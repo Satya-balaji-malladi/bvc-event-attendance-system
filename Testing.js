@@ -521,3 +521,232 @@ function runStudentServiceIntegrationTest() {
     Logger.log('=================================');
   }
 }
+
+/**
+ * Tests EventService.createEvent
+ * @returns {object|null} The created event or null if failed.
+ */
+function testCreateEvent() {
+  Logger.log('--- Executing testCreateEvent ---');
+  const ts = new Date().getTime();
+  const eventName = 'Test Event ' + ts;
+  
+  // Tomorrow's date
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const eventDate = Utils.formatDate(tomorrow);
+
+  const eventData = {
+    event_name: eventName,
+    event_date: eventDate,
+    venue: 'Seminar Hall',
+    coordinator_id: 'USR-001',
+    status: CONFIG.EVENT_STATUS.UPCOMING
+  };
+
+  const result = EventService.createEvent(eventData);
+  if (result.success && result.event) {
+    Logger.log('Create Event: PASS');
+    return result.event;
+  } else {
+    Logger.log('Create Event: FAIL - ' + result.message);
+    return null;
+  }
+}
+
+/**
+ * Tests EventService.getEventById
+ * @param {string} eventId 
+ * @returns {boolean}
+ */
+function testGetEvent(eventId) {
+  Logger.log('--- Executing testGetEvent ---');
+  const event = EventService.getEventById(eventId);
+  if (event && event.event_id === eventId) {
+    Logger.log('Get Event: PASS');
+    return true;
+  } else {
+    Logger.log('Get Event: FAIL');
+    return false;
+  }
+}
+
+/**
+ * Tests EventService.updateEvent
+ * @param {string} eventId 
+ * @returns {boolean}
+ */
+function testUpdateEvent(eventId) {
+  Logger.log('--- Executing testUpdateEvent ---');
+  const result = EventService.updateEvent(eventId, { venue: 'Main Auditorium' });
+  // venue is capitalized by service to 'Main Auditorium'
+  if (result.success && result.event && result.event.venue === 'Main Auditorium') {
+    Logger.log('Update Event: PASS');
+    return true;
+  } else {
+    Logger.log('Update Event: FAIL - ' + result.message);
+    return false;
+  }
+}
+
+/**
+ * Tests EventService.searchEvents
+ * @param {string} keyword 
+ * @returns {boolean}
+ */
+function testSearchEvent(keyword) {
+  Logger.log('--- Executing testSearchEvent ---');
+  const results = EventService.searchEvents(keyword);
+  if (results && results.length > 0) {
+    Logger.log('Search Event: PASS');
+    return true;
+  } else {
+    Logger.log('Search Event: FAIL');
+    return false;
+  }
+}
+
+/**
+ * Tests EventService.getEventsByCoordinator
+ * @returns {boolean}
+ */
+function testGetEventsByCoordinator() {
+  Logger.log('--- Executing testGetEventsByCoordinator ---');
+  const results = EventService.getEventsByCoordinator('USR-001');
+  if (Array.isArray(results)) {
+    Logger.log('Get Events By Coordinator: PASS');
+    return true;
+  } else {
+    Logger.log('Get Events By Coordinator: FAIL');
+    return false;
+  }
+}
+
+/**
+ * Tests EventService.getEventsByStatus
+ * @returns {boolean}
+ */
+function testGetEventsByStatus() {
+  Logger.log('--- Executing testGetEventsByStatus ---');
+  const results = EventService.getEventsByStatus(CONFIG.EVENT_STATUS.UPCOMING);
+  if (Array.isArray(results)) {
+    Logger.log('Get Events By Status: PASS');
+    return true;
+  } else {
+    Logger.log('Get Events By Status: FAIL');
+    return false;
+  }
+}
+
+/**
+ * Tests EventService.getEventsByDate
+ * @param {string} eventDate 
+ * @returns {boolean}
+ */
+function testGetEventsByDate(eventDate) {
+  Logger.log('--- Executing testGetEventsByDate ---');
+  const results = EventService.getEventsByDate(eventDate);
+  if (Array.isArray(results) && results.length > 0) {
+    Logger.log('Get Events By Date: PASS');
+    return true;
+  } else {
+    Logger.log('Get Events By Date: FAIL');
+    return false;
+  }
+}
+
+/**
+ * Tests EventService.completeEvent
+ * @param {string} eventId 
+ * @returns {boolean}
+ */
+function testCompleteEvent(eventId) {
+  Logger.log('--- Executing testCompleteEvent ---');
+  const result = EventService.completeEvent(eventId);
+  if (result.success || result.message === CONFIG.MESSAGES.EVENT_ALREADY_COMPLETED) {
+    const event = EventService.getEventById(eventId);
+    if (event && event.status === CONFIG.EVENT_STATUS.COMPLETED) {
+      Logger.log('Complete Event: PASS');
+      return true;
+    }
+  }
+  Logger.log('Complete Event: FAIL - ' + (result ? result.message : 'Unknown'));
+  return false;
+}
+
+/**
+ * Tests EventService.activateEvent
+ * @param {string} eventId 
+ * @returns {boolean}
+ */
+function testActivateEvent(eventId) {
+  Logger.log('--- Executing testActivateEvent ---');
+  const result = EventService.activateEvent(eventId);
+  if (result.success || result.message === CONFIG.MESSAGES.EVENT_ALREADY_UPCOMING) {
+    const event = EventService.getEventById(eventId);
+    if (event && event.status === CONFIG.EVENT_STATUS.UPCOMING) {
+      Logger.log('Activate Event: PASS');
+      return true;
+    }
+  }
+  Logger.log('Activate Event: FAIL - ' + (result ? result.message : 'Unknown'));
+  return false;
+}
+
+/**
+ * Tests EventService.deleteEvent
+ * @param {string} eventId 
+ * @returns {boolean}
+ */
+function testDeleteEvent(eventId) {
+  Logger.log('--- Executing testDeleteEvent ---');
+  const result = EventService.deleteEvent(eventId);
+  if (result.success) {
+    const event = EventService.getEventById(eventId);
+    if (!event) {
+      Logger.log('Delete Event: PASS');
+      return true;
+    }
+  }
+  Logger.log('Delete Event: FAIL - ' + result.message);
+  return false;
+}
+
+/**
+ * Master integration test runner for EventService.
+ */
+function runEventServiceIntegrationTest() {
+  Logger.log('=================================');
+  Logger.log('EVENT SERVICE INTEGRATION TEST STARTED');
+  Logger.log('=================================');
+
+  const createdEvent = testCreateEvent();
+  if (!createdEvent) {
+    Logger.log('Test aborted: Create Event failed.');
+    Logger.log('=================================');
+    return;
+  }
+
+  const eventId = createdEvent.event_id;
+  const eventName = createdEvent.event_name;
+  const eventDate = createdEvent.event_date;
+
+  try {
+    testGetEvent(eventId);
+    testUpdateEvent(eventId);
+    testSearchEvent(eventName);
+    testGetEventsByCoordinator();
+    testGetEventsByStatus();
+    testGetEventsByDate(eventDate);
+    testCompleteEvent(eventId);
+    testActivateEvent(eventId);
+  } catch (e) {
+    Logger.log('An error occurred during testing: ' + e.message);
+  } finally {
+    Logger.log('--- Cleanup ---');
+    testDeleteEvent(eventId);
+    Logger.log('=================================');
+    Logger.log('EVENT SERVICE INTEGRATION TEST COMPLETE');
+    Logger.log('=================================');
+  }
+}

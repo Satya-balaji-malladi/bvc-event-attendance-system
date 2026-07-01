@@ -88,7 +88,20 @@ SESSION_STATUS: {
     STUDENT_DELETED: 'Student deleted successfully',
     ROLL_NUMBER_EXISTS: 'Roll number already exists',
     USERNAME_EXISTS: 'Username already exists',
+    ROLL_NUMBER_EXISTS: 'Roll number already exists',
+    USERNAME_EXISTS: 'Username already exists',
     EMAIL_EXISTS: 'Email already exists',
-    STUDENT_NOT_FOUND: 'Student not found'
+    STUDENT_NOT_FOUND: 'Student not found',
+    EVENT_CREATED: 'Event created successfully',
+    EVENT_UPDATED: 'Event updated successfully',
+    EVENT_DELETED: 'Event deleted successfully',
+    EVENT_NOT_FOUND: 'Event not found',
+    EVENT_ALREADY_EXISTS: 'An event with this name and date already exists',
+    EVENT_CREATE_FAILED: 'Failed to create event in database',
+    EVENT_UPDATE_FAILED: 'Failed to update event in database',
+    EVENT_DELETE_FAILED: 'Failed to delete event in database',
+    INVALID_COORDINATOR: 'Invalid coordinator ID',
+    EVENT_ALREADY_UPCOMING: 'Event is already upcoming',
+    EVENT_ALREADY_COMPLETED: 'Event is already completed'
   }
 };
