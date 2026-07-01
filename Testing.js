@@ -1291,3 +1291,312 @@ function runReportServiceIntegrationTest() {
     Logger.log('=================================');
   }
 }
+
+/**
+ * Master integration test runner for the Controller layer.
+ */
+function runControllerIntegrationTest() {
+  Logger.log('=================================');
+  Logger.log('CONTROLLER INTEGRATION TEST STARTED');
+  Logger.log('=================================');
+
+  const ts = new Date().getTime();
+  
+  let sessionToken = null;
+  let userId = null;
+  const username = 'ctrl_user_' + ts;
+  
+  let rollNumber = 'CTRL' + ts.toString().slice(-6);
+  let eventId = null;
+  let attendanceId = null;
+
+  const logResult = (name, result, expectedCondition) => {
+    let success = false;
+    if (typeof expectedCondition === 'function') {
+      success = expectedCondition(result);
+    } else if (result && result.success !== undefined) {
+      success = result.success === expectedCondition;
+    } else if (result) {
+      success = true;
+    }
+
+    if (success) {
+      Logger.log(name + ' : PASS');
+    } else {
+      const msg = result && result.message ? result.message : 'Condition not met';
+      Logger.log(name + ' : FAIL - ' + msg);
+    }
+    return success;
+  };
+
+  try {
+    // ------------------------------------------
+    // 1. Authentication Controller
+    // ------------------------------------------
+    Logger.log('--- 1. Authentication Controller ---');
+    
+    // Using admin to login initially if possible or just standard test user
+    // We assume an admin exists for testing:
+    const loginResult = Controller.Auth.login({ usernameOrEmail: 'admin', password: 'admin123' });
+    if (logResult('Test Login', loginResult, true)) {
+      sessionToken = loginResult.session.session_token;
+    }
+
+    if (sessionToken) {
+      const authResult = Controller.Auth.authenticate(sessionToken);
+      logResult('Test Authenticate', authResult, true);
+    } else {
+      Logger.log('Skipping Authenticate: No Session Token');
+    }
+
+    // ------------------------------------------
+    // 2. User Controller
+    // ------------------------------------------
+    Logger.log('--- 2. User Controller ---');
+    
+    const createUserResult = Controller.User.createUser({
+      full_name: 'Ctrl Test User',
+      username: username,
+      email: username + '@example.com',
+      role: 'Coordinator',
+      password: 'password123'
+    });
+    
+    if (logResult('Create User', createUserResult, true)) {
+      userId = createUserResult.user.user_id;
+    }
+
+    if (userId) {
+      const getUser = Controller.User.getUserById(userId);
+      logResult('Get User', getUser, (r) => r && r.user_id === userId);
+
+      const getUserByUsername = Controller.User.getUserByUsername(username);
+      logResult('Get User By Username', getUserByUsername, (r) => r && r.username === username);
+
+      const updateUser = Controller.User.updateUser(userId, { full_name: 'Updated Ctrl User' });
+      logResult('Update User', updateUser, true);
+
+      const deactivateUser = Controller.User.deactivateUser(userId);
+      logResult('Deactivate User', deactivateUser, true);
+
+      const activateUser = Controller.User.activateUser(userId);
+      logResult('Activate User', activateUser, true);
+
+      const searchUser = Controller.User.searchUsers(username);
+      logResult('Search User', searchUser, (r) => Array.isArray(r) && r.length > 0);
+
+      const allUsers = Controller.User.getAllUsers();
+      logResult('Get All Users', allUsers, (r) => Array.isArray(r));
+    } else {
+      Logger.log('Skipping User tests: Create User failed');
+    }
+
+    // ------------------------------------------
+    // 3. Student Controller
+    // ------------------------------------------
+    Logger.log('--- 3. Student Controller ---');
+
+    const createStudentResult = Controller.Student.createStudent({
+      roll_number: rollNumber,
+      student_name: 'Ctrl Student',
+      department: 'CSE',
+      year: '3',
+      section: 'A',
+      status: 'Active'
+    });
+    
+    logResult('Create Student', createStudentResult, true);
+
+    const getStudent = Controller.Student.getStudentByRollNumber(rollNumber);
+    logResult('Get Student', getStudent, (r) => r && r.roll_number === rollNumber);
+
+    const updateStudent = Controller.Student.updateStudent(rollNumber, { student_name: 'Updated Ctrl Student' });
+    logResult('Update Student', updateStudent, true);
+
+    const searchStudent = Controller.Student.searchStudents(rollNumber);
+    logResult('Search Student', searchStudent, (r) => Array.isArray(r) && r.length > 0);
+
+    const deptFilter = Controller.Student.getStudentsByDepartment('CSE');
+    logResult('Department Filter', deptFilter, (r) => Array.isArray(r));
+
+    const yearFilter = Controller.Student.getStudentsByYear('3');
+    logResult('Year Filter', yearFilter, (r) => Array.isArray(r));
+
+    const sectionFilter = Controller.Student.getStudentsBySection('A');
+    logResult('Section Filter', sectionFilter, (r) => Array.isArray(r));
+
+    const allStudents = Controller.Student.getAllStudents();
+    logResult('Get All Students', allStudents, (r) => Array.isArray(r));
+
+    // ------------------------------------------
+    // 4. Event Controller
+    // ------------------------------------------
+    Logger.log('--- 4. Event Controller ---');
+
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const eventDate = Utils.formatDate(tomorrow);
+
+    const createEventResult = Controller.Event.createEvent({
+      event_name: 'Ctrl Event ' + ts,
+      event_date: eventDate,
+      venue: 'Ctrl Hall',
+      coordinator_id: userId || 'USR-001',
+      status: 'Upcoming'
+    });
+
+    if (logResult('Create Event', createEventResult, true)) {
+      eventId = createEventResult.event.event_id;
+    }
+
+    if (eventId) {
+      const getEvent = Controller.Event.getEventById(eventId);
+      logResult('Get Event', getEvent, (r) => r && r.event_id === eventId);
+
+      const updateEvent = Controller.Event.updateEvent(eventId, { venue: 'Updated Hall' });
+      logResult('Update Event', updateEvent, true);
+
+      const searchEvent = Controller.Event.searchEvents('Ctrl Event');
+      logResult('Search Event', searchEvent, (r) => Array.isArray(r) && r.length > 0);
+
+      const evCoord = Controller.Event.getEventsByCoordinator(userId || 'USR-001');
+      logResult('Get Events By Coordinator', evCoord, (r) => Array.isArray(r));
+
+      const evStatus = Controller.Event.getEventsByStatus('Upcoming');
+      logResult('Get Events By Status', evStatus, (r) => Array.isArray(r));
+
+      const evDate = Controller.Event.getEventsByDate(eventDate);
+      logResult('Get Events By Date', evDate, (r) => Array.isArray(r));
+
+      const completeEv = Controller.Event.completeEvent(eventId);
+      logResult('Complete Event', completeEv, true);
+
+      const activateEv = Controller.Event.activateEvent(eventId);
+      logResult('Activate Event', activateEv, true);
+    } else {
+      Logger.log('Skipping Event tests: Create Event failed');
+    }
+
+    // ------------------------------------------
+    // 5. Attendance Controller
+    // ------------------------------------------
+    Logger.log('--- 5. Attendance Controller ---');
+
+    if (eventId && rollNumber) {
+      const markAtt = Controller.Attendance.markAttendance({
+        event_id: eventId,
+        roll_number: rollNumber,
+        status: 'Present'
+      });
+
+      if (logResult('Mark Attendance', markAtt, true)) {
+        attendanceId = markAtt.attendance.attendance_id;
+      }
+
+      const dupAtt = Controller.Attendance.markAttendance({
+        event_id: eventId,
+        roll_number: rollNumber,
+        status: 'Present'
+      });
+      logResult('Duplicate Attendance', dupAtt, false);
+
+      if (attendanceId) {
+        const getAtt = Controller.Attendance.getAttendanceById(attendanceId);
+        logResult('Get Attendance', getAtt, (r) => r && r.attendance_id === attendanceId);
+      }
+
+      const attByEv = Controller.Attendance.getAttendanceByEvent(eventId);
+      logResult('Get Attendance By Event', attByEv, (r) => Array.isArray(r));
+
+      const attByStu = Controller.Attendance.getAttendanceByStudent(rollNumber);
+      logResult('Get Attendance By Student', attByStu, (r) => Array.isArray(r));
+
+      const todayStr = Utils.formatDate(Utils.getCurrentDate());
+      const attByDate = Controller.Attendance.getAttendanceByDate(todayStr);
+      logResult('Get Attendance By Date', attByDate, (r) => Array.isArray(r));
+
+      const attByStatus = Controller.Attendance.getAttendanceByStatus('Present');
+      logResult('Get Attendance By Status', attByStatus, (r) => Array.isArray(r));
+
+      const evCount = Controller.Attendance.getEventAttendanceCount(eventId);
+      logResult('Event Attendance Count', evCount, (r) => r && r.total !== undefined);
+
+      const stuCount = Controller.Attendance.getStudentAttendanceCount(rollNumber);
+      logResult('Student Attendance Count', stuCount, (r) => typeof r === 'number');
+
+      const stuSumm = Controller.Attendance.getStudentAttendanceSummary(rollNumber);
+      logResult('Student Attendance Summary', stuSumm, (r) => r && r.totalEvents !== undefined);
+
+      const overallStat = Controller.Attendance.getOverallAttendanceStatistics();
+      logResult('Overall Attendance Statistics', overallStat, (r) => r && r.totalAttendance !== undefined);
+
+      const summByEv = Controller.Attendance.getAttendanceSummaryByEvent(eventId);
+      logResult('Attendance Summary By Event', summByEv, (r) => r && r.eventId === eventId);
+    } else {
+      Logger.log('Skipping Attendance tests: Event or Student missing');
+    }
+
+    // ------------------------------------------
+    // 6. Report Controller
+    // ------------------------------------------
+    Logger.log('--- 6. Report Controller ---');
+
+    const dashSumm = Controller.Report.getDashboardSummary();
+    logResult('Dashboard Summary', dashSumm, true);
+
+    if (eventId) {
+      const evRep = Controller.Report.getEventReport(eventId);
+      logResult('Event Report', evRep, true);
+    }
+
+    if (rollNumber) {
+      const stuRep = Controller.Report.getStudentReport(rollNumber);
+      logResult('Student Report', stuRep, true);
+      
+      const yrRep = Controller.Report.getYearWiseReport('3');
+      logResult('Year Wise Report', yrRep, true);
+    }
+
+    const deptRep = Controller.Report.getDepartmentReport('CSE');
+    logResult('Department Report', deptRep, true);
+
+    const secRep = Controller.Report.getSectionReport('A');
+    logResult('Section Report', secRep, true);
+
+    const todayStr = Utils.formatDate(Utils.getCurrentDate());
+    const dateRep = Controller.Report.getDateWiseReport(todayStr);
+    logResult('Date Wise Report', dateRep, true);
+
+    const overallRep = Controller.Report.getOverallAttendanceReport();
+    logResult('Overall Attendance Report', overallRep, true);
+
+    if (userId) {
+      const coordRep = Controller.Report.getCoordinatorReport(userId);
+      logResult('Coordinator Report', coordRep, true);
+    }
+
+    // ------------------------------------------
+    // 7. Logout
+    // ------------------------------------------
+    Logger.log('--- 7. Logout ---');
+    if (sessionToken) {
+      const logoutRes = Controller.Auth.logout(sessionToken);
+      logResult('Logout', logoutRes, true);
+    } else {
+      Logger.log('Skipping Logout: No Session Token');
+    }
+
+  } catch (error) {
+    Logger.log('An error occurred during Controller test execution: ' + error.message);
+  } finally {
+    Logger.log('--- Cleanup ---');
+    if (attendanceId) Controller.Attendance.deleteAttendance(attendanceId);
+    if (eventId) Controller.Event.deleteEvent(eventId);
+    if (rollNumber) Controller.Student.deleteStudent(rollNumber);
+    if (userId) Controller.User.deleteUser(userId);
+
+    Logger.log('=================================');
+    Logger.log('CONTROLLER INTEGRATION TEST COMPLETE');
+    Logger.log('=================================');
+  }
+}

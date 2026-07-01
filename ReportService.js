@@ -189,14 +189,13 @@ const ReportService = {
   getYearWiseReport: function(year) {
   try {
 
-    Logger.log("Input Year: " + year);
-
     const students = StudentService.getStudentsByYear(year) || [];
 
-    Logger.log("Students Found: " + students.length);
-
     if (students.length === 0) {
-      return Utils.buildResponse(false, CONFIG.MESSAGES.INVALID_YEAR || 'Invalid year.');
+      return Utils.buildResponse(
+        false,
+        CONFIG.MESSAGES.INVALID_YEAR || 'Invalid year.'
+      );
     }
 
     const stats = this._generateStudentAttendanceStatistics(students);
