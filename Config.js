@@ -89,8 +89,6 @@ SESSION_STATUS: {
     STUDENT_DELETED: 'Student deleted successfully',
     ROLL_NUMBER_EXISTS: 'Roll number already exists',
     USERNAME_EXISTS: 'Username already exists',
-    ROLL_NUMBER_EXISTS: 'Roll number already exists',
-    USERNAME_EXISTS: 'Username already exists',
     EMAIL_EXISTS: 'Email already exists',
     STUDENT_NOT_FOUND: 'Student not found',
     EVENT_CREATED: 'Event created successfully',
@@ -110,6 +108,11 @@ SESSION_STATUS: {
     ATTENDANCE_ALREADY_EXISTS: 'Student attendance for this event already exists',
     INVALID_ATTENDANCE_STATUS: 'Invalid attendance status',
     ATTENDANCE_MARK_FAILED: 'Failed to mark attendance in database',
-    ATTENDANCE_DELETE_FAILED: 'Failed to delete attendance in database'
+    ATTENDANCE_DELETE_FAILED: 'Failed to delete attendance in database',
+    REPORT_GENERATED: 'Report generated successfully',
+    REPORT_NOT_FOUND: 'Report not found',
+    INVALID_DEPARTMENT: 'Invalid department',
+    INVALID_YEAR: 'Invalid year',
+    INVALID_SECTION: 'Invalid section'
   }
 };

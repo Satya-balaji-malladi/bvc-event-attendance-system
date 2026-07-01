@@ -167,9 +167,13 @@ const DatabaseService = {
    * @returns {object[]} Array of matched records.
    */
   findByColumn: function(sheetName, searchColumn, searchValue) {
-    const records = this.readAllRows(sheetName);
-    return records.filter(record => record[searchColumn] === searchValue);
-  },
+  const records = this.readAllRows(sheetName);
+
+  return records.filter(function(record) {
+    return String(record[searchColumn]).trim() ===
+           String(searchValue).trim();
+  });
+},
 
   /**
    * Checks if a record exists based on a specific column and value.

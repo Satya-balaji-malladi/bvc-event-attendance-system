@@ -1050,3 +1050,244 @@ function runAttendanceServiceIntegrationTest() {
     Logger.log('=================================');
   }
 }
+
+/**
+ * Tests ReportService.getDashboardSummary
+ * @returns {boolean}
+ */
+function testDashboardSummary() {
+  Logger.log('--- Executing testDashboardSummary ---');
+  const result = ReportService.getDashboardSummary();
+  if (result.success && result.report) {
+    const r = result.report;
+    if (r.totalStudents !== undefined && r.totalEvents !== undefined && r.totalAttendance !== undefined && 
+        r.totalPresent !== undefined && r.totalAbsent !== undefined && r.attendancePercentage !== undefined) {
+      Logger.log('Dashboard Summary: PASS');
+      return true;
+    }
+  }
+  Logger.log('Dashboard Summary: FAIL - ' + result.message);
+  return false;
+}
+
+/**
+ * Tests ReportService.getEventReport
+ * @param {string} eventId 
+ * @returns {boolean}
+ */
+function testEventReport(eventId) {
+  Logger.log('--- Executing testEventReport ---');
+  const result = ReportService.getEventReport(eventId);
+  if (result.success && result.report) {
+    const r = result.report;
+    if (r.eventId === eventId && r.eventName !== undefined && r.venue !== undefined && 
+        r.eventDate !== undefined && r.coordinatorId !== undefined && r.status !== undefined && 
+        r.totalAttendance !== undefined && r.present !== undefined && r.absent !== undefined && 
+        r.attendancePercentage !== undefined) {
+      Logger.log('Event Report: PASS');
+      return true;
+    }
+  }
+  Logger.log('Event Report: FAIL - ' + result.message);
+  return false;
+}
+
+/**
+ * Tests ReportService.getStudentReport
+ * @param {string} rollNumber 
+ * @returns {boolean}
+ */
+function testStudentReport(rollNumber) {
+  Logger.log('--- Executing testStudentReport ---');
+  const result = ReportService.getStudentReport(rollNumber);
+  if (result.success && result.report) {
+    const r = result.report;
+    if (r.rollNumber === rollNumber && r.studentName !== undefined && r.department !== undefined && 
+        r.year !== undefined && r.section !== undefined && r.status !== undefined && 
+        r.totalEvents !== undefined && r.present !== undefined && r.absent !== undefined && 
+        r.attendancePercentage !== undefined) {
+      Logger.log('Student Report: PASS');
+      return true;
+    }
+  }
+  Logger.log('Student Report: FAIL - ' + result.message);
+  return false;
+}
+
+/**
+ * Tests ReportService.getDepartmentReport
+ * @returns {boolean}
+ */
+function testDepartmentReport() {
+  Logger.log('--- Executing testDepartmentReport ---');
+  const result = ReportService.getDepartmentReport('CSE');
+  if (result.success && result.report) {
+    const r = result.report;
+    if (r.department === 'CSE' && r.totalStudents !== undefined && r.totalAttendance !== undefined && 
+        r.present !== undefined && r.absent !== undefined && r.attendancePercentage !== undefined) {
+      Logger.log('Department Report: PASS');
+      return true;
+    }
+  }
+  Logger.log('Department Report: FAIL - ' + result.message);
+  return false;
+}
+
+/**
+ * Tests ReportService.getYearWiseReport
+ * @param {string|number} year
+ * @returns {boolean}
+ */
+function testYearWiseReport(year) {
+  Logger.log('--- Executing testYearWiseReport ---');
+  const result = ReportService.getYearWiseReport(year);
+  if (result.success && result.report) {
+    const r = result.report;
+    if (r.year === String(year) && r.totalStudents !== undefined && r.totalAttendance !== undefined && 
+        r.present !== undefined && r.absent !== undefined && r.attendancePercentage !== undefined) {
+      Logger.log('Year Wise Report: PASS');
+      return true;
+    }
+  }
+  Logger.log('Year Wise Report: FAIL - ' + result.message);
+  return false;
+}
+
+/**
+ * Tests ReportService.getSectionReport
+ * @returns {boolean}
+ */
+function testSectionReport() {
+  Logger.log('--- Executing testSectionReport ---');
+  const result = ReportService.getSectionReport('A');
+  if (result.success && result.report) {
+    const r = result.report;
+    if (r.section === 'A' && r.totalStudents !== undefined && r.totalAttendance !== undefined && 
+        r.present !== undefined && r.absent !== undefined && r.attendancePercentage !== undefined) {
+      Logger.log('Section Report: PASS');
+      return true;
+    }
+  }
+  Logger.log('Section Report: FAIL - ' + result.message);
+  return false;
+}
+
+/**
+ * Tests ReportService.getDateWiseReport
+ * @returns {boolean}
+ */
+function testDateWiseReport() {
+  Logger.log('--- Executing testDateWiseReport ---');
+  const today = Utils.formatDate(Utils.getCurrentDate());
+  const result = ReportService.getDateWiseReport(today);
+  if (result.success && result.report) {
+    const r = result.report;
+    if (r.date === today && r.totalAttendance !== undefined && r.present !== undefined && 
+        r.absent !== undefined && r.attendancePercentage !== undefined) {
+      Logger.log('Date Wise Report: PASS');
+      return true;
+    }
+  }
+  Logger.log('Date Wise Report: FAIL - ' + result.message);
+  return false;
+}
+
+/**
+ * Tests ReportService.getOverallAttendanceReport
+ * @returns {boolean}
+ */
+function testOverallAttendanceReport() {
+  Logger.log('--- Executing testOverallAttendanceReport ---');
+  const result = ReportService.getOverallAttendanceReport();
+  if (result.success && result.report) {
+    const r = result.report;
+    if (r.totalStudents !== undefined && r.totalEvents !== undefined && 
+        r.totalAttendance !== undefined && r.attendancePercentage !== undefined) {
+      Logger.log('Overall Attendance Report: PASS');
+      return true;
+    }
+  }
+  Logger.log('Overall Attendance Report: FAIL - ' + result.message);
+  return false;
+}
+
+/**
+ * Tests ReportService.getCoordinatorReport
+ * @returns {boolean}
+ */
+function testCoordinatorReport() {
+  Logger.log('--- Executing testCoordinatorReport ---');
+  const result = ReportService.getCoordinatorReport('USR-001');
+  if (result.success && result.report) {
+    const r = result.report;
+    if (r.coordinatorId === 'USR-001' && r.coordinatorName !== undefined && 
+        r.totalEvents !== undefined && r.totalAttendance !== undefined && 
+        r.present !== undefined && r.absent !== undefined && r.attendancePercentage !== undefined) {
+      Logger.log('Coordinator Report: PASS');
+      return true;
+    }
+  }
+  Logger.log('Coordinator Report: FAIL - ' + result.message);
+  return false;
+}
+
+/**
+ * Master integration test runner for ReportService.
+ */
+function runReportServiceIntegrationTest() {
+  Logger.log('=================================');
+  Logger.log('REPORT SERVICE INTEGRATION TEST STARTED');
+  Logger.log('=================================');
+
+  // Step 1 & 2: Database prerequisites
+  const student = testCreateStudent();
+  const event = testCreateEvent();
+
+  if (!student || !event) {
+    Logger.log('Test aborted: Prerequisites failed to create.');
+    if (student) testDeleteStudent(student.roll_number);
+    if (event) testDeleteEvent(event.event_id);
+    Logger.log('=================================');
+    return;
+  }
+
+  const rollNumber = student.roll_number;
+  const eventId = event.event_id;
+  let attendanceId = null;
+
+  try {
+    // Step 3: Mark Attendance
+    const attendance = testMarkAttendance(eventId, rollNumber);
+    if (!attendance) {
+      Logger.log('Test aborted: Mark Attendance failed.');
+      return;
+    }
+    attendanceId = attendance.attendance_id;
+
+    // Steps 4-12
+    testDashboardSummary();
+    testEventReport(eventId);
+    testStudentReport(rollNumber);
+    testDepartmentReport();
+    testYearWiseReport(student.year);
+    testSectionReport();
+    testDateWiseReport();
+    testOverallAttendanceReport();
+    testCoordinatorReport();
+
+  } catch (e) {
+    Logger.log('An error occurred during testing: ' + e.message);
+  } finally {
+    Logger.log('--- Cleanup ---');
+    // Step 13: Cleanup
+    if (attendanceId) {
+      testDeleteAttendance(attendanceId);
+    }
+    testDeleteEvent(eventId);
+    testDeleteStudent(rollNumber);
+    
+    Logger.log('=================================');
+    Logger.log('REPORT SERVICE INTEGRATION TEST COMPLETE');
+    Logger.log('=================================');
+  }
+}
