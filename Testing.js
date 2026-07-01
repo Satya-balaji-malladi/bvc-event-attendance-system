@@ -750,3 +750,303 @@ function runEventServiceIntegrationTest() {
     Logger.log('=================================');
   }
 }
+
+/**
+ * Tests AttendanceService.markAttendance
+ * @param {string} eventId 
+ * @param {string} rollNumber 
+ * @returns {object|null} The created attendance object.
+ */
+function testMarkAttendance(eventId, rollNumber) {
+  Logger.log('--- Executing testMarkAttendance ---');
+  const result = AttendanceService.markAttendance({
+    event_id: eventId,
+    roll_number: rollNumber,
+    status: CONFIG.ATTENDANCE_STATUS.PRESENT
+  });
+  
+  if (result.success && result.attendance) {
+    Logger.log('Mark Attendance: PASS');
+    return result.attendance;
+  } else {
+    Logger.log('Mark Attendance: FAIL - ' + result.message);
+    return null;
+  }
+}
+
+/**
+ * Tests duplicate attendance prevention.
+ * @param {string} eventId 
+ * @param {string} rollNumber 
+ * @returns {boolean}
+ */
+function testDuplicateAttendance(eventId, rollNumber) {
+  Logger.log('--- Executing testDuplicateAttendance ---');
+  const result = AttendanceService.markAttendance({
+    event_id: eventId,
+    roll_number: rollNumber,
+    status: CONFIG.ATTENDANCE_STATUS.PRESENT
+  });
+  
+  if (!result.success && result.message === CONFIG.MESSAGES.ATTENDANCE_ALREADY_EXISTS) {
+    Logger.log('Duplicate Attendance: PASS');
+    return true;
+  } else {
+    Logger.log('Duplicate Attendance: FAIL - Expected ALREADY_EXISTS');
+    return false;
+  }
+}
+
+/**
+ * Tests AttendanceService.getAttendanceById
+ * @param {string} attendanceId 
+ * @returns {boolean}
+ */
+function testGetAttendance(attendanceId) {
+  Logger.log('--- Executing testGetAttendance ---');
+  const record = AttendanceService.getAttendanceById(attendanceId);
+  if (record && record.attendance_id === attendanceId) {
+    Logger.log('Get Attendance: PASS');
+    return true;
+  } else {
+    Logger.log('Get Attendance: FAIL');
+    return false;
+  }
+}
+
+/**
+ * Tests AttendanceService.getAttendanceByEvent
+ * @param {string} eventId 
+ * @returns {boolean}
+ */
+function testGetAttendanceByEvent(eventId) {
+  Logger.log('--- Executing testGetAttendanceByEvent ---');
+  const records = AttendanceService.getAttendanceByEvent(eventId);
+  if (Array.isArray(records) && records.length > 0) {
+    Logger.log('Get Attendance By Event: PASS');
+    return true;
+  } else {
+    Logger.log('Get Attendance By Event: FAIL');
+    return false;
+  }
+}
+
+/**
+ * Tests AttendanceService.getAttendanceByStudent
+ * @param {string} rollNumber 
+ * @returns {boolean}
+ */
+function testGetAttendanceByStudent(rollNumber) {
+  Logger.log('--- Executing testGetAttendanceByStudent ---');
+  const records = AttendanceService.getAttendanceByStudent(rollNumber);
+  if (Array.isArray(records) && records.length > 0) {
+    Logger.log('Get Attendance By Student: PASS');
+    return true;
+  } else {
+    Logger.log('Get Attendance By Student: FAIL');
+    return false;
+  }
+}
+
+/**
+ * Tests AttendanceService.getAttendanceByDate
+ * @param {string} date 
+ * @returns {boolean}
+ */
+function testGetAttendanceByDate(date) {
+  Logger.log('--- Executing testGetAttendanceByDate ---');
+  const records = AttendanceService.getAttendanceByDate(date);
+  if (Array.isArray(records) && records.length > 0) {
+    Logger.log('Get Attendance By Date: PASS');
+    return true;
+  } else {
+    Logger.log('Get Attendance By Date: FAIL');
+    return false;
+  }
+}
+
+/**
+ * Tests AttendanceService.getAttendanceByStatus
+ * @param {string} status 
+ * @returns {boolean}
+ */
+function testGetAttendanceByStatus(status) {
+  Logger.log('--- Executing testGetAttendanceByStatus ---');
+  const records = AttendanceService.getAttendanceByStatus(status);
+  if (Array.isArray(records) && records.length > 0) {
+    Logger.log('Get Attendance By Status: PASS');
+    return true;
+  } else {
+    Logger.log('Get Attendance By Status: FAIL');
+    return false;
+  }
+}
+
+/**
+ * Tests AttendanceService.getEventAttendanceCount
+ * @param {string} eventId 
+ * @returns {boolean}
+ */
+function testEventAttendanceCount(eventId) {
+  Logger.log('--- Executing testEventAttendanceCount ---');
+  const counts = AttendanceService.getEventAttendanceCount(eventId);
+  if (counts && counts.total !== undefined && counts.present !== undefined && counts.absent !== undefined) {
+    Logger.log('Event Attendance Count: PASS');
+    return true;
+  } else {
+    Logger.log('Event Attendance Count: FAIL');
+    return false;
+  }
+}
+
+/**
+ * Tests AttendanceService.getStudentAttendanceCount
+ * @param {string} rollNumber 
+ * @returns {boolean}
+ */
+function testStudentAttendanceCount(rollNumber) {
+  Logger.log('--- Executing testStudentAttendanceCount ---');
+  const count = AttendanceService.getStudentAttendanceCount(rollNumber);
+  if (typeof count === 'number' && count > 0) {
+    Logger.log('Student Attendance Count: PASS');
+    return true;
+  } else {
+    Logger.log('Student Attendance Count: FAIL');
+    return false;
+  }
+}
+
+/**
+ * Tests AttendanceService.getStudentAttendanceSummary
+ * @param {string} rollNumber 
+ * @returns {boolean}
+ */
+function testStudentAttendanceSummary(rollNumber) {
+  Logger.log('--- Executing testStudentAttendanceSummary ---');
+  const summary = AttendanceService.getStudentAttendanceSummary(rollNumber);
+  if (summary && summary.totalEvents !== undefined && summary.present !== undefined && summary.absent !== undefined) {
+    Logger.log('Student Attendance Summary: PASS');
+    return true;
+  } else {
+    Logger.log('Student Attendance Summary: FAIL');
+    return false;
+  }
+}
+
+/**
+ * Tests AttendanceService.getOverallAttendanceStatistics
+ * @returns {boolean}
+ */
+function testOverallAttendanceStatistics() {
+  Logger.log('--- Executing testOverallAttendanceStatistics ---');
+  const stats = AttendanceService.getOverallAttendanceStatistics();
+  if (stats && stats.totalAttendance !== undefined && stats.present !== undefined && stats.absent !== undefined && stats.attendancePercentage !== undefined) {
+    Logger.log('Overall Attendance Statistics: PASS');
+    return true;
+  } else {
+    Logger.log('Overall Attendance Statistics: FAIL');
+    return false;
+  }
+}
+
+/**
+ * Tests AttendanceService.getAttendanceSummaryByEvent
+ * @param {string} eventId 
+ * @returns {boolean}
+ */
+function testAttendanceSummaryByEvent(eventId) {
+  Logger.log('--- Executing testAttendanceSummaryByEvent ---');
+  const summary = AttendanceService.getAttendanceSummaryByEvent(eventId);
+  if (summary && summary.eventId === eventId && summary.eventName !== undefined && summary.total !== undefined && summary.present !== undefined && summary.absent !== undefined) {
+    Logger.log('Attendance Summary By Event: PASS');
+    return true;
+  } else {
+    Logger.log('Attendance Summary By Event: FAIL');
+    return false;
+  }
+}
+
+/**
+ * Tests AttendanceService.deleteAttendance
+ * @param {string} attendanceId 
+ * @returns {boolean}
+ */
+function testDeleteAttendance(attendanceId) {
+  Logger.log('--- Executing testDeleteAttendance ---');
+  const result = AttendanceService.deleteAttendance(attendanceId);
+  if (result.success) {
+    const record = AttendanceService.getAttendanceById(attendanceId);
+    if (!record) {
+      Logger.log('Delete Attendance: PASS');
+      return true;
+    }
+  }
+  Logger.log('Delete Attendance: FAIL - ' + result.message);
+  return false;
+}
+
+/**
+ * Master integration test runner for AttendanceService.
+ */
+function runAttendanceServiceIntegrationTest() {
+  Logger.log('=================================');
+  Logger.log('ATTENDANCE SERVICE INTEGRATION TEST STARTED');
+  Logger.log('=================================');
+
+  // Step 1: Database prerequisites
+  const student = testCreateStudent();
+  const event = testCreateEvent();
+
+  if (!student || !event) {
+    Logger.log('Test aborted: Prerequisites failed to create.');
+    if (student) testDeleteStudent(student.roll_number);
+    if (event) testDeleteEvent(event.event_id);
+    Logger.log('=================================');
+    return;
+  }
+
+  const rollNumber = student.roll_number;
+  const eventId = event.event_id;
+  let attendanceId = null;
+
+  try {
+    // Step 2: Mark Attendance
+    const attendance = testMarkAttendance(eventId, rollNumber);
+    if (!attendance) {
+      Logger.log('Test aborted: Mark Attendance failed.');
+      return;
+    }
+    
+    attendanceId = attendance.attendance_id;
+    const today = Utils.formatDate(Utils.getCurrentDate());
+
+    // Steps 3-13
+    testDuplicateAttendance(eventId, rollNumber);
+    testGetAttendance(attendanceId);
+    testGetAttendanceByEvent(eventId);
+    testGetAttendanceByStudent(rollNumber);
+    testGetAttendanceByDate(today);
+    testGetAttendanceByStatus(CONFIG.ATTENDANCE_STATUS.PRESENT);
+    testEventAttendanceCount(eventId);
+    testStudentAttendanceCount(rollNumber);
+    testStudentAttendanceSummary(rollNumber);
+    testOverallAttendanceStatistics();
+    testAttendanceSummaryByEvent(eventId);
+
+  } catch (e) {
+    Logger.log('An error occurred during testing: ' + e.message);
+  } finally {
+    Logger.log('--- Cleanup ---');
+    // Step 14: Delete Attendance
+    if (attendanceId) {
+      testDeleteAttendance(attendanceId);
+    }
+    // Cleanup prerequisites
+    testDeleteStudent(rollNumber);
+    testDeleteEvent(eventId);
+    
+    Logger.log('=================================');
+    Logger.log('ATTENDANCE SERVICE INTEGRATION TEST COMPLETE');
+    Logger.log('=================================');
+  }
+}

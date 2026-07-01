@@ -46,7 +46,8 @@ const CONFIG = {
 
   // 7. Attendance Status
   ATTENDANCE_STATUS: {
-    PRESENT: 'Present'
+    PRESENT: 'Present',
+    ABSENT: 'Absent'
   },
   // 8. Student Status
 STUDENT_STATUS: {
@@ -102,6 +103,13 @@ SESSION_STATUS: {
     EVENT_DELETE_FAILED: 'Failed to delete event in database',
     INVALID_COORDINATOR: 'Invalid coordinator ID',
     EVENT_ALREADY_UPCOMING: 'Event is already upcoming',
-    EVENT_ALREADY_COMPLETED: 'Event is already completed'
+    EVENT_ALREADY_COMPLETED: 'Event is already completed',
+    ATTENDANCE_MARKED: 'Attendance marked successfully',
+    ATTENDANCE_DELETED: 'Attendance deleted successfully',
+    ATTENDANCE_NOT_FOUND: 'Attendance record not found',
+    ATTENDANCE_ALREADY_EXISTS: 'Student attendance for this event already exists',
+    INVALID_ATTENDANCE_STATUS: 'Invalid attendance status',
+    ATTENDANCE_MARK_FAILED: 'Failed to mark attendance in database',
+    ATTENDANCE_DELETE_FAILED: 'Failed to delete attendance in database'
   }
 };
