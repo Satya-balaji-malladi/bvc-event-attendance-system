@@ -1,0 +1,78 @@
+<script>
+/**
+ * ==========================================
+ * EVENTS MODULE
+ * ==========================================
+ */
+App.Modules.events = {
+  init: function() {
+    console.log("Events Module Init");
+    App.Logger.info('Events init');
+    this.load();
+  },
+  load: function() {
+    console.log("Events Module Load");
+    
+    App.API.getAllEvents()
+      .then(events => {
+        console.log("Events received:", events);
+        
+        // Adapt properties if needed
+        const mappedEvents = (events || []).map(e => ({
+          ...e,
+          event_id: e.event_id || e.EventID || e.eventId || e.id || 'N/A',
+          event_name: e.event_name || e.EventName || e.eventName || e.title || 'N/A',
+          event_date: e.event_date || e.EventDate || e.eventDate || e.date || 'N/A',
+          venue: e.venue || e.Venue || 'N/A',
+          coordinator_id: e.coordinator_id || e.CoordinatorID || e.coordinatorId || e.coordinator || 'N/A',
+          status: e.status || e.Status || e.event_status || 'N/A'
+        }));
+        
+        this.renderEvents(mappedEvents);
+      })
+      .catch(err => {
+        App.ErrorHandler.handle(err, "Failed to load events in Events module");
+      });
+  },
+  renderEvents: function(events) {
+    const tbody = document.getElementById('events-table-body');
+    if (!tbody) {
+      console.error("events-table-body not found");
+      return;
+    }
+    
+    tbody.innerHTML = '';
+    
+    if (!events || events.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-5">No events found</td></tr>';
+      return;
+    }
+    
+    events.forEach(evt => {
+      let badge = evt.status === App.Constants.EVENT_STATUS.UPCOMING ? 'bg-primary' : 
+                  evt.status === App.Constants.EVENT_STATUS.COMPLETED ? 'bg-success' : 
+                  evt.status === App.Constants.EVENT_STATUS.ACTIVE ? 'bg-info' : 'bg-secondary';
+                  
+      const rowHTML = `
+        <tr>
+          <td>${App.Utils.escapeHtml(String(evt.event_id))}</td>
+          <td class="fw-medium">${App.Utils.escapeHtml(String(evt.event_name))}</td>
+          <td>${App.Utils.escapeHtml(String(evt.event_date))}</td>
+          <td><span class="badge ${badge} rounded-pill">${App.Utils.escapeHtml(String(evt.status))}</span></td>
+          <td>
+            <button class="btn btn-sm btn-outline-primary me-2" data-action="edit-event" data-id="${App.Utils.escapeHtml(String(evt.event_id))}"><i class="bi bi-pencil"></i></button>
+            <button class="btn btn-sm btn-outline-danger" data-action="delete-event" data-id="${App.Utils.escapeHtml(String(evt.event_id))}"><i class="bi bi-trash"></i></button>
+          </td>
+        </tr>
+      `;
+      tbody.insertAdjacentHTML('beforeend', rowHTML);
+    });
+  },
+  refresh: function() {
+    this.load();
+  },
+  destroy: function() {
+    App.Logger.info('Events destroy');
+  }
+};
+</script>

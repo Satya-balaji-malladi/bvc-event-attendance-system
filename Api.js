@@ -1,0 +1,94 @@
+/**
+ * Api.js
+ * 
+ * Top-level Google Apps Script global function wrappers.
+ * google.script.run can only invoke top-level functions.
+ * This file exposes the Controller methods to the frontend.
+ * Contains no business logic, acts as a thin routing layer.
+ */
+
+// ==========================================
+// Authentication API
+// ==========================================
+function login(credentials) { return Controller.Auth.login(credentials); }
+function logout(sessionToken) { return Controller.Auth.logout(sessionToken); }
+function authenticate(sessionToken) { return Controller.Auth.authenticate(sessionToken); }
+
+// ==========================================
+// Session API
+// ==========================================
+function validateSession(sessionToken) { return Controller.Session.validateSession(sessionToken); }
+function getCurrentUser(sessionToken) { return Controller.Session.getCurrentUser(sessionToken); }
+function hasRole(sessionToken, role) { return Controller.Session.hasRole(sessionToken, role); }
+
+// ==========================================
+// User API
+// ==========================================
+function createUser(userData) { return Controller.User.createUser(userData); }
+function getUserById(userId) { return Controller.User.getUserById(userId); }
+function getUserByUsername(username) { return Controller.User.getUserByUsername(username); }
+// function getAllUsers() moved to Code.js
+function updateUser(userId, userData) { return Controller.User.updateUser(userId, userData); }
+function deleteUser(userId) { return Controller.User.deleteUser(userId); }
+function deactivateUser(userId) { return Controller.User.deactivateUser(userId); }
+function activateUser(userId) { return Controller.User.activateUser(userId); }
+function searchUsers(keyword) { return Controller.User.searchUsers(keyword); }
+function changePassword(userId, oldPassword, newPassword) { return Controller.User.changePassword(userId, oldPassword, newPassword); }
+
+// ==========================================
+// Student API
+// ==========================================
+function createStudent(studentData) { return Controller.Student.createStudent(studentData); }
+function updateStudent(rollNumber, studentData) { return Controller.Student.updateStudent(rollNumber, studentData); }
+function deleteStudent(rollNumber) { return Controller.Student.deleteStudent(rollNumber); }
+function getStudentByRollNumber(rollNumber) { return Controller.Student.getStudentByRollNumber(rollNumber); }
+// function getAllStudents() moved to Code.js
+function searchStudents(keyword) { return Controller.Student.searchStudents(keyword); }
+function getStudentsByDepartment(department) { return Controller.Student.getStudentsByDepartment(department); }
+function getStudentsByYear(year) { return Controller.Student.getStudentsByYear(year); }
+function getStudentsBySection(section) { return Controller.Student.getStudentsBySection(section); }
+
+// ==========================================
+// Event API
+// ==========================================
+function createEvent(eventData) { return Controller.Event.createEvent(eventData); }
+function updateEvent(eventId, eventData) { return Controller.Event.updateEvent(eventId, eventData); }
+function deleteEvent(eventId) { return Controller.Event.deleteEvent(eventId); }
+function getEventById(eventId) { return Controller.Event.getEventById(eventId); }
+// function getAllEvents() moved to Code.js
+function searchEvents(keyword) { return Controller.Event.searchEvents(keyword); }
+function getEventsByCoordinator(coordinatorId) { return Controller.Event.getEventsByCoordinator(coordinatorId); }
+function getEventsByStatus(status) { return Controller.Event.getEventsByStatus(status); }
+function getEventsByDate(date) { return Controller.Event.getEventsByDate(date); }
+function completeEvent(eventId) { return Controller.Event.completeEvent(eventId); }
+function activateEvent(eventId) { return Controller.Event.activateEvent(eventId); }
+
+// ==========================================
+// Attendance API
+// ==========================================
+function markAttendance(attendanceData) { return Controller.Attendance.markAttendance(attendanceData); }
+function deleteAttendance(attendanceId) { return Controller.Attendance.deleteAttendance(attendanceId); }
+function getAttendanceById(attendanceId) { return Controller.Attendance.getAttendanceById(attendanceId); }
+// function getAttendanceByEvent(eventId) moved to Code.js
+function getAttendanceByStudent(rollNumber) { return Controller.Attendance.getAttendanceByStudent(rollNumber); }
+function getAttendanceByDate(date) { return Controller.Attendance.getAttendanceByDate(date); }
+function getAttendanceByStatus(status) { return Controller.Attendance.getAttendanceByStatus(status); }
+function checkAttendanceExists(eventId, rollNumber) { return Controller.Attendance.checkAttendanceExists(eventId, rollNumber); }
+function getEventAttendanceCount(eventId) { return Controller.Attendance.getEventAttendanceCount(eventId); }
+function getStudentAttendanceCount(rollNumber) { return Controller.Attendance.getStudentAttendanceCount(rollNumber); }
+function getStudentAttendanceSummary(rollNumber) { return Controller.Attendance.getStudentAttendanceSummary(rollNumber); }
+function getOverallAttendanceStatistics() { return Controller.Attendance.getOverallAttendanceStatistics(); }
+function getAttendanceSummaryByEvent(eventId) { return Controller.Attendance.getAttendanceSummaryByEvent(eventId); }
+
+// ==========================================
+// Report API
+// ==========================================
+// function getDashboardSummary() moved to Code.js
+function getEventReport(eventId) { return Controller.Report.getEventReport(eventId); }
+function getStudentReport(rollNumber) { return Controller.Report.getStudentReport(rollNumber); }
+function getDepartmentReport(department) { return Controller.Report.getDepartmentReport(department); }
+function getYearWiseReport(year) { return Controller.Report.getYearWiseReport(year); }
+function getSectionReport(section) { return Controller.Report.getSectionReport(section); }
+function getDateWiseReport(date) { return Controller.Report.getDateWiseReport(date); }
+function getOverallAttendanceReport() { return Controller.Report.getOverallAttendanceReport(); }
+function getCoordinatorReport(coordinatorId) { return Controller.Report.getCoordinatorReport(coordinatorId); }

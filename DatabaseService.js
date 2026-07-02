@@ -67,13 +67,26 @@ const DatabaseService = {
     const dataRange = sheet.getRange(1, 1, lastRow, lastColumn).getValues();
     const headers = dataRange.shift();
     
-    return dataRange.map(row => {
+    const records = dataRange.map(row => {
       let record = {};
       headers.forEach((header, index) => {
         record[header] = row[index];
       });
       return record;
     });
+
+    if (sheetName === CONFIG.SHEETS.EVENTS) {
+      Logger.log("DatabaseService.readAllRows(" + sheetName + "): Read " + records.length + " rows");
+      if (records.length > 0) {
+        Logger.log("First event object from DB: " + JSON.stringify(records[0]));
+      }
+    }
+    
+    if (sheetName === CONFIG.SHEETS.USERS) {
+      Logger.log("STEP 5 - DatabaseService readAllRows for USERS: Length = " + records.length);
+    }
+
+    return records;
   },
 
   /**
@@ -83,10 +96,12 @@ const DatabaseService = {
    * @returns {boolean} True if inserted successfully.
    */
   insertRow: function(sheetName, recordData) {
+    Logger.log("BACKEND STEP 5.1: DatabaseService.insertRow started for sheet: " + sheetName);
     const sheet = this.getSheet(sheetName);
     const headers = this.getHeaderRow(sheetName);
     
     if (headers.length === 0) {
+      Logger.log("BACKEND EXCEPTION: No headers found in sheet.");
       throw new Error('Cannot insert into a sheet without headers.');
     }
     
@@ -94,7 +109,9 @@ const DatabaseService = {
       return recordData.hasOwnProperty(header) ? recordData[header] : '';
     });
 
+    Logger.log("BACKEND STEP 5.2: Appending row...");
     sheet.appendRow(rowData);
+    Logger.log("BACKEND STEP 5.3: Append complete.");
     return true;
   },
 

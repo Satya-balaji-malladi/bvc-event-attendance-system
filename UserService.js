@@ -28,21 +28,26 @@ const UserService = {
    * @returns {object} Standard response object.
    */
   createUser: function(userData) {
+    Logger.log("BACKEND STEP 3: UserService.createUser started");
     const userToCreate = Object.assign({}, userData);
     userToCreate.role = userToCreate.role || CONFIG.ROLES.COORDINATOR;
     userToCreate.status = userToCreate.status || CONFIG.USER_STATUS.ACTIVE;
     userToCreate.password = userToCreate.password || Utils.generateRandomPassword();
 
+    Logger.log("BACKEND STEP 4: Calling ValidationService.validateUser");
     const validationResult = ValidationService.validateUser(userToCreate);
     if (!validationResult.valid) {
+      Logger.log("BACKEND STEP 4: Validation failed: " + validationResult.errors.join(' '));
       return Utils.buildResponse(false, validationResult.errors.join(' '));
     }
 
     if (!this._isUsernameAvailable(userToCreate.username)) {
+      Logger.log("BACKEND STEP 4: Username taken");
       return Utils.buildResponse(false, CONFIG.MESSAGES.USERNAME_EXISTS || 'Username already exists.');
     }
 
     if (!this._isEmailAvailable(userToCreate.email)) {
+      Logger.log("BACKEND STEP 4: Email taken");
       return Utils.buildResponse(false, CONFIG.MESSAGES.EMAIL_EXISTS || 'Email already exists.');
     }
 
@@ -59,7 +64,10 @@ const UserService = {
       created_at: Utils.formatDate(Utils.getCurrentDate())
     };
 
+    Logger.log("BACKEND STEP 5: Calling DatabaseService.insertRow for user: " + newUser.user_id);
     const success = DatabaseService.insertRow(CONFIG.SHEETS.USERS, newUser);
+    Logger.log("BACKEND STEP 6: DatabaseService.insertRow returned: " + success);
+
     if (success) {
       return Utils.buildResponse(true, CONFIG.MESSAGES.USER_CREATED || 'User created successfully.', { user: Utils.sanitizeUser(newUser) });
     }
@@ -180,8 +188,11 @@ const UserService = {
    * @returns {object[]} Array of safe user objects.
    */
   getAllUsers: function() {
-    const records = DatabaseService.readAllRows(CONFIG.SHEETS.USERS);
-    return records.map(user => Utils.sanitizeUser(user));
+    const records = DatabaseService.readAllRows(CONFIG.SHEETS.USERS) || [];
+    Logger.log("STEP 4 - UserService.getAllUsers received from DB: " + typeof records + " / Array? " + Array.isArray(records) + " / Length: " + records.length);
+    const sanitized = records.map(user => Utils.sanitizeUser(user));
+    Logger.log("STEP 4 - UserService returning sanitized array: " + Array.isArray(sanitized) + " / Length: " + sanitized.length);
+    return sanitized;
   },
 
   /**

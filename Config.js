@@ -28,7 +28,7 @@ const CONFIG = {
 
   // 4. User Roles
   ROLES: {
-    SUPER_ADMIN: 'Super Admin',
+    ADMIN: 'Admin',
     COORDINATOR: 'Coordinator'
   },
 

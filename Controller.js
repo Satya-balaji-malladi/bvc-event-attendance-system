@@ -83,7 +83,10 @@ const Controller = {
      * @returns {object} Response object.
      */
     createUser: function(userData) {
-      return UserService.createUser(userData);
+      Logger.log("BACKEND STEP 2: Controller.User.createUser started");
+      const result = UserService.createUser(userData);
+      Logger.log("BACKEND STEP 7: Controller.User.createUser finished.");
+      return result;
     },
 
     /**
@@ -105,11 +108,12 @@ const Controller = {
     },
 
     /**
-     * Retrieves all users.
      * @returns {object[]} Array of all users.
      */
     getAllUsers: function() {
-      return UserService.getAllUsers();
+      const users = UserService.getAllUsers();
+      Logger.log("STEP 3 - Controller.User.getAllUsers received from UserService: " + typeof users + " / Array? " + Array.isArray(users) + " / Length: " + (users ? users.length : 0));
+      return users || [];
     },
 
     /**
@@ -299,10 +303,12 @@ const Controller = {
 
     /**
      * Retrieves all events.
-     * @returns {object[]}
+     * @returns {object} Response object.
      */
     getAllEvents: function() {
-      return EventService.getAllEvents();
+      const events = EventService.getAllEvents();
+      Logger.log("Controller.Event.getAllEvents() events length: " + (events ? events.length : "null"));
+      return events || [];
     },
 
     /**

@@ -153,7 +153,17 @@ const EventService = {
    * @returns {object[]} Array of all event objects.
    */
   getAllEvents: function() {
-    return DatabaseService.readAllRows(CONFIG.SHEETS.EVENTS);
+    try {
+      const events = DatabaseService.readAllRows(CONFIG.SHEETS.EVENTS) || [];
+      Logger.log("EventService.getAllEvents() database rows: " + events.length);
+      if (events.length > 0) {
+        Logger.log(JSON.stringify(events[0]));
+      }
+      return events;
+    } catch (e) {
+      Logger.log("Error in EventService.getAllEvents: " + e.message);
+      return [];
+    }
   },
 
   /**

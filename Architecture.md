@@ -138,7 +138,15 @@ Responsibilities
 
 # 6. System Layers
 
-Frontend
+Frontend (HtmlService)
+
+↓
+
+Api.js (Top-level google.script.run wrappers)
+
+↓
+
+Controller.js (API routing layer)
 
 ↓
 
@@ -157,6 +165,20 @@ Frontend never accesses Google Sheets directly.
 ---
 
 # 7. Service Architecture
+
+## Api.js
+
+Purpose
+
+Expose top-level wrapper functions for `google.script.run`.
+
+Contains
+
+* Global function wrappers for all Controller methods.
+
+No business logic.
+
+---
 
 ## Config.js
 

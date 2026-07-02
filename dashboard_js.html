@@ -1,0 +1,256 @@
+<script>
+/**
+ * ==========================================
+ * DASHBOARD MODULE
+ * ==========================================
+ */
+App.Modules.dashboard = {
+  _listenerAttached: false,
+
+  init: function() {
+    this.attachListeners();
+    this.load();
+  },
+
+  load: function(forceRefresh = false) {
+    if (!forceRefresh) {
+      const cachedData = App.Cache.get('dashboardData');
+      if (cachedData) {
+        this.render(cachedData);
+        return;
+      }
+    }
+
+    // Reference-counted loading happens inside API wrapper automatically
+    Promise.all([
+      App.API.getDashboardSummary(),
+      App.API.getAllEvents(),
+      App.API.getAllUsers(),
+      App.API.getAllStudents()
+    ])
+    .then(([summaryRes, eventsRes, usersRes, studentsRes]) => {
+      console.log("Summary Response:", summaryRes);
+      console.log("Events Response:", eventsRes);
+      console.log("Users Response:", usersRes);
+      console.log("Students Response:", studentsRes);
+
+      if (!summaryRes) console.error("API returned null:", "getDashboardSummary");
+      if (!eventsRes) console.error("API returned null:", "getAllEvents");
+      if (!usersRes) console.error("API returned null:", "getAllUsers");
+      if (!studentsRes) console.error("API returned null:", "getAllStudents");
+
+      const summary = summaryRes?.report || summaryRes || {};
+      let events = eventsRes?.data || eventsRes || [];
+      const users = usersRes?.data || usersRes || [];
+      const students = studentsRes?.data || studentsRes || [];
+
+      // 1. Log Raw Events Response
+      console.log("Raw Events Response:", eventsRes);
+      
+      // Adapt field mapping if necessary (Requirement 4, 8)
+      events = events.map(e => ({
+        ...e,
+        event_id: e.event_id || e.EventID || e.eventId || e.id || e.ID,
+        event_name: e.event_name || e.EventName || e.eventName || e.title || e.Name,
+        event_date: e.event_date || e.EventDate || e.eventDate || e.date || e.Date,
+        status: e.status || e.Status || e.event_status || e.State,
+        coordinator_id: e.coordinator_id || e.CoordinatorID || e.coordinatorId || e.coordinator
+      }));
+
+      // 1 & 2. Log Parsed Events and First Event
+      console.log("Events API Response", events);
+      console.log("Parsed Events:", events);
+      console.table(events);
+      if (events.length > 0) {
+        console.log("First Event:", events[0]);
+      }
+
+      const sortedEvents = [...events].sort((a, b) => new Date(b.event_date) - new Date(a.event_date));
+      
+      // Calculate active/upcoming separately to debug logic
+      const activeEvents = events.filter(e => e.status === App.Constants.EVENT_STATUS.ACTIVE || e.status === App.Constants.EVENT_STATUS.UPCOMING).length;
+      const completedEvents = events.filter(e => e.status === App.Constants.EVENT_STATUS.COMPLETED).length;
+      
+      const coordinators = users.filter(u => u.role === App.Constants.ROLES.COORDINATOR).length;
+      const uniqueDepartments = new Set(students.map(s => s.department)).size;
+
+      const latestEvents = sortedEvents.slice(0, 5).map(evt => {
+        const coord = users.find(u => u.user_id === evt.coordinator_id);
+        return { ...evt, coordinator_name: coord ? coord.full_name : 'Unknown' };
+      });
+
+      // 5. Gather debug stats for Dashboard UI
+      const debugStats = {
+        totalEventsLoaded: events.length,
+        upcomingCount: events.filter(e => e.status === App.Constants.EVENT_STATUS.UPCOMING || String(e.status).toUpperCase() === 'UPCOMING').length,
+        activeCount: events.filter(e => e.status === App.Constants.EVENT_STATUS.ACTIVE || String(e.status).toUpperCase() === 'ACTIVE').length,
+        completedCount: events.filter(e => e.status === App.Constants.EVENT_STATUS.COMPLETED || String(e.status).toUpperCase() === 'COMPLETED').length
+      };
+
+      let latestAttendancePromise = Promise.resolve([]);
+      if (sortedEvents.length > 0) {
+        latestAttendancePromise = App.API.getAttendanceByEvent(sortedEvents[0].event_id)
+          .then(res => {
+            console.log("Raw Attendance Response:", res);
+            if (!res) console.error("API returned null:", "getAttendanceByEvent");
+            let attendance = res?.data || res || [];
+            console.table(attendance);
+            
+            // Adapt attendance fields if they differ
+            attendance = attendance.map(a => ({
+              ...a,
+              roll_number: a.roll_number || a.RollNumber || a.rollNumber || a.Roll_Number,
+              status: a.status || a.Status || a.attendance_status,
+              timestamp: a.timestamp || a.Timestamp || a.time
+            }));
+            return attendance;
+          })
+          .then(attendance => {
+            return attendance.slice(0, 10).map(att => {
+              const student = students.find(s => s.roll_number === att.roll_number);
+              return {
+                ...att,
+                student_name: student ? student.student_name : 'Unknown',
+                event_name: sortedEvents[0].event_name,
+                timestamp: att.timestamp || new Date().toLocaleString()
+              };
+            });
+          })
+          .catch(() => []);
+      }
+
+      return latestAttendancePromise.then(latestAttendance => {
+        const dashboardData = {
+          summary, activeEvents, completedEvents, coordinators, uniqueDepartments, latestEvents, latestAttendance, debugStats
+        };
+        App.Cache.set('dashboardData', dashboardData);
+        this.render(dashboardData);
+      });
+    })
+    .catch(error => {
+      App.ErrorHandler.handle(error, 'Failed to load dashboard data.');
+    });
+  },
+
+  refresh: function() {
+    this.load(true);
+  },
+
+  render: function(data) {
+    if (!data.summary) return;
+    
+    document.getElementById('dash-total-students').innerText = App.Utils.escapeHtml(String(data.summary.totalStudents || 0));
+    document.getElementById('dash-total-events').innerText = App.Utils.escapeHtml(String(data.summary.totalEvents || 0));
+    document.getElementById('dash-total-present').innerText = App.Utils.escapeHtml(String(data.summary.totalPresent || 0));
+    document.getElementById('dash-total-absent').innerText = App.Utils.escapeHtml(String(data.summary.totalAbsent || 0));
+    document.getElementById('dash-total-attendance').innerText = App.Utils.escapeHtml(String(data.summary.totalAttendance || 0));
+    
+    const pct = data.summary.attendancePercentage || 0;
+    document.getElementById('dash-percentage').innerText = App.Utils.escapeHtml(String(pct)) + '%';
+    const pBar = document.getElementById('dash-progress-bar');
+    if (pBar) {
+      pBar.style.width = pct + '%';
+      pBar.className = 'progress-bar ' + (pct >= 85 ? 'bg-success' : pct >= 75 ? 'bg-warning' : 'bg-danger');
+    }
+
+    document.getElementById('summary-departments').innerText = App.Utils.escapeHtml(String(data.uniqueDepartments || 0));
+    document.getElementById('summary-coordinators').innerText = App.Utils.escapeHtml(String(data.coordinators || 0));
+    document.getElementById('summary-active-events').innerText = App.Utils.escapeHtml(String(data.activeEvents || 0));
+    document.getElementById('summary-completed-events').innerText = App.Utils.escapeHtml(String(data.completedEvents || 0));
+
+    const evtBody = document.getElementById('dash-events-table-body');
+    const evtEmpty = document.getElementById('dash-events-empty');
+    if (evtBody && evtEmpty) {
+      evtBody.innerHTML = '';
+      if (!data.latestEvents || !data.latestEvents.length) {
+        evtEmpty.classList.remove('d-none');
+        evtBody.parentElement.classList.add('d-none');
+      } else {
+        evtEmpty.classList.add('d-none');
+        evtBody.parentElement.classList.remove('d-none');
+        data.latestEvents.forEach(evt => {
+          let badge = evt.status === App.Constants.EVENT_STATUS.UPCOMING ? 'bg-primary' : 
+                      evt.status === App.Constants.EVENT_STATUS.COMPLETED ? 'bg-success' : 
+                      evt.status === App.Constants.EVENT_STATUS.ACTIVE ? 'bg-info' : 'bg-secondary';
+          evtBody.insertAdjacentHTML('beforeend', 
+            `<tr>
+              <td class="fw-medium">${App.Utils.escapeHtml(evt.event_name || 'N/A')}</td>
+              <td class="text-muted">${App.Utils.escapeHtml(evt.event_date || 'N/A')}</td>
+              <td class="text-muted">${App.Utils.escapeHtml(evt.coordinator_name || 'N/A')}</td>
+              <td><span class="badge ${badge} rounded-pill">${App.Utils.escapeHtml(evt.status || 'N/A')}</span></td>
+            </tr>`
+          );
+        });
+      }
+    }
+
+      const attBody = document.getElementById('dash-attendance-table-body');
+      const attEmpty = document.getElementById('dash-attendance-empty');
+      if (attBody && attEmpty) {
+        attBody.innerHTML = '';
+        if (!data.latestAttendance || !data.latestAttendance.length) {
+          attEmpty.classList.remove('d-none');
+          attBody.parentElement.classList.add('d-none');
+        } else {
+          attEmpty.classList.add('d-none');
+          attBody.parentElement.classList.remove('d-none');
+          data.latestAttendance.forEach(rec => {
+            let badge = rec.status === App.Constants.ATTENDANCE_STATUS.PRESENT ? 'bg-success' : 'bg-danger';
+            attBody.insertAdjacentHTML('beforeend', 
+              `<tr>
+                <td class="fw-medium">${App.Utils.escapeHtml(rec.roll_number || 'N/A')}</td>
+                <td>${App.Utils.escapeHtml(rec.student_name || 'N/A')}</td>
+                <td class="text-muted">${App.Utils.escapeHtml(rec.event_name || 'N/A')}</td>
+                <td class="text-muted"><small>${App.Utils.escapeHtml(rec.timestamp || 'N/A')}</small></td>
+                <td><span class="badge ${badge} rounded-pill">${App.Utils.escapeHtml(rec.status || 'N/A')}</span></td>
+              </tr>`
+            );
+          });
+        }
+      }
+
+      // 5. Add a temporary debug section at the bottom of Dashboard
+      let debugSection = document.getElementById('dash-debug-section');
+      if (!debugSection) {
+        debugSection = document.createElement('div');
+        debugSection.id = 'dash-debug-section';
+        debugSection.style.cssText = 'margin-top:20px; padding:15px; background:#f8d7da; color:#721c24; border:1px solid #f5c6cb; border-radius:5px; font-family:monospace;';
+        const container = document.getElementById('module-dashboard');
+        if (container) container.appendChild(debugSection);
+      }
+      if (debugSection && data.debugStats) {
+        debugSection.innerHTML = `
+          <strong>Debug Information:</strong><br>
+          Total Events Loaded: ${data.debugStats.totalEventsLoaded}<br>
+          Upcoming Count: ${data.debugStats.upcomingCount}<br>
+          Active Count: ${data.debugStats.activeCount}<br>
+          Completed Count: ${data.debugStats.completedCount}
+        `;
+      }
+    },
+
+  attachListeners: function() {
+    // Prevent duplicate event delegation on repeated inits
+    if (this._listenerAttached) return;
+
+    // Use event delegation on the dashboard module container
+    const container = document.getElementById('module-dashboard');
+    if (container) {
+      container.addEventListener('click', (e) => {
+        const btn = e.target.closest('.quick-action-btn');
+        if (btn) {
+          const action = btn.getAttribute('data-action');
+          if (action) App.Router.navigate(action);
+        }
+      });
+      this._listenerAttached = true;
+    }
+  },
+
+  destroy: function() {
+    // Since we use event delegation on a static container, 
+    // cleanup isn't strictly necessary, but maintained for architectural consistency.
+    App.Logger.info('Dashboard module destroyed');
+  }
+};
+</script>
