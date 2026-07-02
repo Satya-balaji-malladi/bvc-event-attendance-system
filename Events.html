@@ -1,24 +1,389 @@
 <div class="card h-100 border-0 shadow-sm module-card">
-  <div class="card-header bg-white border-bottom-0 pt-4 px-4 d-flex justify-content-between align-items-center">
-    <h5 class="fw-semibold mb-0">Events Management</h5>
-    <button class="btn btn-primary" data-action="create-event"><i class="bi bi-calendar-plus me-2"></i>Create Event</button>
+  <!-- Stats Section -->
+  <div class="card-header bg-white border-bottom-0 pt-4 px-4">
+    <div class="row g-2 mb-4" id="events-stats-container">
+      <div class="col">
+        <div class="p-3 bg-light rounded text-center h-100">
+          <h6 class="text-muted mb-1 small">Total Events</h6>
+          <h4 class="mb-0 fw-bold" id="events-stat-total">0</h4>
+        </div>
+      </div>
+      <div class="col">
+        <div class="p-3 bg-light rounded text-center h-100">
+          <h6 class="text-muted mb-1 small">Upcoming</h6>
+          <h4 class="mb-0 fw-bold text-primary" id="events-stat-upcoming">0</h4>
+        </div>
+      </div>
+      <div class="col">
+        <div class="p-3 bg-light rounded text-center h-100">
+          <h6 class="text-muted mb-1 small">Active</h6>
+          <h4 class="mb-0 fw-bold text-success" id="events-stat-active">0</h4>
+        </div>
+      </div>
+      <div class="col">
+        <div class="p-3 bg-light rounded text-center h-100">
+          <h6 class="text-muted mb-1 small">Stopped</h6>
+          <h4 class="mb-0 fw-bold text-dark" id="events-stat-stopped">0</h4>
+        </div>
+      </div>
+      <div class="col">
+        <div class="p-3 bg-light rounded text-center h-100">
+          <h6 class="text-muted mb-1 small">Completed</h6>
+          <h4 class="mb-0 fw-bold text-info" id="events-stat-completed">0</h4>
+        </div>
+      </div>
+      <div class="col">
+        <div class="p-3 bg-light rounded text-center h-100">
+          <h6 class="text-muted mb-1 small">Cancelled</h6>
+          <h4 class="mb-0 fw-bold text-danger" id="events-stat-cancelled">0</h4>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="row g-2 align-items-center pb-3 border-bottom">
+      <div class="col-md-2">
+        <input type="text" id="events-search-input" class="form-control" placeholder="Search events...">
+      </div>
+      <div class="col-md-2">
+        <select id="events-dept-filter" class="form-select">
+          <option value="">All Depts</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select id="events-coord-filter" class="form-select">
+          <option value="">All Coordinators</option>
+        </select>
+      </div>
+      <div class="col-md-2">
+        <select id="events-status-filter" class="form-select">
+          <option value="">All Statuses</option>
+          <option value="Draft">Draft</option>
+          <option value="Upcoming">Upcoming</option>
+          <option value="Active">Active</option>
+          <option value="Stopped">Stopped</option>
+          <option value="Completed">Completed</option>
+          <option value="Cancelled">Cancelled</option>
+        </select>
+      </div>
+      <div class="col-md-1">
+        <select id="events-month-filter" class="form-select">
+          <option value="">Month</option>
+          <option value="01">Jan</option><option value="02">Feb</option><option value="03">Mar</option>
+          <option value="04">Apr</option><option value="05">May</option><option value="06">Jun</option>
+          <option value="07">Jul</option><option value="08">Aug</option><option value="09">Sep</option>
+          <option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option>
+        </select>
+      </div>
+      <div class="col-md-1">
+        <select id="events-year-filter" class="form-select">
+          <option value="">Year</option>
+        </select>
+      </div>
+      <div class="col-md-2 text-end">
+         <button class="btn btn-primary btn-sm w-100" data-action="create-event"><i class="bi bi-calendar-plus me-1"></i>Create Event</button>
+      </div>
+    </div>
   </div>
-  <div class="card-body p-4">
+
+  <!-- Table -->
+  <div class="card-body p-4 pt-0">
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
+      <table class="table table-hover align-middle mb-4" id="events-table">
         <thead class="table-light">
           <tr>
             <th>Event ID</th>
             <th>Event Name</th>
-            <th>Date</th>
+            <th>Dates</th>
+            <th>Start Time</th>
+            <th>End Time</th>
+            <th>Venue</th>
+            <th>Coordinator</th>
+            <th>Target Depts</th>
             <th>Status</th>
-            <th>Actions</th>
+            <th class="text-end">Actions</th>
           </tr>
         </thead>
         <tbody id="events-table-body">
-          <tr><td colspan="5" class="text-center text-muted py-5">No events found</td></tr>
+          <tr><td colspan="10" class="text-center text-muted py-5">Loading events...</td></tr>
         </tbody>
       </table>
     </div>
+
+    <!-- Pagination UI -->
+    <div class="d-flex justify-content-between align-items-center mt-2">
+      <div class="d-flex align-items-center">
+        <span class="me-2 text-muted">Rows per page:</span>
+        <select id="events-per-page" class="form-select form-select-sm" style="width: auto;">
+          <option value="10" selected>10</option>
+          <option value="25">25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+      <nav aria-label="Events pagination">
+        <ul class="pagination mb-0" id="events-pagination">
+          <li class="page-item disabled"><a class="page-link" href="#" tabindex="-1">Previous</a></li>
+          <li class="page-item active"><a class="page-link" href="#">1</a></li>
+          <li class="page-item disabled"><a class="page-link" href="#">Next</a></li>
+        </ul>
+      </nav>
+    </div>
   </div>
+
+  <!-- Event Modal (Add/Edit/View) -->
+  <div class="modal fade" id="eventModal" tabindex="-1" aria-labelledby="eventModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <form id="eventForm" novalidate>
+          <div class="modal-header">
+            <h5 class="modal-title" id="eventModalLabel">Create Event</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+          <div class="modal-body">
+            <div id="eventModalError" class="alert alert-danger d-none"></div>
+            <div id="eventLockedBanner" class="alert alert-warning d-none">
+              <i class="bi bi-lock-fill me-2"></i> This event is locked because it has been completed/cancelled.
+            </div>
+            
+            <div class="row g-3">
+              <input type="hidden" id="eventOriginalId">
+              <input type="hidden" id="eventOriginalStatus">
+              
+              <div class="col-md-6 d-none" id="eventIdGroup">
+                <label for="eventId" class="form-label">Event ID</label>
+                <input type="text" class="form-control" id="eventId" readonly disabled>
+              </div>
+              <div class="col-md-6 d-none" id="eventCreatedAtGroup">
+                <label for="eventCreatedAt" class="form-label">Created Date</label>
+                <input type="text" class="form-control" id="eventCreatedAt" readonly disabled>
+              </div>
+              
+              <div class="col-md-12">
+                <label for="eventName" class="form-label">Event Name <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="eventName" required>
+                <div class="invalid-feedback">Event Name is required.</div>
+              </div>
+              
+              <div class="col-md-12">
+                <label for="eventDescription" class="form-label">Description</label>
+                <textarea class="form-control" id="eventDescription" rows="2"></textarea>
+              </div>
+
+              <div class="col-md-6">
+                <label for="eventStartDate" class="form-label">Start Date <span class="text-danger">*</span></label>
+                <input type="date" class="form-control" id="eventStartDate" required>
+                <div class="invalid-feedback">Start Date is required.</div>
+              </div>
+              <div class="col-md-6">
+                <label for="eventEndDate" class="form-label">End Date <span class="text-danger">*</span></label>
+                <input type="date" class="form-control" id="eventEndDate" required>
+                <div class="invalid-feedback">End Date is required.</div>
+              </div>
+
+              <div class="col-md-6">
+                <label for="eventStartTime" class="form-label">Start Time <span class="text-danger">*</span></label>
+                <input type="time" class="form-control" id="eventStartTime" required>
+                <div class="invalid-feedback">Start Time is required.</div>
+              </div>
+              <div class="col-md-6">
+                <label for="eventEndTime" class="form-label">End Time <span class="text-danger">*</span></label>
+                <input type="time" class="form-control" id="eventEndTime" required>
+                <div class="invalid-feedback">End Time is required.</div>
+              </div>
+
+              <div class="col-md-6">
+                <label for="eventVenue" class="form-label">Venue <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="eventVenue" required>
+                <div class="invalid-feedback">Venue is required.</div>
+              </div>
+              <div class="col-md-6">
+                <label for="eventCoordinator" class="form-label">Coordinator <span class="text-danger">*</span></label>
+                <select class="form-select" id="eventCoordinator" required>
+                  <option value="">Select Coordinator</option>
+                  <!-- Populated dynamically -->
+                </select>
+                <div class="invalid-feedback">Coordinator is required.</div>
+              </div>
+
+              <div class="col-md-6">
+                <label class="form-label">Target Departments <span class="text-danger">*</span></label>
+                <div class="dropdown">
+                  <button class="btn btn-outline-secondary w-100 text-start d-flex justify-content-between align-items-center" type="button" id="eventDepartmentsDropdownBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    <span id="eventDepartmentsDropdownText">Select Departments</span>
+                    <i class="bi bi-chevron-down"></i>
+                  </button>
+                  <div class="dropdown-menu w-100 p-2 shadow-sm" aria-labelledby="eventDepartmentsDropdownBtn">
+                    <div class="mb-2">
+                      <input type="text" class="form-control form-control-sm" id="eventDepartmentsSearch" placeholder="Search departments...">
+                    </div>
+                    <div class="mb-2 pb-2 border-bottom d-flex justify-content-between">
+                      <button type="button" class="btn btn-sm btn-link text-decoration-none p-0" id="eventDepartmentsSelectAll">Select All</button>
+                      <button type="button" class="btn btn-sm btn-link text-decoration-none text-danger p-0" id="eventDepartmentsClearAll">Clear All</button>
+                    </div>
+                    <div id="eventDepartmentsList" style="max-height: 200px; overflow-y: auto;">
+                      <!-- Populated dynamically -->
+                    </div>
+                  </div>
+                </div>
+                <input type="hidden" id="eventDepartments">
+                <div class="invalid-feedback">At least one Department is required.</div>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Target Years</label>
+                <div class="dropdown">
+                  <button class="btn btn-outline-secondary w-100 text-start d-flex justify-content-between align-items-center" type="button" id="eventYearsDropdownBtn" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                    <span id="eventYearsDropdownText">Select Years</span>
+                    <i class="bi bi-chevron-down"></i>
+                  </button>
+                  <div class="dropdown-menu w-100 p-2 shadow-sm" aria-labelledby="eventYearsDropdownBtn">
+                    <div class="mb-2 pb-2 border-bottom d-flex justify-content-between">
+                      <button type="button" class="btn btn-sm btn-link text-decoration-none p-0" id="eventYearsSelectAll">Select All</button>
+                      <button type="button" class="btn btn-sm btn-link text-decoration-none text-danger p-0" id="eventYearsClearAll">Clear All</button>
+                    </div>
+                    <div id="eventYearsList">
+                      <div class="form-check">
+                        <input class="form-check-input event-year-check" type="checkbox" value="1" id="yearCheck1">
+                        <label class="form-check-label" for="yearCheck1">1</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input event-year-check" type="checkbox" value="2" id="yearCheck2">
+                        <label class="form-check-label" for="yearCheck2">2</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input event-year-check" type="checkbox" value="3" id="yearCheck3">
+                        <label class="form-check-label" for="yearCheck3">3</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input event-year-check" type="checkbox" value="4" id="yearCheck4">
+                        <label class="form-check-label" for="yearCheck4">4</label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <input type="hidden" id="eventYears">
+              </div>
+
+              <div class="col-md-6">
+                <label for="eventCapacity" class="form-label">Maximum Capacity</label>
+                <input type="number" class="form-control" id="eventCapacity" min="1">
+              </div>
+              <!-- Creation Status (Only visible on Create) -->
+              <div class="col-md-6" id="eventCreationActionGroup">
+                <label for="eventCreationAction" class="form-label">Action <span class="text-danger">*</span></label>
+                <select class="form-select" id="eventCreationAction">
+                  <option value="Upcoming">Create Now</option>
+                  <option value="Draft">Schedule (Draft)</option>
+                </select>
+              </div>
+
+              <!-- Current Status Badge (Only visible on Edit) -->
+              <div class="col-md-6 d-none" id="eventCurrentStatusGroup">
+                <label class="form-label">Current Status</label>
+                <div id="eventCurrentStatusBadge" class="fs-6 d-block pt-1">
+                  <!-- Injected via JS -->
+                </div>
+              </div>
+
+              <!-- Lifecycle Preview & Dynamic Fields (Only in Edit mode) -->
+              <div class="col-md-12 d-none" id="lifecyclePreviewContainer">
+                <div class="card border-primary bg-light">
+                  <div class="card-body py-2 px-3">
+                    <h6 class="card-title text-primary fw-bold mb-1"><i class="bi bi-info-circle-fill me-1"></i>Lifecycle Preview</h6>
+                    <p class="card-text small mb-2" id="lifecyclePreviewText">No status change.</p>
+                    
+                    <div id="stopReasonGroup" class="d-none mb-2">
+                      <label for="stopReason" class="form-label small fw-bold mb-1">Stop Reason <span class="text-danger">*</span></label>
+                      <textarea class="form-control form-control-sm" id="stopReason" rows="2" minlength="10" maxlength="500"></textarea>
+                      <div class="invalid-feedback">A reason between 10 and 500 characters is required.</div>
+                    </div>
+
+                    <div id="resumeReasonGroup" class="d-none mb-2">
+                      <label for="resumeReason" class="form-label small fw-bold mb-1">Resume Reason (Optional)</label>
+                      <textarea class="form-control form-control-sm" id="resumeReason" rows="2" maxlength="500"></textarea>
+                    </div>
+
+                    <div id="cancelReasonGroup" class="d-none mb-2">
+                      <label for="cancelReason" class="form-label small fw-bold mb-1">Cancel Reason <span class="text-danger">*</span></label>
+                      <textarea class="form-control form-control-sm" id="cancelReason" rows="2" minlength="10" maxlength="500"></textarea>
+                      <div class="invalid-feedback">A reason between 10 and 500 characters is required.</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Timeline Section for View Modal -->
+              <div class="col-md-12 d-none mt-4" id="eventTimelineContainer">
+                <h6 class="border-bottom pb-2 mb-3 fw-bold text-primary"><i class="bi bi-clock-history me-2"></i>Event Timeline</h6>
+                <div class="timeline position-relative ps-3 border-start border-2 border-primary" id="eventTimelineList">
+                  <!-- Timeline items populated dynamically -->
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer border-top-0 d-flex justify-content-between bg-light">
+            <div id="lifecycleActionButtons" class="d-none">
+               <button type="button" class="btn btn-primary btn-sm me-2 d-none" id="btnLifecyclePublish">Publish Event</button>
+               <button type="button" class="btn btn-dark btn-sm me-2 d-none" id="btnLifecycleStop">Stop Event</button>
+               <button type="button" class="btn btn-danger btn-sm d-none" id="btnLifecycleCancel">Cancel Event</button>
+            </div>
+            <div>
+              <button type="button" class="btn btn-secondary text-white border-0 px-4" data-bs-dismiss="modal">Close</button>
+              <button type="submit" class="btn btn-primary px-4 shadow-sm" id="eventSaveBtn" form="eventForm">
+                <span class="spinner-border spinner-border-sm d-none me-2" role="status" aria-hidden="true" id="eventSaveSpinner"></span>
+                <span id="eventSaveBtnText">Save Event</span>
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Event Modal -->
+  <div class="modal fade" id="eventDeleteModal" tabindex="-1" aria-labelledby="eventDeleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="eventDeleteModalLabel">Confirm Delete</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p>Are you sure you want to permanently delete this event?</p>
+          <div class="alert alert-warning">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i> Deleting this event may affect attendance history. Delete only after confirmation.
+          </div>
+          <input type="hidden" id="deleteEventId">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-danger" id="eventConfirmDeleteBtn">
+            <span class="spinner-border spinner-border-sm d-none" id="eventDeleteSpinner" role="status" aria-hidden="true"></span>
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
+
+<style>
+.timeline-item {
+  position: relative;
+  margin-bottom: 1.5rem;
+}
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -1.4rem;
+  top: 0.3rem;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: var(--bs-primary);
+  border: 2px solid white;
+  box-shadow: 0 0 0 1px var(--bs-primary);
+}
+</style>

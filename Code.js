@@ -24,15 +24,60 @@ function include(filename) {
 function getAllEvents() {
   try {
     const res = Controller.Event.getAllEvents();
-    // Force serialization to strip any Google Apps Script internal types (like Dates) that might break google.script.run
     const serialized = JSON.parse(JSON.stringify(res || []));
     Logger.log("Global getAllEvents() returning array of length: " + serialized.length);
     return serialized;
-  } catch (e) {
+  } catch(e) {
     Logger.log("Error in global getAllEvents: " + e.message);
     return [];
   }
 }
+
+function createEvent(eventData) {
+  try {
+    const res = Controller.Event.createEvent(eventData);
+    return JSON.parse(JSON.stringify(res || {}));
+  } catch(e) {
+    Logger.log(e);
+    return { success: false, message: e.message };
+  }
+}
+
+function updateEvent(eventId, eventData) {
+  try {
+    Logger.log("BACKEND: Code.js updateEvent called for " + eventId);
+    const res = Controller.Event.updateEvent(eventId, eventData);
+    Logger.log("BACKEND: Code.js updateEvent returning success: " + (res && res.success));
+    return JSON.parse(JSON.stringify(res || {}));
+  } catch(e) {
+    Logger.log("BACKEND EXCEPTION in Code.js updateEvent: " + e.message);
+    return { success: false, message: e.message };
+  }
+}
+
+function deleteEvent(eventId) {
+  try {
+    const res = Controller.Event.deleteEvent(eventId);
+    return JSON.parse(JSON.stringify(res || {}));
+  } catch(e) {
+    Logger.log(e);
+    return { success: false, message: e.message };
+  }
+}
+
+function getEventById(eventId) {
+  try {
+    Logger.log("BACKEND: Code.js getEventById called for " + eventId);
+    const res = Controller.Event.getEventById(eventId);
+    Logger.log("BACKEND: Code.js getEventById returning event");
+    return JSON.parse(JSON.stringify(res || {}));
+  } catch(e) {
+    Logger.log("BACKEND EXCEPTION in Code.js getEventById: " + e.message);
+    return [];
+  }
+}
+
+
 
 function getAllUsers() {
   try {

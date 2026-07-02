@@ -289,7 +289,10 @@ const Controller = {
      * @returns {object} Response object.
      */
     updateEvent: function(eventId, eventData) {
-      return EventService.updateEvent(eventId, eventData);
+      Logger.log("BACKEND: Controller.Event.updateEvent started for " + eventId);
+      const result = EventService.updateEvent(eventId, eventData);
+      Logger.log("BACKEND: Controller.Event.updateEvent finished.");
+      return result;
     },
 
     /**
@@ -307,7 +310,10 @@ const Controller = {
      * @returns {object|null}
      */
     getEventById: function(eventId) {
-      return EventService.getEventById(eventId);
+      Logger.log("BACKEND: Controller.Event.getEventById started for " + eventId);
+      const result = EventService.getEventById(eventId);
+      Logger.log("BACKEND: Controller.Event.getEventById finished.");
+      return result;
     },
 
     /**
@@ -356,23 +362,6 @@ const Controller = {
       return EventService.getEventsByDate(date);
     },
 
-    /**
-     * Marks an event as completed.
-     * @param {string} eventId 
-     * @returns {object} Response object.
-     */
-    completeEvent: function(eventId) {
-      return EventService.completeEvent(eventId);
-    },
-
-    /**
-     * Marks an event as upcoming.
-     * @param {string} eventId 
-     * @returns {object} Response object.
-     */
-    activateEvent: function(eventId) {
-      return EventService.activateEvent(eventId);
-    }
   },
 
   // ==========================================

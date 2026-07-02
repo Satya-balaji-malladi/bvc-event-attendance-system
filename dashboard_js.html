@@ -169,9 +169,13 @@ App.Modules.dashboard = {
         evtEmpty.classList.add('d-none');
         evtBody.parentElement.classList.remove('d-none');
         data.latestEvents.forEach(evt => {
-          let badge = evt.status === App.Constants.EVENT_STATUS.UPCOMING ? 'bg-primary' : 
-                      evt.status === App.Constants.EVENT_STATUS.COMPLETED ? 'bg-success' : 
-                      evt.status === App.Constants.EVENT_STATUS.ACTIVE ? 'bg-info' : 'bg-secondary';
+          let badge = 'bg-secondary';
+          if (evt.status === App.Constants.EVENT_STATUS.UPCOMING) badge = 'bg-primary';
+          else if (evt.status === App.Constants.EVENT_STATUS.ACTIVE) badge = 'bg-success';
+          else if (evt.status === App.Constants.EVENT_STATUS.STOPPED) badge = 'bg-dark';
+          else if (evt.status === App.Constants.EVENT_STATUS.COMPLETED) badge = 'bg-info';
+          else if (evt.status === App.Constants.EVENT_STATUS.CANCELLED) badge = 'bg-danger';
+          
           evtBody.insertAdjacentHTML('beforeend', 
             `<tr>
               <td class="fw-medium">${App.Utils.escapeHtml(evt.event_name || 'N/A')}</td>

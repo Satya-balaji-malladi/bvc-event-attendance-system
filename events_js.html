@@ -5,74 +5,1079 @@
  * ==========================================
  */
 App.Modules.events = {
+  eventsData: [],
+  filteredData: [],
+  coordinatorsData: [],
+  departmentsData: new Set(),
+  sectionsData: new Set(),
+  currentPage: 1,
+  itemsPerPage: 10,
+  editingEventId: null,
+  isFormDirty: false,
+  
   init: function() {
-    console.log("Events Module Init");
     App.Logger.info('Events init');
-    this.load();
+    this.bindEvents();
+    this.loadDependencies().then(() => {
+      this.load();
+    });
   },
+
+  loadDependencies: function() {
+    return Promise.all([
+      App.API.getAllUsers().catch(() => []),
+      App.API.getAllStudents().catch(() => [])
+    ]).then(([users, students]) => {
+      const uData = users.data || users;
+      this.coordinatorsData = (Array.isArray(uData) ? uData : []).filter(u => u.role === App.Constants.ROLES.COORDINATOR || u.role === 'Coordinator');
+      
+      const defaultDepts = ['CSE', 'CSE (AI & ML)', 'CSE (Data Science)', 'Information Technology (IT)', 'Electronics & Communication Engineering (ECE)', 'Electrical & Electronics Engineering (EEE)', 'Mechanical Engineering', 'Civil Engineering'];
+      defaultDepts.forEach(d => this.departmentsData.add(d));
+
+      const sData = students.data || students;
+      const studList = Array.isArray(sData) ? sData : [];
+      studList.forEach(s => {
+        if (s.department && s.department !== 'N/A') this.departmentsData.add(s.department);
+      });
+
+      this.populateDependencyDropdowns();
+    });
+  },
+
+  populateDependencyDropdowns: function() {
+    // Coordinators Filter and Form
+    const coordFilter = document.getElementById('events-coord-filter');
+    const coordSelect = document.getElementById('eventCoordinator');
+    let coordHtml = '<option value="">Select Coordinator</option>';
+    let coordFilterHtml = '<option value="">All Coordinators</option>';
+    this.coordinatorsData.forEach(c => {
+      coordHtml += `<option value="${App.Utils.escapeHtml(c.user_id)}">${App.Utils.escapeHtml(c.full_name)}</option>`;
+      coordFilterHtml += `<option value="${App.Utils.escapeHtml(c.user_id)}">${App.Utils.escapeHtml(c.full_name)}</option>`;
+    });
+    if (coordFilter) coordFilter.innerHTML = coordFilterHtml;
+    if (coordSelect) coordSelect.innerHTML = coordHtml;
+
+    // Departments Filter and Custom Checkbox Form
+    const deptFilter = document.getElementById('events-dept-filter');
+    const deptList = document.getElementById('eventDepartmentsList');
+    
+    let deptFilterHtml = '<option value="">All Depts</option>';
+    let deptCheckboxHtml = '';
+    
+    Array.from(this.departmentsData).sort().forEach((d, idx) => {
+      deptFilterHtml += `<option value="${App.Utils.escapeHtml(d)}">${App.Utils.escapeHtml(d)}</option>`;
+      deptCheckboxHtml += `
+        <div class="form-check event-department-item">
+          <input class="form-check-input event-dept-check" type="checkbox" value="${App.Utils.escapeHtml(d)}" id="deptCheck${idx}">
+          <label class="form-check-label department-label" for="deptCheck${idx}">${App.Utils.escapeHtml(d)}</label>
+        </div>
+      `;
+    });
+    
+    if (deptFilter) deptFilter.innerHTML = deptFilterHtml;
+    if (deptList) deptList.innerHTML = deptCheckboxHtml;
+  },
+
   load: function() {
-    console.log("Events Module Load");
+    const tbody = document.getElementById('events-table-body');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-5"><div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>Loading events...</td></tr>';
     
     App.API.getAllEvents()
-      .then(events => {
-        console.log("Events received:", events);
+      .then(res => {
+        const data = res.data || res;
+        this.eventsData = Array.isArray(data) ? data : [];
         
-        // Adapt properties if needed
-        const mappedEvents = (events || []).map(e => ({
+        // Normalize fields based on Attendance Module requirement list
+        this.eventsData = this.eventsData.map(e => ({
           ...e,
           event_id: e.event_id || e.EventID || e.eventId || e.id || 'N/A',
           event_name: e.event_name || e.EventName || e.eventName || e.title || 'N/A',
-          event_date: e.event_date || e.EventDate || e.eventDate || e.date || 'N/A',
+          description: e.description || e.Description || e.event_description || '',
+          start_date: e.start_date || e.StartDate || e.startDate || e.event_date || 'N/A',
+          end_date: e.end_date || e.EndDate || e.endDate || e.event_date || 'N/A',
+          start_time: e.start_time || e.StartTime || e.startTime || 'N/A',
+          end_time: e.end_time || e.EndTime || e.endTime || 'N/A',
           venue: e.venue || e.Venue || 'N/A',
           coordinator_id: e.coordinator_id || e.CoordinatorID || e.coordinatorId || e.coordinator || 'N/A',
-          status: e.status || e.Status || e.event_status || 'N/A'
+          departments: e.departments || e.Departments || e.department || e.dept || '',
+          years: e.years || e.Years || e.year || '',
+          capacity: e.capacity || e.MaximumCapacity || e.max_capacity || 'N/A',
+          status: e.status || e.Status || e.event_status || 'Upcoming',
+          created_at: e.created_at || e.CreatedAt || e.createdAt || 'N/A'
         }));
         
-        this.renderEvents(mappedEvents);
+        this.applyFilters();
       })
       .catch(err => {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="10" class="text-center text-danger py-5">Failed to load events</td></tr>';
         App.ErrorHandler.handle(err, "Failed to load events in Events module");
       });
   },
-  renderEvents: function(events) {
+
+  bindEvents: function() {
+    const searchInput = document.getElementById('events-search-input');
+    const deptFilter = document.getElementById('events-dept-filter');
+    const coordFilter = document.getElementById('events-coord-filter');
+    const statusFilter = document.getElementById('events-status-filter');
+    const monthFilter = document.getElementById('events-month-filter');
+    const yearFilter = document.getElementById('events-year-filter');
+    const perPageSelect = document.getElementById('events-per-page');
+
+    if (searchInput) searchInput.addEventListener('input', () => this.applyFilters());
+    if (deptFilter) deptFilter.addEventListener('change', () => this.applyFilters());
+    if (coordFilter) coordFilter.addEventListener('change', () => this.applyFilters());
+    if (statusFilter) statusFilter.addEventListener('change', () => this.applyFilters());
+    if (monthFilter) monthFilter.addEventListener('change', () => this.applyFilters());
+    if (yearFilter) yearFilter.addEventListener('change', () => this.applyFilters());
+    
+    // Setup Year Filter dynamically for the last 5 years + next 2
+    if (yearFilter) {
+      const currentYear = new Date().getFullYear();
+      let yearHtml = '<option value="">Year</option>';
+      for (let i = currentYear - 5; i <= currentYear + 2; i++) {
+        yearHtml += `<option value="${i}">${i}</option>`;
+      }
+      yearFilter.innerHTML = yearHtml;
+    }
+    
+    if (perPageSelect) {
+      perPageSelect.addEventListener('change', (e) => {
+        this.itemsPerPage = parseInt(e.target.value, 10);
+        this.currentPage = 1;
+        this.renderTable();
+      });
+    }
+
     const tbody = document.getElementById('events-table-body');
-    if (!tbody) {
-      console.error("events-table-body not found");
+    if (tbody) {
+      tbody.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        const action = btn.getAttribute('data-action');
+        const id = btn.getAttribute('data-id');
+        
+        if (action === 'view-event') this.openViewEventModal(id);
+        else if (action === 'edit-event') this.openEditEventModal(id);
+        else if (action === 'delete-event') this.openDeleteEventModal(id);
+      });
+    }
+
+    const addBtn = document.querySelector('button[data-action="create-event"]');
+    if (addBtn) addBtn.addEventListener('click', () => this.openAddEventModal());
+
+    const eventForm = document.getElementById('eventForm');
+    if (eventForm) eventForm.addEventListener('submit', (e) => this.handleEventSubmit(e));
+
+    const confirmDeleteBtn = document.getElementById('eventConfirmDeleteBtn');
+    if (confirmDeleteBtn) confirmDeleteBtn.addEventListener('click', () => this.handleDeleteEvent());
+    
+    const btnPublish = document.getElementById('btnLifecyclePublish');
+    if (btnPublish) btnPublish.addEventListener('click', () => this.handleLifecycleClick('Publish'));
+    
+    const btnStop = document.getElementById('btnLifecycleStop');
+    if (btnStop) btnStop.addEventListener('click', () => this.handleLifecycleClick('Stop'));
+    
+    const btnCancel = document.getElementById('btnLifecycleCancel');
+    if (btnCancel) btnCancel.addEventListener('click', () => this.handleLifecycleClick('Cancel'));
+
+    this.setupCustomDropdowns();
+    
+    // Dirty form checking
+    if (eventForm) {
+      eventForm.addEventListener('change', () => {
+        this.isFormDirty = true;
+      });
+      eventForm.addEventListener('input', () => {
+        this.isFormDirty = true;
+      });
+    }
+
+    const modalEl = document.getElementById('eventModal');
+    if (modalEl) {
+      modalEl.addEventListener('hide.bs.modal', (e) => {
+        if (this.isFormDirty) {
+          if (!confirm("You have unsaved changes. Do you really want to close?")) {
+            e.preventDefault();
+          } else {
+            this.isFormDirty = false;
+            this.editingEventId = null;
+          }
+        } else {
+          this.editingEventId = null;
+        }
+      });
+    }
+  },
+
+  applyFilters: function() {
+    const searchInput = document.getElementById('events-search-input');
+    const deptFilter = document.getElementById('events-dept-filter');
+    const coordFilter = document.getElementById('events-coord-filter');
+    const statusFilter = document.getElementById('events-status-filter');
+    const monthFilter = document.getElementById('events-month-filter');
+    const yearFilter = document.getElementById('events-year-filter');
+
+    const searchStr = (searchInput ? searchInput.value : '').toLowerCase().trim();
+    const deptVal = deptFilter ? deptFilter.value : '';
+    const coordVal = coordFilter ? coordFilter.value : '';
+    const statusVal = statusFilter ? statusFilter.value : '';
+    const monthVal = monthFilter ? monthFilter.value : '';
+    const yearVal = yearFilter ? yearFilter.value : '';
+
+    this.filteredData = this.eventsData.filter(e => {
+      let match = true;
+      
+      if (deptVal && !(e.departments || '').includes(deptVal)) match = false;
+      if (coordVal && e.coordinator_id !== coordVal) match = false;
+      if (statusVal && e.status !== statusVal) match = false;
+      if (yearVal && !(e.years || '').includes(yearVal)) match = false;
+      
+      if (e.start_date && e.start_date !== 'N/A') {
+        const [evYear, evMonth] = String(e.start_date).split('-');
+        if (monthVal && evMonth !== monthVal) match = false;
+      } else if (monthVal) {
+        match = false;
+      }
+      
+      if (match && searchStr) {
+        const coordObj = this.coordinatorsData.find(c => String(c.user_id) === String(e.coordinator_id));
+        const coordName = coordObj ? coordObj.full_name : e.coordinator_id;
+        
+        const searchable = [
+          e.event_id,
+          e.event_name,
+          e.venue,
+          coordName,
+          e.departments,
+          e.years,
+          e.status
+        ].join(' ').toLowerCase();
+        
+        if (!searchable.includes(searchStr)) {
+          match = false;
+        }
+      }
+      return match;
+    });
+
+    this.currentPage = 1;
+    this.updateStats();
+    this.renderTable();
+  },
+
+  updateStats: function() {
+    const total = this.filteredData.length;
+    let upcoming = 0, active = 0, stopped = 0, completed = 0, cancelled = 0;
+    
+    this.filteredData.forEach(e => {
+      const stat = (e.status || '').toLowerCase();
+      if (stat === 'upcoming') upcoming++;
+      else if (stat === 'active') active++;
+      else if (stat === 'stopped') stopped++;
+      else if (stat === 'completed') completed++;
+      else if (stat === 'cancelled') cancelled++;
+    });
+
+    const elTotal = document.getElementById('events-stat-total');
+    if(elTotal) elTotal.textContent = total;
+    
+    const elUpcoming = document.getElementById('events-stat-upcoming');
+    if(elUpcoming) elUpcoming.textContent = upcoming;
+    
+    const elActive = document.getElementById('events-stat-active');
+    if(elActive) elActive.textContent = active;
+
+    const elStopped = document.getElementById('events-stat-stopped');
+    if(elStopped) elStopped.textContent = stopped;
+    
+    const elCompleted = document.getElementById('events-stat-completed');
+    if(elCompleted) elCompleted.textContent = completed;
+    
+    const elCancelled = document.getElementById('events-stat-cancelled');
+    if(elCancelled) elCancelled.textContent = cancelled;
+  },
+
+  renderTable: function() {
+    const tbody = document.getElementById('events-table-body');
+    if (!tbody) return;
+
+    if (this.filteredData.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-5">No events found</td></tr>';
+      this.renderPagination(0);
       return;
     }
-    
-    tbody.innerHTML = '';
-    
-    if (!events || events.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-5">No events found</td></tr>';
-      return;
-    }
-    
-    events.forEach(evt => {
-      let badge = evt.status === App.Constants.EVENT_STATUS.UPCOMING ? 'bg-primary' : 
-                  evt.status === App.Constants.EVENT_STATUS.COMPLETED ? 'bg-success' : 
-                  evt.status === App.Constants.EVENT_STATUS.ACTIVE ? 'bg-info' : 'bg-secondary';
-                  
-      const rowHTML = `
+
+    // Sort by Start Date DESC as default
+    this.filteredData.sort((a, b) => new Date(b.start_date) - new Date(a.start_date));
+
+    const startIndex = (this.currentPage - 1) * this.itemsPerPage;
+    const endIndex = Math.min(startIndex + this.itemsPerPage, this.filteredData.length);
+    const pageData = this.filteredData.slice(startIndex, endIndex);
+
+    const isSuper = App.State && App.State.currentUser && 
+                    (App.State.currentUser.role === App.Constants.ROLES.ADMIN || 
+                     App.State.currentUser.role === App.Constants.ROLES.SUPER_ADMIN);
+
+    let html = '';
+    pageData.forEach(evt => {
+      const stat = (evt.status || '').toLowerCase();
+      let badge = 'bg-secondary text-white';
+      if (stat === 'upcoming') badge = 'bg-primary text-white';
+      else if (stat === 'active') badge = 'bg-success text-white';
+      else if (stat === 'stopped') badge = 'bg-dark text-white';
+      else if (stat === 'completed') badge = 'bg-info text-white';
+      else if (stat === 'cancelled') badge = 'bg-danger text-white';
+
+      const coordObj = this.coordinatorsData.find(c => String(c.user_id) === String(evt.coordinator_id));
+      const coordName = coordObj ? coordObj.full_name : evt.coordinator_id;
+      
+      const dateDisplay = evt.start_date === evt.end_date ? App.Utils.escapeHtml(evt.start_date) : `${App.Utils.escapeHtml(evt.start_date)} to ${App.Utils.escapeHtml(evt.end_date)}`;
+
+      let actionsHtml = `
+        <button class="btn btn-sm btn-light text-primary me-1" data-action="view-event" data-id="${App.Utils.escapeHtml(evt.event_id)}" title="View"><i class="bi bi-eye"></i></button>
+        <button class="btn btn-sm btn-light text-warning me-1" data-action="edit-event" data-id="${App.Utils.escapeHtml(evt.event_id)}" title="Edit"><i class="bi bi-pencil"></i></button>
+        <button class="btn btn-sm btn-light text-danger" data-action="delete-event" data-id="${App.Utils.escapeHtml(evt.event_id)}" title="Delete"><i class="bi bi-trash"></i></button>
+      `;
+
+      html += `
         <tr>
-          <td>${App.Utils.escapeHtml(String(evt.event_id))}</td>
-          <td class="fw-medium">${App.Utils.escapeHtml(String(evt.event_name))}</td>
-          <td>${App.Utils.escapeHtml(String(evt.event_date))}</td>
-          <td><span class="badge ${badge} rounded-pill">${App.Utils.escapeHtml(String(evt.status))}</span></td>
-          <td>
-            <button class="btn btn-sm btn-outline-primary me-2" data-action="edit-event" data-id="${App.Utils.escapeHtml(String(evt.event_id))}"><i class="bi bi-pencil"></i></button>
-            <button class="btn btn-sm btn-outline-danger" data-action="delete-event" data-id="${App.Utils.escapeHtml(String(evt.event_id))}"><i class="bi bi-trash"></i></button>
+          <td class="text-muted small">${App.Utils.escapeHtml(evt.event_id)}</td>
+          <td class="fw-bold">${App.Utils.escapeHtml(evt.event_name)}</td>
+          <td>${dateDisplay}</td>
+          <td>${App.Utils.escapeHtml(evt.start_time)}</td>
+          <td>${App.Utils.escapeHtml(evt.end_time)}</td>
+          <td>${App.Utils.escapeHtml(evt.venue)}</td>
+          <td>${App.Utils.escapeHtml(coordName)}</td>
+          <td>${App.Utils.escapeHtml(evt.departments)}</td>
+          <td><span class="badge ${badge} rounded-pill">${App.Utils.escapeHtml(evt.status)}</span></td>
+          <td class="text-end">
+            ${actionsHtml}
           </td>
         </tr>
       `;
-      tbody.insertAdjacentHTML('beforeend', rowHTML);
+    });
+
+    tbody.innerHTML = html;
+    this.renderPagination(Math.ceil(this.filteredData.length / this.itemsPerPage));
+  },
+
+  renderPagination: function(totalPages) {
+    const nav = document.getElementById('events-pagination');
+    if (!nav) return;
+
+    if (totalPages <= 1) {
+      nav.innerHTML = `
+        <li class="page-item disabled"><a class="page-link" href="#" tabindex="-1">Previous</a></li>
+        <li class="page-item active"><a class="page-link" href="#">1</a></li>
+        <li class="page-item disabled"><a class="page-link" href="#">Next</a></li>
+      `;
+      return;
+    }
+
+    let html = '';
+    const prevDisabled = this.currentPage === 1 ? 'disabled' : '';
+    html += `<li class="page-item ${prevDisabled}"><a class="page-link" href="#" data-page="${this.currentPage - 1}">Previous</a></li>`;
+
+    let startPage = Math.max(1, this.currentPage - 2);
+    let endPage = Math.min(totalPages, startPage + 4);
+    
+    if (endPage - startPage < 4) {
+      startPage = Math.max(1, endPage - 4);
+    }
+
+    if (startPage > 1) {
+      html += `<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>`;
+      if (startPage > 2) html += `<li class="page-item disabled"><a class="page-link" href="#">...</a></li>`;
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      const active = i === this.currentPage ? 'active' : '';
+      html += `<li class="page-item ${active}"><a class="page-link" href="#" data-page="${i}">${i}</a></li>`;
+    }
+
+    if (endPage < totalPages) {
+      if (endPage < totalPages - 1) html += `<li class="page-item disabled"><a class="page-link" href="#">...</a></li>`;
+      html += `<li class="page-item"><a class="page-link" href="#" data-page="${totalPages}">${totalPages}</a></li>`;
+    }
+
+    const nextDisabled = this.currentPage === totalPages ? 'disabled' : '';
+    html += `<li class="page-item ${nextDisabled}"><a class="page-link" href="#" data-page="${this.currentPage + 1}">Next</a></li>`;
+
+    nav.innerHTML = html;
+
+    const links = nav.querySelectorAll('a.page-link');
+    links.forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const parent = e.target.closest('.page-item');
+        if (parent && parent.classList.contains('disabled')) return;
+        
+        const page = e.target.getAttribute('data-page');
+        if (page) {
+          this.currentPage = parseInt(page, 10);
+          this.renderTable();
+        }
+      });
     });
   },
-  refresh: function() {
-    this.load();
+
+  openAddEventModal: function() {
+    const form = document.getElementById('eventForm');
+    if (form) {
+      form.reset();
+      form.classList.remove('was-validated');
+      Array.from(form.elements).forEach(el => {
+        if (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') {
+          el.disabled = false;
+          el.readOnly = false;
+        }
+      });
+    }
+    
+    document.getElementById('eventOriginalId').value = '';
+    document.getElementById('eventOriginalStatus').value = 'Draft';
+    document.getElementById('eventModalLabel').textContent = 'Create Event';
+    
+    document.getElementById('eventIdGroup').classList.add('d-none');
+    document.getElementById('eventCreatedAtGroup').classList.add('d-none');
+    document.getElementById('eventCurrentStatusGroup').classList.add('d-none');
+    document.getElementById('eventCreationActionGroup').classList.remove('d-none');
+    document.getElementById('lifecycleActionButtons').classList.add('d-none');
+    
+    const pContainer = document.getElementById('lifecyclePreviewContainer');
+    if (pContainer) pContainer.classList.add('d-none');
+    
+    const saveBtn = document.getElementById('eventSaveBtn');
+    if (saveBtn) {
+      saveBtn.classList.remove('d-none');
+      document.getElementById('eventSaveBtnText').textContent = 'Create Event';
+    }
+    
+    const errorAlert = document.getElementById('eventModalError');
+    if (errorAlert) errorAlert.classList.add('d-none');
+    
+    if (!this.eventModalInstance) {
+      const modalEl = document.getElementById('eventModal');
+      if (modalEl) this.eventModalInstance = new bootstrap.Modal(modalEl);
+    }
+    if (this.eventModalInstance) this.eventModalInstance.show();
   },
+
+  openViewEventModal: function(id) {
+    const evt = this.eventsData.find(e => String(e.event_id) === String(id));
+    if (!evt) return;
+    
+    const form = document.getElementById('eventForm');
+    if (form) {
+      form.reset();
+      form.classList.remove('was-validated');
+    }
+    
+    document.getElementById('eventModalLabel').textContent = 'View Event';
+    
+    document.getElementById('eventOriginalId').value = evt.event_id;
+    document.getElementById('eventId').value = evt.event_id;
+    document.getElementById('eventName').value = evt.event_name || '';
+    document.getElementById('eventDescription').value = evt.description || '';
+    document.getElementById('eventStartDate').value = evt.start_date || '';
+    document.getElementById('eventEndDate').value = evt.end_date || '';
+    document.getElementById('eventStartTime').value = evt.start_time || '';
+    document.getElementById('eventEndTime').value = evt.end_time || '';
+    document.getElementById('eventVenue').value = evt.venue || '';
+    document.getElementById('eventCoordinator').value = evt.coordinator_id || '';
+    
+    const dptArr = (evt.departments || '').split(',').map(s=>s.trim());
+    document.querySelectorAll('.event-dept-check').forEach(cb => {
+      cb.checked = dptArr.includes(cb.value);
+    });
+    
+    const yrArr = (evt.years || '').split(',').map(s=>s.trim());
+    document.querySelectorAll('.event-year-check').forEach(cb => {
+      cb.checked = yrArr.includes(cb.value);
+    });
+    
+    // Update Dropdown Text
+    const updateText = (checks, spanId, defaultText) => {
+      const selected = Array.from(checks).filter(c => c.checked);
+      document.getElementById(spanId).textContent = selected.length > 0 ? `Selected (${selected.length})` : defaultText;
+    };
+    updateText(document.querySelectorAll('.event-dept-check'), 'eventDepartmentsDropdownText', 'Select Departments');
+    updateText(document.querySelectorAll('.event-year-check'), 'eventYearsDropdownText', 'Select Years');
+    
+    document.getElementById('eventCapacity').value = evt.capacity || '';
+    
+    // Status Badge
+    const badgeMap = {
+      'Draft': 'bg-secondary',
+      'Upcoming': 'bg-primary',
+      'Active': 'bg-success',
+      'Stopped': 'bg-dark',
+      'Completed': 'bg-info',
+      'Cancelled': 'bg-danger'
+    };
+    const currentStatus = evt.status || 'Draft';
+    const badgeClass = badgeMap[currentStatus] || 'bg-secondary';
+    
+    document.getElementById('eventCreationActionGroup').classList.add('d-none');
+    document.getElementById('eventCurrentStatusGroup').classList.remove('d-none');
+    document.getElementById('eventCurrentStatusBadge').innerHTML = `<span class="badge ${badgeClass}">${currentStatus}</span>`;
+    
+    document.getElementById('eventOriginalStatus').value = currentStatus;
+    document.getElementById('eventCreatedAt').value = evt.created_at || 'N/A';
+    
+    document.getElementById('eventIdGroup').classList.remove('d-none');
+    document.getElementById('eventCreatedAtGroup').classList.remove('d-none');
+    
+    // Build Timeline
+    const tlContainer = document.getElementById('eventTimelineContainer');
+    const tlList = document.getElementById('eventTimelineList');
+    if (tlContainer && tlList) {
+      tlContainer.classList.remove('d-none');
+      let tlHtml = '';
+      
+      const formatTLDate = (isoString) => {
+        if (!isoString || isoString === 'N/A') return 'N/A';
+        const d = new Date(isoString);
+        if (isNaN(d.getTime())) return isoString;
+        const pad = (n) => n.toString().padStart(2, '0');
+        return `${pad(d.getDate())}-${pad(d.getMonth()+1)}-${d.getFullYear()} ${pad(d.getHours() > 12 ? d.getHours()-12 : (d.getHours()===0 ? 12 : d.getHours()))}:${pad(d.getMinutes())} ${d.getHours() >= 12 ? 'PM' : 'AM'}`;
+      };
+
+      const getUserName = (id) => {
+        if (!id || id === 'Unknown') return 'System';
+        const user = App.Modules.events.coordinatorsData.find(u => String(u.user_id) === String(id));
+        return user ? user.full_name : id;
+      };
+
+      const buildItem = (action, dateStr, byId, reasonLabel, reasonText) => {
+        if (!dateStr || dateStr === 'N/A') return '';
+        let html = `<div class="timeline-item">
+                      <div class="fw-bold">${action}</div>
+                      <div class="text-muted small">${formatTLDate(dateStr)}</div>
+                      <div class="text-muted small mb-1">By ${getUserName(byId)}</div>`;
+        if (reasonLabel && reasonText) {
+          html += `<div class="small bg-light p-2 rounded mt-1 border"><strong>${reasonLabel}:</strong> ${App.Utils.escapeHtml(reasonText)}</div>`;
+        }
+        html += `</div>`;
+        return html;
+      };
+
+      tlHtml += buildItem('Created', evt.created_at, evt.created_by);
+      tlHtml += buildItem('Published', evt.published_at, evt.published_by);
+      tlHtml += buildItem('Started', evt.started_at, evt.started_by);
+      tlHtml += buildItem('Stopped', evt.stopped_at, evt.stopped_by, 'Reason', evt.stopped_reason);
+      tlHtml += buildItem('Resumed', evt.resumed_at, evt.resumed_by, 'Reason', evt.resume_reason);
+      tlHtml += buildItem('Completed', evt.completed_at, evt.completed_by);
+      tlHtml += buildItem('Cancelled', evt.cancelled_at, evt.cancelled_by, 'Reason', evt.cancel_reason);
+
+      if (!tlHtml) tlHtml = '<div class="text-muted small italic">No history available</div>';
+      tlList.innerHTML = tlHtml;
+    }
+
+    const saveBtn = document.getElementById('eventSaveBtn');
+    if (saveBtn) saveBtn.classList.add('d-none');
+    
+    const errorAlert = document.getElementById('eventModalError');
+    if (errorAlert) errorAlert.classList.add('d-none');
+    
+    // Disable all inputs
+    Array.from(form.elements).forEach(el => {
+      if (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') {
+        el.disabled = true;
+      }
+    });
+    
+    if (!this.eventModalInstance) {
+      const modalEl = document.getElementById('eventModal');
+      if (modalEl) this.eventModalInstance = new bootstrap.Modal(modalEl);
+    }
+    if (this.eventModalInstance) this.eventModalInstance.show();
+  },
+
+  openEditEventModal: function(id) {
+    App.Logger.info("FRONTEND: Edit Click " + id);
+    this.setModalLoading(true);
+    App.API.getEventById(id)
+      .then(evt => {
+        this.setModalLoading(false);
+        if (!evt || (Array.isArray(evt) && evt.length === 0)) {
+          App.UI.showError("Event not found.");
+          return;
+        }
+        
+        App.Logger.info("FRONTEND: Event Loaded " + id);
+        
+        // Handle if backend returns an array instead of an object
+        if (Array.isArray(evt)) evt = evt[0];
+        
+        this.editingEventId = evt.event_id;
+        this.isFormDirty = false;
+        
+        const form = document.getElementById('eventForm');
+        if (form) {
+          form.reset();
+          form.classList.remove('was-validated');
+          
+          Array.from(form.elements).forEach(el => {
+            if (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') {
+              el.disabled = false;
+              el.readOnly = false;
+            }
+          });
+        }
+        
+        document.getElementById('eventModalLabel').textContent = 'Edit Event';
+        const tlContainer = document.getElementById('eventTimelineContainer');
+        if (tlContainer) tlContainer.classList.add('d-none');
+        
+        document.getElementById('eventOriginalId').value = evt.event_id;
+        document.getElementById('eventId').value = evt.event_id;
+        document.getElementById('eventId').readOnly = true;
+        document.getElementById('eventId').disabled = true;
+        
+        document.getElementById('eventCreatedAt').value = evt.created_at || 'N/A';
+        document.getElementById('eventCreatedAt').readOnly = true;
+        document.getElementById('eventCreatedAt').disabled = true;
+        
+        document.getElementById('eventName').value = evt.event_name || '';
+        document.getElementById('eventDescription').value = evt.description || '';
+        document.getElementById('eventStartDate').value = evt.start_date || '';
+        document.getElementById('eventEndDate').value = evt.end_date || '';
+        document.getElementById('eventStartTime').value = evt.start_time || '';
+        document.getElementById('eventEndTime').value = evt.end_time || '';
+        document.getElementById('eventVenue').value = evt.venue || '';
+        document.getElementById('eventCoordinator').value = evt.coordinator_id || '';
+        
+        const dptArr = (evt.departments || '').split(',').map(s=>s.trim());
+        document.querySelectorAll('.event-dept-check').forEach(cb => {
+          cb.checked = dptArr.includes(cb.value);
+        });
+        
+        const yrArr = (evt.years || '').split(',').map(s=>s.trim());
+        document.querySelectorAll('.event-year-check').forEach(cb => {
+          cb.checked = yrArr.includes(cb.value);
+        });
+        
+        // Update Dropdown Text
+        const updateText = (checks, spanId, defaultText) => {
+          const selected = Array.from(checks).filter(c => c.checked);
+          document.getElementById(spanId).textContent = selected.length > 0 ? `Selected (${selected.length})` : defaultText;
+        };
+        updateText(document.querySelectorAll('.event-dept-check'), 'eventDepartmentsDropdownText', 'Select Departments');
+        updateText(document.querySelectorAll('.event-year-check'), 'eventYearsDropdownText', 'Select Years');
+        
+        document.getElementById('eventCapacity').value = evt.capacity || '';
+        document.getElementById('eventOriginalStatus').value = evt.status || 'Draft';
+        
+        document.getElementById('eventCreationActionGroup').classList.add('d-none');
+        document.getElementById('eventCurrentStatusGroup').classList.remove('d-none');
+        
+        // Status Badge
+        const badgeMap = {
+          'Draft': 'bg-secondary',
+          'Upcoming': 'bg-primary',
+          'Active': 'bg-success',
+          'Stopped': 'bg-dark',
+          'Completed': 'bg-info',
+          'Cancelled': 'bg-danger'
+        };
+        const currentStatus = evt.status || 'Draft';
+        const badgeClass = badgeMap[currentStatus] || 'bg-secondary';
+        document.getElementById('eventCurrentStatusBadge').innerHTML = `<span class="badge ${badgeClass}">${currentStatus}</span>`;
+        
+        document.getElementById('eventIdGroup').classList.remove('d-none');
+        document.getElementById('eventCreatedAtGroup').classList.remove('d-none');
+        
+        const banner = document.getElementById('eventLockedBanner');
+        const saveBtn = document.getElementById('eventSaveBtn');
+        
+        // Check lock conditions
+        const stat = (evt.status || '').toLowerCase();
+        const isLocked = stat === 'completed' || stat === 'cancelled';
+        
+        if (isLocked) {
+          if (banner) banner.classList.remove('d-none');
+          if (saveBtn) saveBtn.classList.add('d-none');
+          if (tlContainer) tlContainer.classList.add('d-none'); // Hide preview just in case
+          // Disable all form elements
+          Array.from(form.elements).forEach(el => {
+            if (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') {
+              el.disabled = true;
+            }
+          });
+        } else {
+          if (banner) banner.classList.add('d-none');
+          if (saveBtn) {
+            saveBtn.classList.remove('d-none');
+            document.getElementById('eventSaveBtnText').textContent = 'Update Event';
+          }
+          this.evaluateLifecycleActions(stat);
+        }
+        
+        const errorAlert = document.getElementById('eventModalError');
+        if (errorAlert) errorAlert.classList.add('d-none');
+        
+        if (!this.eventModalInstance) {
+          const modalEl = document.getElementById('eventModal');
+          if (modalEl) this.eventModalInstance = new bootstrap.Modal(modalEl);
+        }
+        if (this.eventModalInstance) this.eventModalInstance.show();
+      })
+      .catch(err => {
+        this.setModalLoading(false);
+        App.UI.showError(err.message || "Failed to fetch event data.");
+      });
+  },
+
+  openDeleteEventModal: function(id) {
+    document.getElementById('deleteEventId').value = id;
+    const modalEl = document.getElementById('eventDeleteModal');
+    if (modalEl) {
+      const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+      modal.show();
+    }
+  },
+
+  setModalLoading: function(isLoading) {
+    const btn = document.getElementById('eventSaveBtn');
+    const spinner = document.getElementById('eventSaveSpinner');
+    if (btn) btn.disabled = isLoading;
+    if (spinner) {
+      if (isLoading) spinner.classList.remove('d-none');
+      else spinner.classList.add('d-none');
+    }
+  },
+
+  handleEventSubmit: function(e) {
+    e.preventDefault();
+    const form = e.target;
+    const errorAlert = document.getElementById('eventModalError');
+    
+    if (!form.checkValidity()) {
+      e.stopPropagation();
+      form.classList.add('was-validated');
+      return;
+    }
+    
+    // Custom Validations
+    const stTime = document.getElementById('eventStartTime').value;
+    const enTime = document.getElementById('eventEndTime').value;
+    const eventStartDateStr = document.getElementById('eventStartDate').value;
+    const eventEndDateStr = document.getElementById('eventEndDate').value;
+
+    if (stTime && enTime && eventStartDateStr === eventEndDateStr && stTime >= enTime) {
+      if (errorAlert) {
+        errorAlert.textContent = "End Time must be strictly after Start Time on the same day.";
+        errorAlert.classList.remove('d-none');
+      }
+      return;
+    }
+
+    const isEdit = !!document.getElementById('eventOriginalId').value;
+    
+    if (eventStartDateStr && eventEndDateStr && eventStartDateStr > eventEndDateStr) {
+      if (errorAlert) {
+        errorAlert.textContent = "End Date must be greater than or equal to Start Date.";
+        errorAlert.classList.remove('d-none');
+      }
+      return;
+    }
+    
+    if (!isEdit && eventStartDateStr) {
+      // Past Date validation only on Create
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const evDate = new Date(eventStartDateStr);
+      if (evDate < today) {
+        if (errorAlert) {
+          errorAlert.textContent = "Cannot create an event in the past.";
+          errorAlert.classList.remove('d-none');
+        }
+        return;
+      }
+    }
+    
+    this.setModalLoading(true);
+    if (errorAlert) errorAlert.classList.add('d-none');
+    
+    const originalId = document.getElementById('eventOriginalId').value;
+    
+    const depts = Array.from(document.querySelectorAll('.event-dept-check:checked')).map(cb => cb.value).join(',');
+    const years = Array.from(document.querySelectorAll('.event-year-check:checked')).map(cb => cb.value).join(',');
+    document.getElementById('eventDepartments').value = depts;
+    document.getElementById('eventYears').value = years;
+
+    if (!depts) {
+      if (errorAlert) {
+        errorAlert.textContent = "At least one Department is required.";
+        errorAlert.classList.remove('d-none');
+      }
+      this.setModalLoading(false);
+      return;
+    }
+    
+    let currentTargetStatus = '';
+    if (!isEdit) {
+      currentTargetStatus = document.getElementById('eventCreationAction').value;
+    } else {
+      const pendingAction = document.getElementById('eventSaveBtn').getAttribute('data-pending-action');
+      const origStatus = document.getElementById('eventOriginalStatus').value || 'Draft';
+      if (pendingAction === 'Publish') currentTargetStatus = 'Upcoming';
+      else if (pendingAction === 'Cancel') currentTargetStatus = 'Cancelled';
+      else if (pendingAction === 'Stop') currentTargetStatus = 'Stopped';
+      else currentTargetStatus = origStatus;
+    }
+    
+    const eventData = {
+      event_name: document.getElementById('eventName').value.trim(),
+      description: document.getElementById('eventDescription').value.trim(),
+      start_date: eventStartDateStr,
+      end_date: eventEndDateStr,
+      start_time: stTime,
+      end_time: enTime,
+      venue: document.getElementById('eventVenue').value.trim(),
+      coordinator_id: document.getElementById('eventCoordinator').value,
+      departments: depts,
+      years: years,
+      capacity: document.getElementById('eventCapacity').value,
+      status: currentTargetStatus,
+      
+      created_by: App.State && App.State.currentUser ? App.State.currentUser.user_id : 'Unknown',
+      action_by: App.State && App.State.currentUser ? App.State.currentUser.user_id : 'Unknown',
+      stop_reason: document.getElementById('stopReason') ? document.getElementById('stopReason').value : '',
+      resume_reason: document.getElementById('resumeReason') ? document.getElementById('resumeReason').value : '',
+      cancel_reason: document.getElementById('cancelReason') ? document.getElementById('cancelReason').value : ''
+    };
+    
+    if (isEdit) {
+      App.Logger.info("FRONTEND: Update Submitted");
+      App.API.updateEvent(originalId, eventData)
+        .then(res => {
+          App.Logger.info("FRONTEND: Update Success");
+          this.setModalLoading(false);
+          this.isFormDirty = false;
+          this.editingEventId = null;
+          if (this.eventModalInstance) this.eventModalInstance.hide();
+          
+          if (App.Modules.dashboard) {
+            App.Modules.dashboard.load(true);
+          }
+          
+          App.UI.showSuccess("Event updated successfully!");
+          
+          // Inline array update for snappy UI
+          const updatedIndex = this.eventsData.findIndex(e => String(e.event_id) === String(originalId));
+          if (updatedIndex > -1) {
+            if (res.data && res.data.event) {
+              this.eventsData[updatedIndex] = { ...this.eventsData[updatedIndex], ...res.data.event };
+            } else {
+              this.eventsData[updatedIndex] = { ...this.eventsData[updatedIndex], ...eventData };
+            }
+          }
+          this.applyFilters();
+        })
+        .catch(err => {
+          App.Logger.info("FRONTEND: Update Failed");
+          this.setModalLoading(false);
+          if (errorAlert) {
+            errorAlert.textContent = err.message || "Failed to update event.";
+            errorAlert.classList.remove('d-none');
+          }
+          App.UI.showError(err.message || "Failed to update event.");
+        });
+    } else {
+      App.API.createEvent(eventData)
+        .then(res => {
+          this.setModalLoading(false);
+          if (this.eventModalInstance) this.eventModalInstance.hide();
+          
+          if (App.Modules.dashboard) {
+            App.Modules.dashboard.load(true);
+          }
+          
+          App.UI.showSuccess("Event created successfully!");
+          this.load();
+        })
+        .catch(err => {
+          this.setModalLoading(false);
+          if (errorAlert) {
+            errorAlert.textContent = err.message || "Failed to create event.";
+            errorAlert.classList.remove('d-none');
+          }
+          App.UI.showError(err.message || "Failed to create event.");
+        });
+    }
+  },
+
+  handleDeleteEvent: function() {
+    const id = document.getElementById('deleteEventId').value;
+    if (!id) return;
+    
+    const btn = document.getElementById('eventConfirmDeleteBtn');
+    const spinner = document.getElementById('eventDeleteSpinner');
+    if (btn) btn.disabled = true;
+    if (spinner) spinner.classList.remove('d-none');
+    
+    App.API.deleteEvent(id)
+      .then(() => {
+        if (btn) btn.disabled = false;
+        if (spinner) spinner.classList.add('d-none');
+        
+        const modalEl = document.getElementById('eventDeleteModal');
+        if (modalEl) {
+          const modal = bootstrap.Modal.getInstance(modalEl);
+          if (modal) modal.hide();
+        }
+        
+        // FUTURE: If dashboard depends on stats, trigger dashboard refresh here
+        if (App.Modules.dashboard) {
+           App.Modules.dashboard.load(true);
+        }
+        
+        App.UI.showSuccess("Event deleted successfully!");
+        this.load();
+      })
+      .catch(err => {
+        if (btn) btn.disabled = false;
+        if (spinner) spinner.classList.add('d-none');
+        App.UI.showError(err.message || "Failed to delete event.");
+      });
+  },
+
+  refresh: function() {
+    this.loadDependencies().then(() => this.load());
+  },
+  
   destroy: function() {
     App.Logger.info('Events destroy');
+  },
+  
+  setupCustomDropdowns: function() {
+    const attachDropdownEvents = (prefix, defaultText) => {
+      const search = document.getElementById(`${prefix}Search`);
+      const selectAll = document.getElementById(`${prefix}SelectAll`);
+      const clearAll = document.getElementById(`${prefix}ClearAll`);
+      const spanText = document.getElementById(`${prefix}DropdownText`);
+      
+      const updateText = () => {
+        const checked = document.querySelectorAll(`.event-${prefix.replace('event','').toLowerCase().replace('years','year').replace('departments','dept')}-check:checked`);
+        spanText.textContent = checked.length > 0 ? `Selected (${checked.length})` : defaultText;
+        // Update hidden inputs for validation
+        const hiddenInput = document.getElementById(prefix);
+        if (hiddenInput) {
+          hiddenInput.value = Array.from(checked).map(c => c.value).join(',');
+        }
+      };
+
+      if (search) {
+        search.addEventListener('input', (e) => {
+          const term = e.target.value.toLowerCase();
+          document.querySelectorAll(`.event-${prefix.replace('event','').toLowerCase().replace('years','year').replace('departments','dept')}-item`).forEach(div => {
+            const label = div.querySelector('label').textContent.toLowerCase();
+            div.style.display = label.includes(term) ? 'block' : 'none';
+          });
+        });
+      }
+
+      if (selectAll) {
+        selectAll.addEventListener('click', (e) => {
+          e.stopPropagation();
+          document.querySelectorAll(`.event-${prefix.replace('event','').toLowerCase().replace('years','year').replace('departments','dept')}-check`).forEach(cb => {
+            if (cb.closest('.form-check').style.display !== 'none') cb.checked = true;
+          });
+          updateText();
+        });
+      }
+
+      if (clearAll) {
+        clearAll.addEventListener('click', (e) => {
+          e.stopPropagation();
+          document.querySelectorAll(`.event-${prefix.replace('event','').toLowerCase().replace('years','year').replace('departments','dept')}-check`).forEach(cb => cb.checked = false);
+          updateText();
+        });
+      }
+
+      document.body.addEventListener('change', (e) => {
+        if (e.target.classList.contains(`event-${prefix.replace('event','').toLowerCase().replace('years','year').replace('departments','dept')}-check`)) {
+          updateText();
+        }
+      });
+    };
+
+    attachDropdownEvents('eventDepartments', 'Select Departments');
+    attachDropdownEvents('eventYears', 'Select Years');
+  },
+
+  evaluateLifecycleActions: function(status) {
+    const actionBtns = document.getElementById('lifecycleActionButtons');
+    const btnPublish = document.getElementById('btnLifecyclePublish');
+    const btnStop = document.getElementById('btnLifecycleStop');
+    const btnCancel = document.getElementById('btnLifecycleCancel');
+    
+    const previewContainer = document.getElementById('lifecyclePreviewContainer');
+    const previewText = document.getElementById('lifecyclePreviewText');
+    const stopGroup = document.getElementById('stopReasonGroup');
+    const resumeGroup = document.getElementById('resumeReasonGroup');
+    const cancelGroup = document.getElementById('cancelReasonGroup');
+    
+    if (actionBtns) actionBtns.classList.remove('d-none');
+    if (btnPublish) btnPublish.classList.add('d-none');
+    if (btnStop) btnStop.classList.add('d-none');
+    if (btnCancel) btnCancel.classList.add('d-none');
+    
+    if (previewContainer) previewContainer.classList.add('d-none');
+    if (stopGroup) stopGroup.classList.add('d-none');
+    if (resumeGroup) resumeGroup.classList.add('d-none');
+    if (cancelGroup) cancelGroup.classList.add('d-none');
+    
+    // Clear required attributes
+    if (document.getElementById('stopReason')) document.getElementById('stopReason').required = false;
+    if (document.getElementById('cancelReason')) document.getElementById('cancelReason').required = false;
+    
+    // We store the "pending Action" in a data attribute on the save button to know what we are submitting
+    if (saveBtn) saveBtn.removeAttribute('data-pending-action');
+    
+    if (status === 'draft') {
+      if (btnPublish) btnPublish.classList.remove('d-none');
+    } else if (status === 'upcoming') {
+      if (btnCancel) btnCancel.classList.remove('d-none');
+    } else if (status === 'active') {
+      if (btnStop) btnStop.classList.remove('d-none');
+    } else if (status === 'stopped') {
+      if (btnCancel) btnCancel.classList.remove('d-none');
+    }
+  },
+
+  handleLifecycleClick: function(action) {
+    const previewContainer = document.getElementById('lifecyclePreviewContainer');
+    const previewText = document.getElementById('lifecyclePreviewText');
+    const stopGroup = document.getElementById('stopReasonGroup');
+    const cancelGroup = document.getElementById('cancelReasonGroup');
+    const saveBtn = document.getElementById('eventSaveBtn');
+    
+    // Reset
+    if (previewContainer) previewContainer.classList.remove('d-none');
+    if (stopGroup) stopGroup.classList.add('d-none');
+    if (cancelGroup) cancelGroup.classList.add('d-none');
+    if (document.getElementById('stopReason')) document.getElementById('stopReason').required = false;
+    if (document.getElementById('cancelReason')) document.getElementById('cancelReason').required = false;
+    
+    if (saveBtn) {
+      saveBtn.setAttribute('data-pending-action', action);
+      document.getElementById('eventSaveBtnText').textContent = 'Confirm ' + action;
+    }
+    
+    if (action === 'Publish') {
+      previewText.innerHTML = `<strong>Action:</strong> This event will be published.<br><span class="text-muted small">Status will change to Upcoming.</span>`;
+    } else if (action === 'Cancel') {
+      previewText.innerHTML = `<strong>Action:</strong> This event will be cancelled.<br><span class="text-muted small">Cancel Reason is required.</span>`;
+      if (cancelGroup) cancelGroup.classList.remove('d-none');
+      if (document.getElementById('cancelReason')) document.getElementById('cancelReason').required = true;
+    } else if (action === 'Stop') {
+      previewText.innerHTML = `<strong>Action:</strong> This event will be stopped.<br><span class="text-muted small">Stop Reason is required.</span>`;
+      if (stopGroup) stopGroup.classList.remove('d-none');
+      if (document.getElementById('stopReason')) document.getElementById('stopReason').required = true;
+    }
   }
 };
 </script>

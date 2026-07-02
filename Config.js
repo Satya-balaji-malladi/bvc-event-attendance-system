@@ -38,10 +38,13 @@ const CONFIG = {
     INACTIVE: 'Inactive'
   },
 
-  // 6. Event Status
   EVENT_STATUS: {
+    DRAFT: 'Draft',
     UPCOMING: 'Upcoming',
-    COMPLETED: 'Completed'
+    ACTIVE: 'Active',
+    STOPPED: 'Stopped',
+    COMPLETED: 'Completed',
+    CANCELLED: 'Cancelled'
   },
 
   // 7. Attendance Status

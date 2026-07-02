@@ -196,15 +196,32 @@ const ValidationService = {
 
     const reqFields = [
       { key: 'event_name', name: 'Event Name' },
-      { key: 'event_date', name: 'Event Date' },
+      { key: 'start_date', name: 'Start Date' },
+      { key: 'end_date', name: 'End Date' },
+      { key: 'start_time', name: 'Start Time' },
+      { key: 'end_time', name: 'End Time' },
       { key: 'venue', name: 'Venue' },
-      { key: 'coordinator_id', name: 'Coordinator ID' }
+      { key: 'coordinator_id', name: 'Coordinator ID' },
+      { key: 'departments', name: 'Departments' },
+      { key: 'status', name: 'Status' }
     ];
 
     reqFields.forEach(field => {
       const err = this.validateRequired(eventData[field.key], field.name);
       if (err) errors.push(err);
     });
+
+    if (eventData.start_time && eventData.end_time) {
+      if (eventData.start_date === eventData.end_date && eventData.start_time >= eventData.end_time) {
+        errors.push("End Time must be strictly after Start Time on the same day.");
+      }
+    }
+    
+    if (eventData.start_date && eventData.end_date) {
+      if (eventData.start_date > eventData.end_date) {
+        errors.push("End Date must be greater than or equal to Start Date.");
+      }
+    }
 
     return this._buildResult(errors);
   },

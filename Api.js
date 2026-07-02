@@ -66,17 +66,24 @@ function getStudentsBySection(section) { return Controller.Student.getStudentsBy
 // ==========================================
 // Event API
 // ==========================================
-function createEvent(eventData) { return Controller.Event.createEvent(eventData); }
-function updateEvent(eventId, eventData) { return Controller.Event.updateEvent(eventId, eventData); }
-function deleteEvent(eventId) { return Controller.Event.deleteEvent(eventId); }
-function getEventById(eventId) { return Controller.Event.getEventById(eventId); }
+function createEvent(eventData) { 
+  try { return JSON.parse(JSON.stringify(Controller.Event.createEvent(eventData) || {})); } catch(e) { return {success:false, message:e.message}; }
+}
+function updateEvent(eventId, eventData) { 
+  try { return JSON.parse(JSON.stringify(Controller.Event.updateEvent(eventId, eventData) || {})); } catch(e) { return {success:false, message:e.message}; }
+}
+function deleteEvent(eventId) { 
+  try { return JSON.parse(JSON.stringify(Controller.Event.deleteEvent(eventId) || {})); } catch(e) { return {success:false, message:e.message}; }
+}
+function getEventById(eventId) { 
+  try { return JSON.parse(JSON.stringify(Controller.Event.getEventById(eventId) || {})); } catch(e) { return {}; }
+}
 // function getAllEvents() moved to Code.js
 function searchEvents(keyword) { return Controller.Event.searchEvents(keyword); }
 function getEventsByCoordinator(coordinatorId) { return Controller.Event.getEventsByCoordinator(coordinatorId); }
 function getEventsByStatus(status) { return Controller.Event.getEventsByStatus(status); }
 function getEventsByDate(date) { return Controller.Event.getEventsByDate(date); }
-function completeEvent(eventId) { return Controller.Event.completeEvent(eventId); }
-function activateEvent(eventId) { return Controller.Event.activateEvent(eventId); }
+
 
 // ==========================================
 // Attendance API

@@ -35,7 +35,7 @@ window.App = {
   Constants: {
     MODULES: { DASHBOARD: 'dashboard', USERS: 'users', STUDENTS: 'students', EVENTS: 'events', ATTENDANCE: 'attendance', REPORTS: 'reports' },
     ROLES: { ADMIN: 'Admin', SUPER_ADMIN: 'Super Admin', COORDINATOR: 'Coordinator' },
-    EVENT_STATUS: { UPCOMING: 'Upcoming', ACTIVE: 'Active', COMPLETED: 'Completed', CANCELLED: 'Cancelled' },
+    EVENT_STATUS: { DRAFT: 'Draft', UPCOMING: 'Upcoming', ACTIVE: 'Active', STOPPED: 'Stopped', COMPLETED: 'Completed', CANCELLED: 'Cancelled' },
     ATTENDANCE_STATUS: { PRESENT: 'Present', ABSENT: 'Absent' },
     MSGS: { ERR_SERVER: 'Server error occurred', ERR_NOT_FOUND: 'Method not found' }
   },
@@ -203,6 +203,10 @@ window.App = {
     },
     getDashboardSummary: function() { return this._call('getDashboardSummary'); },
     getAllEvents: function() { return this._call('getAllEvents'); },
+    createEvent: function(eventData) { return this._call('createEvent', eventData); },
+    updateEvent: function(eventId, eventData) { return this._call('updateEvent', eventId, eventData); },
+    deleteEvent: function(eventId) { return this._call('deleteEvent', eventId); },
+    getEventById: function(eventId) { return this._call('getEventById', eventId); },
     getAllUsers: function() { return this._call('getAllUsers'); },
     createUser: function(userData) { return this._call('createUser', userData); },
     updateUser: function(userId, userData) { return this._call('updateUser', userId, userData); },
