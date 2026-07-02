@@ -5,16 +5,565 @@
  * ==========================================
  */
 App.Modules.students = {
+  studentsData: [],
+  filteredData: [],
+  currentPage: 1,
+  itemsPerPage: 10,
+  
   init: function() {
     App.Logger.info('Students init');
+    this.bindEvents();
     this.load();
   },
+  
   load: function() {
-    // Implementation pending
+    const tbody = document.getElementById('students-table-body');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-5"><div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>Loading students...</td></tr>';
+    
+    App.API.getAllStudents()
+      .then(res => {
+        const data = res.data || res;
+        this.studentsData = Array.isArray(data) ? data : [];
+        
+        // Normalize fields if needed
+        this.studentsData = this.studentsData.map(s => ({
+          ...s,
+          roll_number: s.roll_number || s.RollNumber || s.rollNumber || 'N/A',
+          student_name: s.student_name || s.StudentName || s.studentName || s.name || 'N/A',
+          department: s.department || s.Department || s.dept || 'N/A',
+          year: String(s.year || s.Year || 'N/A'),
+          section: s.section || s.Section || 'N/A',
+          gender: s.gender || s.Gender || 'N/A',
+          email: s.email || s.Email || 'N/A',
+          mobile: s.mobile || s.Mobile || s.phone || 'N/A',
+          status: s.status || s.Status || 'Active'
+        }));
+        
+        this.populateDynamicFilters();
+        this.applyFilters();
+      })
+      .catch(err => {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="10" class="text-center text-danger py-5">Failed to load students</td></tr>';
+        App.ErrorHandler.handle(err, "Failed to load students in Students module");
+      });
   },
+
+  bindEvents: function() {
+    const searchInput = document.getElementById('students-search-input');
+    const deptFilter = document.getElementById('students-dept-filter');
+    const yearFilter = document.getElementById('students-year-filter');
+    const sectionFilter = document.getElementById('students-section-filter');
+    const statusFilter = document.getElementById('students-status-filter');
+    const perPageSelect = document.getElementById('students-per-page');
+
+    if (searchInput) searchInput.addEventListener('input', () => this.applyFilters());
+    if (deptFilter) deptFilter.addEventListener('change', () => this.applyFilters());
+    if (yearFilter) yearFilter.addEventListener('change', () => this.applyFilters());
+    if (sectionFilter) sectionFilter.addEventListener('change', () => this.applyFilters());
+    if (statusFilter) statusFilter.addEventListener('change', () => this.applyFilters());
+    
+    if (perPageSelect) {
+      perPageSelect.addEventListener('change', (e) => {
+        this.itemsPerPage = parseInt(e.target.value, 10);
+        this.currentPage = 1;
+        this.renderTable();
+      });
+    }
+
+    const tbody = document.getElementById('students-table-body');
+    if (tbody) {
+      tbody.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        const action = btn.getAttribute('data-action');
+        const roll = btn.getAttribute('data-id');
+        
+        if (action === 'view-student') this.openViewStudentModal(roll);
+        else if (action === 'edit-student') this.openEditStudentModal(roll);
+        else if (action === 'delete-student') this.openDeleteStudentModal(roll);
+      });
+    }
+
+    const addStudentBtn = document.querySelector('button[data-action="add-student"]');
+    if (addStudentBtn) {
+      addStudentBtn.addEventListener('click', () => this.openAddStudentModal());
+    }
+
+    const studentForm = document.getElementById('studentForm');
+    if (studentForm) {
+      studentForm.addEventListener('submit', (e) => this.handleStudentSubmit(e));
+    }
+
+    const confirmDeleteBtn = document.getElementById('studentConfirmDeleteBtn');
+    if (confirmDeleteBtn) {
+      confirmDeleteBtn.addEventListener('click', () => this.handleDeleteStudent());
+    }
+  },
+
+  populateDynamicFilters: function() {
+    const deptSet = new Set();
+    const sectionSet = new Set();
+    
+    this.studentsData.forEach(s => {
+      if (s.department && s.department !== 'N/A') deptSet.add(s.department);
+      if (s.section && s.section !== 'N/A') sectionSet.add(s.section);
+    });
+    
+    const deptSelect = document.getElementById('students-dept-filter');
+    if (deptSelect) {
+      const currentVal = deptSelect.value;
+      let html = '<option value="">All Depts</option>';
+      Array.from(deptSet).sort().forEach(d => {
+        html += `<option value="${App.Utils.escapeHtml(d)}">${App.Utils.escapeHtml(d)}</option>`;
+      });
+      deptSelect.innerHTML = html;
+      deptSelect.value = currentVal;
+    }
+    
+    const sectionSelect = document.getElementById('students-section-filter');
+    if (sectionSelect) {
+      const currentVal = sectionSelect.value;
+      let html = '<option value="">All Sections</option>';
+      Array.from(sectionSet).sort().forEach(sec => {
+        html += `<option value="${App.Utils.escapeHtml(sec)}">${App.Utils.escapeHtml(sec)}</option>`;
+      });
+      sectionSelect.innerHTML = html;
+      sectionSelect.value = currentVal;
+    }
+  },
+
+  applyFilters: function() {
+    const searchInput = document.getElementById('students-search-input');
+    const deptFilter = document.getElementById('students-dept-filter');
+    const yearFilter = document.getElementById('students-year-filter');
+    const sectionFilter = document.getElementById('students-section-filter');
+    const statusFilter = document.getElementById('students-status-filter');
+
+    const searchStr = (searchInput ? searchInput.value : '').toLowerCase().trim();
+    const deptVal = deptFilter ? deptFilter.value : '';
+    const yearVal = yearFilter ? yearFilter.value : '';
+    const sectionVal = sectionFilter ? sectionFilter.value : '';
+    const statusVal = statusFilter ? statusFilter.value : '';
+
+    this.filteredData = this.studentsData.filter(s => {
+      let match = true;
+      
+      if (deptVal && s.department !== deptVal) match = false;
+      if (yearVal && String(s.year) !== String(yearVal)) match = false;
+      if (sectionVal && s.section !== sectionVal) match = false;
+      if (statusVal && s.status !== statusVal) match = false;
+      
+      if (match && searchStr) {
+        const searchable = [
+          s.roll_number,
+          s.student_name,
+          s.department,
+          String(s.year),
+          s.section,
+          s.email,
+          s.mobile
+        ].join(' ').toLowerCase();
+        
+        if (!searchable.includes(searchStr)) {
+          match = false;
+        }
+      }
+      return match;
+    });
+
+    this.currentPage = 1;
+    this.updateStats();
+    this.renderTable();
+  },
+
+  updateStats: function() {
+    const total = this.filteredData.length;
+    const active = this.filteredData.filter(s => s.status.toLowerCase() === 'active').length;
+    const inactive = total - active;
+    
+    const depts = new Set();
+    this.filteredData.forEach(s => {
+      if (s.department && s.department !== 'N/A') depts.add(s.department);
+    });
+
+    document.getElementById('students-stat-total').textContent = total;
+    document.getElementById('students-stat-active').textContent = active;
+    document.getElementById('students-stat-inactive').textContent = inactive;
+    document.getElementById('students-stat-departments').textContent = depts.size;
+  },
+
+  renderTable: function() {
+    const tbody = document.getElementById('students-table-body');
+    if (!tbody) return;
+
+    if (this.filteredData.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="10" class="text-center text-muted py-5">No students found</td></tr>';
+      this.renderPagination(0);
+      return;
+    }
+
+    const startIndex = (this.currentPage - 1) * this.itemsPerPage;
+    const endIndex = Math.min(startIndex + this.itemsPerPage, this.filteredData.length);
+    const pageData = this.filteredData.slice(startIndex, endIndex);
+
+    let html = '';
+    pageData.forEach(student => {
+      const statusBadge = student.status.toLowerCase() === 'active' 
+        ? '<span class="badge bg-success bg-opacity-10 text-success border border-success-subtle">Active</span>'
+        : '<span class="badge bg-danger bg-opacity-10 text-danger border border-danger-subtle">Inactive</span>';
+
+      html += `
+        <tr>
+          <td class="fw-medium text-dark">${App.Utils.escapeHtml(student.roll_number)}</td>
+          <td class="fw-bold">${App.Utils.escapeHtml(student.student_name)}</td>
+          <td>${App.Utils.escapeHtml(student.department)}</td>
+          <td>${App.Utils.escapeHtml(String(student.year))}</td>
+          <td>${App.Utils.escapeHtml(student.section)}</td>
+          <td>${App.Utils.escapeHtml(student.gender)}</td>
+          <td>${App.Utils.escapeHtml(student.email)}</td>
+          <td>${App.Utils.escapeHtml(student.mobile)}</td>
+          <td>${statusBadge}</td>
+          <td class="text-end">
+            <button class="btn btn-sm btn-light text-primary me-1" data-action="view-student" data-id="${App.Utils.escapeHtml(student.roll_number)}" title="View"><i class="bi bi-eye"></i></button>
+            <button class="btn btn-sm btn-light text-warning me-1" data-action="edit-student" data-id="${App.Utils.escapeHtml(student.roll_number)}" title="Edit"><i class="bi bi-pencil"></i></button>
+            <button class="btn btn-sm btn-light text-danger" data-action="delete-student" data-id="${App.Utils.escapeHtml(student.roll_number)}" title="Delete"><i class="bi bi-trash"></i></button>
+          </td>
+        </tr>
+      `;
+    });
+
+    tbody.innerHTML = html;
+    this.renderPagination(Math.ceil(this.filteredData.length / this.itemsPerPage));
+  },
+
+  renderPagination: function(totalPages) {
+    const nav = document.getElementById('students-pagination');
+    if (!nav) return;
+
+    if (totalPages <= 1) {
+      nav.innerHTML = `
+        <li class="page-item disabled"><a class="page-link" href="#" tabindex="-1">Previous</a></li>
+        <li class="page-item active"><a class="page-link" href="#">1</a></li>
+        <li class="page-item disabled"><a class="page-link" href="#">Next</a></li>
+      `;
+      return;
+    }
+
+    let html = '';
+    const prevDisabled = this.currentPage === 1 ? 'disabled' : '';
+    html += `<li class="page-item ${prevDisabled}"><a class="page-link" href="#" data-page="${this.currentPage - 1}">Previous</a></li>`;
+
+    let startPage = Math.max(1, this.currentPage - 2);
+    let endPage = Math.min(totalPages, startPage + 4);
+    
+    if (endPage - startPage < 4) {
+      startPage = Math.max(1, endPage - 4);
+    }
+
+    if (startPage > 1) {
+      html += `<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>`;
+      if (startPage > 2) {
+        html += `<li class="page-item disabled"><a class="page-link" href="#">...</a></li>`;
+      }
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      const active = i === this.currentPage ? 'active' : '';
+      html += `<li class="page-item ${active}"><a class="page-link" href="#" data-page="${i}">${i}</a></li>`;
+    }
+
+    if (endPage < totalPages) {
+      if (endPage < totalPages - 1) {
+        html += `<li class="page-item disabled"><a class="page-link" href="#">...</a></li>`;
+      }
+      html += `<li class="page-item"><a class="page-link" href="#" data-page="${totalPages}">${totalPages}</a></li>`;
+    }
+
+    const nextDisabled = this.currentPage === totalPages ? 'disabled' : '';
+    html += `<li class="page-item ${nextDisabled}"><a class="page-link" href="#" data-page="${this.currentPage + 1}">Next</a></li>`;
+
+    nav.innerHTML = html;
+
+    const links = nav.querySelectorAll('a.page-link');
+    links.forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const parent = e.target.closest('.page-item');
+        if (parent && parent.classList.contains('disabled')) return;
+        
+        const page = e.target.getAttribute('data-page');
+        if (page) {
+          this.currentPage = parseInt(page, 10);
+          this.renderTable();
+        }
+      });
+    });
+  },
+
+  openAddStudentModal: function() {
+    const form = document.getElementById('studentForm');
+    if (form) {
+      form.reset();
+      form.classList.remove('was-validated');
+      Array.from(form.elements).forEach(el => {
+        if (el.tagName === 'INPUT' || el.tagName === 'SELECT') {
+          el.disabled = false;
+          el.readOnly = false;
+        }
+      });
+    }
+    
+    document.getElementById('studentOriginalRoll').value = '';
+    document.getElementById('studentModalLabel').textContent = 'Add Student';
+    
+    document.getElementById('studentCreatedAtGroup').classList.add('d-none');
+    
+    const saveBtn = document.getElementById('studentSaveBtn');
+    if (saveBtn) {
+      saveBtn.classList.remove('d-none');
+      document.getElementById('studentSaveBtnText').textContent = 'Save Student';
+    }
+    
+    const errorAlert = document.getElementById('studentModalError');
+    if (errorAlert) errorAlert.classList.add('d-none');
+    
+    if (!this.studentModalInstance) {
+      const modalEl = document.getElementById('studentModal');
+      if (modalEl) this.studentModalInstance = new bootstrap.Modal(modalEl);
+    }
+    
+    if (this.studentModalInstance) {
+      this.studentModalInstance.show();
+    }
+  },
+
+  openViewStudentModal: function(roll) {
+    const student = this.studentsData.find(s => String(s.roll_number) === String(roll));
+    if (!student) return;
+    
+    const form = document.getElementById('studentForm');
+    if (form) {
+      form.reset();
+      form.classList.remove('was-validated');
+    }
+    
+    document.getElementById('studentModalLabel').textContent = 'View Student';
+    
+    document.getElementById('studentOriginalRoll').value = student.roll_number;
+    document.getElementById('studentRollNumber').value = student.roll_number;
+    document.getElementById('studentName').value = student.student_name || '';
+    document.getElementById('studentDepartment').value = student.department || '';
+    document.getElementById('studentYear').value = student.year || '';
+    document.getElementById('studentSection').value = student.section || '';
+    document.getElementById('studentGender').value = student.gender || '';
+    document.getElementById('studentEmail').value = student.email || '';
+    document.getElementById('studentMobile').value = student.mobile || '';
+    document.getElementById('studentStatus').value = student.status || '';
+    document.getElementById('studentCreatedAt').value = student.created_at || student.CreatedAt || student.createdAt || 'N/A';
+    
+    document.getElementById('studentCreatedAtGroup').classList.remove('d-none');
+    
+    const saveBtn = document.getElementById('studentSaveBtn');
+    if (saveBtn) saveBtn.classList.add('d-none');
+    
+    const errorAlert = document.getElementById('studentModalError');
+    if (errorAlert) errorAlert.classList.add('d-none');
+    
+    // Disable all inputs
+    Array.from(form.elements).forEach(el => {
+      if (el.tagName === 'INPUT' || el.tagName === 'SELECT') {
+        el.disabled = true;
+      }
+    });
+    
+    if (!this.studentModalInstance) {
+      const modalEl = document.getElementById('studentModal');
+      if (modalEl) this.studentModalInstance = new bootstrap.Modal(modalEl);
+    }
+    
+    if (this.studentModalInstance) {
+      this.studentModalInstance.show();
+    }
+  },
+
+  openEditStudentModal: function(roll) {
+    const student = this.studentsData.find(s => String(s.roll_number) === String(roll));
+    if (!student) return;
+    
+    const form = document.getElementById('studentForm');
+    if (form) {
+      form.reset();
+      form.classList.remove('was-validated');
+      
+      // Reset disabled states for editable fields
+      Array.from(form.elements).forEach(el => {
+        if (el.tagName === 'INPUT' || el.tagName === 'SELECT') {
+          el.disabled = false;
+          el.readOnly = false;
+        }
+      });
+    }
+    
+    document.getElementById('studentModalLabel').textContent = 'Edit Student';
+    
+    document.getElementById('studentOriginalRoll').value = student.roll_number;
+    
+    const rollInput = document.getElementById('studentRollNumber');
+    rollInput.value = student.roll_number;
+    rollInput.readOnly = true;
+    rollInput.disabled = true;
+    
+    const createdDisplay = document.getElementById('studentCreatedAt');
+    createdDisplay.value = student.created_at || student.CreatedAt || student.createdAt || 'N/A';
+    createdDisplay.readOnly = true;
+    createdDisplay.disabled = true;
+    
+    document.getElementById('studentName').value = student.student_name || '';
+    document.getElementById('studentDepartment').value = student.department || '';
+    document.getElementById('studentYear').value = student.year || '';
+    document.getElementById('studentSection').value = student.section || '';
+    document.getElementById('studentGender').value = student.gender || '';
+    document.getElementById('studentEmail').value = student.email || '';
+    document.getElementById('studentMobile').value = student.mobile || '';
+    document.getElementById('studentStatus').value = student.status || '';
+    
+    document.getElementById('studentCreatedAtGroup').classList.remove('d-none');
+    
+    const saveBtn = document.getElementById('studentSaveBtn');
+    if (saveBtn) {
+      saveBtn.classList.remove('d-none');
+      document.getElementById('studentSaveBtnText').textContent = 'Update Student';
+    }
+    
+    const errorAlert = document.getElementById('studentModalError');
+    if (errorAlert) errorAlert.classList.add('d-none');
+    
+    if (!this.studentModalInstance) {
+      const modalEl = document.getElementById('studentModal');
+      if (modalEl) this.studentModalInstance = new bootstrap.Modal(modalEl);
+    }
+    
+    if (this.studentModalInstance) {
+      this.studentModalInstance.show();
+    }
+  },
+
+  openDeleteStudentModal: function(roll) {
+    document.getElementById('studentDeleteRoll').value = roll;
+    const modalEl = document.getElementById('studentDeleteModal');
+    if (modalEl) {
+      const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+      modal.show();
+    }
+  },
+
+  setModalLoading: function(isLoading) {
+    const btn = document.getElementById('studentSaveBtn');
+    const spinner = document.getElementById('studentSaveSpinner');
+    if (btn) btn.disabled = isLoading;
+    if (spinner) {
+      if (isLoading) spinner.classList.remove('d-none');
+      else spinner.classList.add('d-none');
+    }
+  },
+
+  handleStudentSubmit: function(e) {
+    e.preventDefault();
+    const form = e.target;
+    
+    if (!form.checkValidity()) {
+      e.stopPropagation();
+      form.classList.add('was-validated');
+      return;
+    }
+    
+    this.setModalLoading(true);
+    const errorAlert = document.getElementById('studentModalError');
+    if (errorAlert) errorAlert.classList.add('d-none');
+    
+    const originalRoll = document.getElementById('studentOriginalRoll').value;
+    const isEdit = !!originalRoll;
+    
+    const studentData = {
+      roll_number: document.getElementById('studentRollNumber').value.trim().toUpperCase(),
+      student_name: document.getElementById('studentName').value.trim(),
+      department: document.getElementById('studentDepartment').value.trim().toUpperCase(),
+      year: document.getElementById('studentYear').value,
+      section: document.getElementById('studentSection').value.trim().toUpperCase(),
+      gender: document.getElementById('studentGender').value,
+      email: document.getElementById('studentEmail').value.trim(),
+      mobile: document.getElementById('studentMobile').value.trim(),
+      status: document.getElementById('studentStatus').value
+    };
+    
+    if (isEdit) {
+      App.API.updateStudent(originalRoll, studentData)
+        .then(res => {
+          this.setModalLoading(false);
+          if (this.studentModalInstance) this.studentModalInstance.hide();
+          App.UI.showSuccess("Student updated successfully!");
+          this.load();
+        })
+        .catch(err => {
+          this.setModalLoading(false);
+          if (errorAlert) {
+            errorAlert.textContent = err.message || "Failed to update student.";
+            errorAlert.classList.remove('d-none');
+          }
+          App.UI.showError(err.message || "Failed to update student.");
+        });
+    } else {
+      App.API.createStudent(studentData)
+        .then(res => {
+          this.setModalLoading(false);
+          if (this.studentModalInstance) this.studentModalInstance.hide();
+          App.UI.showSuccess("Student created successfully!");
+          this.load();
+        })
+        .catch(err => {
+          this.setModalLoading(false);
+          if (errorAlert) {
+            errorAlert.textContent = err.message || "Failed to create student.";
+            errorAlert.classList.remove('d-none');
+          }
+          App.UI.showError(err.message || "Failed to create student.");
+        });
+    }
+  },
+
+  handleDeleteStudent: function() {
+    const roll = document.getElementById('studentDeleteRoll').value;
+    if (!roll) return;
+    
+    const btn = document.getElementById('studentConfirmDeleteBtn');
+    const spinner = document.getElementById('studentDeleteSpinner');
+    if (btn) btn.disabled = true;
+    if (spinner) spinner.classList.remove('d-none');
+    
+    App.API.deleteStudent(roll)
+      .then(() => {
+        if (btn) btn.disabled = false;
+        if (spinner) spinner.classList.add('d-none');
+        
+        const modalEl = document.getElementById('studentDeleteModal');
+        if (modalEl) {
+          const modal = bootstrap.Modal.getInstance(modalEl);
+          if (modal) modal.hide();
+        }
+        App.UI.showSuccess("Student deleted successfully!");
+        this.load();
+      })
+      .catch(err => {
+        if (btn) btn.disabled = false;
+        if (spinner) spinner.classList.add('d-none');
+        App.UI.showError(err.message || "Failed to delete student.");
+      });
+  },
+
   refresh: function() {
     this.load();
   },
+  
   destroy: function() {
     App.Logger.info('Students destroy');
   }

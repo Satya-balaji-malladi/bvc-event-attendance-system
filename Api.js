@@ -48,9 +48,15 @@ function changePassword(userId, oldPassword, newPassword) { return Controller.Us
 // Student API
 // ==========================================
 function createStudent(studentData) { return Controller.Student.createStudent(studentData); }
-function updateStudent(rollNumber, studentData) { return Controller.Student.updateStudent(rollNumber, studentData); }
-function deleteStudent(rollNumber) { return Controller.Student.deleteStudent(rollNumber); }
-function getStudentByRollNumber(rollNumber) { return Controller.Student.getStudentByRollNumber(rollNumber); }
+function updateStudent(rollNumber, studentData) { 
+  try { return JSON.parse(JSON.stringify(Controller.Student.updateStudent(rollNumber, studentData) || {})); } catch(e) { return {success:false, message:e.message}; }
+}
+function deleteStudent(rollNumber) { 
+  try { return JSON.parse(JSON.stringify(Controller.Student.deleteStudent(rollNumber) || {})); } catch(e) { return {success:false, message:e.message}; }
+}
+function getStudentByRollNumber(rollNumber) { 
+  try { return JSON.parse(JSON.stringify(Controller.Student.getStudentByRollNumber(rollNumber) || {})); } catch(e) { return {}; }
+}
 // function getAllStudents() moved to Code.js
 function searchStudents(keyword) { return Controller.Student.searchStudents(keyword); }
 function getStudentsByDepartment(department) { return Controller.Student.getStudentsByDepartment(department); }

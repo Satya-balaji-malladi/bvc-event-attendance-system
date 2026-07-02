@@ -210,6 +210,10 @@ window.App = {
     resetPassword: function(userId) { return this._call('resetPassword', userId); },
     getUserById: function(userId) { return this._call('getUserById', userId); },
     getAllStudents: function() { return this._call('getAllStudents'); },
+    createStudent: function(studentData) { return this._call('createStudent', studentData); },
+    updateStudent: function(rollNumber, studentData) { return this._call('updateStudent', rollNumber, studentData); },
+    deleteStudent: function(rollNumber) { return this._call('deleteStudent', rollNumber); },
+    getStudentById: function(rollNumber) { return this._call('getStudentByRollNumber', rollNumber); },
     getAttendanceByEvent: function(eventId) { return this._call('getAttendanceByEvent', eventId); },
     _getMock: function(m) {
       if (m === 'getDashboardSummary') return { report: { totalStudents: 1250, totalEvents: 45, totalAttendance: 15420, totalPresent: 14200, totalAbsent: 1220, attendancePercentage: 92.08 } };
