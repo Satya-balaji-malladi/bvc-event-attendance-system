@@ -205,10 +205,6 @@ window.App = {
     getAllEvents: function() { return this._call('getAllEvents'); },
     getAllUsers: function() { return this._call('getAllUsers'); },
     createUser: function(userData) { return this._call('createUser', userData); },
-    updateUser: function(userId, userData) { return this._call('updateUser', userId, userData); },
-    deleteUser: function(userId) { return this._call('deleteUser', userId); },
-    resetPassword: function(userId) { return this._call('resetPassword', userId); },
-    getUserById: function(userId) { return this._call('getUserById', userId); },
     getAllStudents: function() { return this._call('getAllStudents'); },
     getAttendanceByEvent: function(eventId) { return this._call('getAttendanceByEvent', eventId); },
     _getMock: function(m) {

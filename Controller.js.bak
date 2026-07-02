@@ -145,15 +145,6 @@ const Controller = {
     },
 
     /**
-     * Resets a user's password to the default.
-     * @param {string} userId 
-     * @returns {object} Response object.
-     */
-    resetPassword: function(userId) {
-      return UserService.resetPassword(userId);
-    },
-
-    /**
      * Activates a user.
      * @param {string} userId 
      * @returns {object} Response object.

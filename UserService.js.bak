@@ -136,29 +136,6 @@ const UserService = {
   },
 
   /**
-   * Resets a user's password to default.
-   * @param {string} userId 
-   * @returns {object} Standard response object.
-   */
-  resetPassword: function(userId) {
-    const usersSheet = CONFIG.SHEETS.USERS;
-    if (!DatabaseService.exists(usersSheet, 'user_id', userId)) {
-      return Utils.buildResponse(false, CONFIG.MESSAGES.USER_NOT_FOUND || 'User not found.');
-    }
-    
-    // Default password as requested
-    const defaultPassword = 'Welcome@123';
-    // Use the existing hashing method (Utils.hashPassword if it exists, or just store it if not hashed)
-    const hashed = typeof Utils.hashPassword === 'function' ? Utils.hashPassword(defaultPassword) : defaultPassword;
-    
-    const success = DatabaseService.updateRow(usersSheet, 'user_id', userId, { password: hashed });
-    if (success) {
-      return Utils.buildResponse(true, 'Password reset successfully.');
-    }
-    return Utils.buildResponse(false, 'Failed to reset password.');
-  },
-
-  /**
    * Activates a user.
    * @param {string} userId 
    * @returns {object} Standard response object.

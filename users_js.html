@@ -64,6 +64,31 @@ App.Modules.users = {
     if (userForm) {
       userForm.addEventListener('submit', (e) => this.handleUserSubmit(e));
     }
+    
+    const tbody = document.getElementById('users-table-body');
+    if (tbody) {
+      tbody.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        const action = btn.getAttribute('data-action');
+        const id = btn.getAttribute('data-id');
+        
+        if (action === 'view-user') this.openViewUserModal(id);
+        else if (action === 'edit-user') this.openEditUserModal(id);
+        else if (action === 'delete-user') this.openDeleteUserModal(id);
+        else if (action === 'reset-pwd-user') this.openResetPasswordModal(id);
+      });
+    }
+    
+    const confirmDeleteBtn = document.getElementById('userConfirmDeleteBtn');
+    if (confirmDeleteBtn) {
+      confirmDeleteBtn.addEventListener('click', () => this.handleDeleteUser());
+    }
+    
+    const confirmResetBtn = document.getElementById('userConfirmResetBtn');
+    if (confirmResetBtn) {
+      confirmResetBtn.addEventListener('click', () => this.handleResetPassword());
+    }
   },
 
   openAddUserModal: function() {
@@ -71,6 +96,36 @@ App.Modules.users = {
     if (form) {
       form.reset();
       form.classList.remove('was-validated');
+      
+      // Reset disabled states
+      Array.from(form.elements).forEach(el => {
+        if (el.tagName === 'INPUT' || el.tagName === 'SELECT') {
+          el.disabled = false;
+          el.readOnly = false;
+        }
+      });
+    }
+    
+    document.getElementById('userOriginalId').value = '';
+    document.getElementById('userModalLabel').textContent = 'Add User';
+    
+    // Show/hide fields
+    document.getElementById('userIdGroup').classList.add('d-none');
+    document.getElementById('userUsernameGroup').classList.add('d-none');
+    document.getElementById('userCreatedAtGroup').classList.add('d-none');
+    
+    const pwdGroup = document.getElementById('userPasswordGroup');
+    const confirmPwdGroup = document.getElementById('userConfirmPasswordGroup');
+    pwdGroup.classList.remove('d-none');
+    confirmPwdGroup.classList.remove('d-none');
+    
+    document.getElementById('userPassword').setAttribute('required', 'true');
+    document.getElementById('userConfirmPassword').setAttribute('required', 'true');
+    
+    const saveBtn = document.getElementById('userSaveBtn');
+    if (saveBtn) {
+      saveBtn.classList.remove('d-none');
+      document.getElementById('userSaveBtnText').textContent = 'Save User';
     }
     
     const errorAlert = document.getElementById('userModalError');
@@ -88,19 +143,187 @@ App.Modules.users = {
     }
   },
 
+  openViewUserModal: function(userId) {
+    const user = this.usersData.find(u => String(u.user_id) === String(userId));
+    if (!user) return;
+    
+    const form = document.getElementById('userForm');
+    if (form) {
+      form.reset();
+      form.classList.remove('was-validated');
+    }
+    
+    document.getElementById('userModalLabel').textContent = 'View User';
+    
+    document.getElementById('userOriginalId').value = user.user_id;
+    document.getElementById('userIdDisplay').value = user.user_id;
+    document.getElementById('userUsername').value = user.username || 'N/A';
+    document.getElementById('userName').value = user.full_name || '';
+    document.getElementById('userEmail').value = user.email || '';
+    document.getElementById('userDepartment').value = user.department || '';
+    document.getElementById('userRole').value = user.role || '';
+    document.getElementById('userStatus').value = user.status || '';
+    document.getElementById('userCreatedAt').value = user.created_at || user.CreatedAt || user.createdAt || 'N/A';
+    
+    document.getElementById('userIdGroup').classList.remove('d-none');
+    document.getElementById('userUsernameGroup').classList.remove('d-none');
+    document.getElementById('userCreatedAtGroup').classList.remove('d-none');
+    
+    const pwdGroup = document.getElementById('userPasswordGroup');
+    const confirmPwdGroup = document.getElementById('userConfirmPasswordGroup');
+    pwdGroup.classList.add('d-none');
+    confirmPwdGroup.classList.add('d-none');
+    
+    document.getElementById('userPassword').removeAttribute('required');
+    document.getElementById('userConfirmPassword').removeAttribute('required');
+    
+    const saveBtn = document.getElementById('userSaveBtn');
+    if (saveBtn) saveBtn.classList.add('d-none');
+    
+    const errorAlert = document.getElementById('userModalError');
+    if (errorAlert) errorAlert.classList.add('d-none');
+    
+    // Disable all inputs
+    Array.from(form.elements).forEach(el => {
+      if (el.tagName === 'INPUT' || el.tagName === 'SELECT') {
+        el.disabled = true;
+      }
+    });
+    
+    if (!this.userModalInstance) {
+      const modalEl = document.getElementById('userModal');
+      if (modalEl) this.userModalInstance = new bootstrap.Modal(modalEl);
+    }
+    
+    if (this.userModalInstance) {
+      this.userModalInstance.show();
+    }
+  },
+
+  openEditUserModal: function(userId) {
+    const user = this.usersData.find(u => String(u.user_id) === String(userId));
+    if (!user) return;
+    
+    const form = document.getElementById('userForm');
+    if (form) {
+      form.reset();
+      form.classList.remove('was-validated');
+      
+      // Reset disabled states for editable fields
+      Array.from(form.elements).forEach(el => {
+        if (el.tagName === 'INPUT' || el.tagName === 'SELECT') {
+          el.disabled = false;
+          el.readOnly = false;
+        }
+      });
+    }
+    
+    document.getElementById('userModalLabel').textContent = 'Edit User';
+    
+    document.getElementById('userOriginalId').value = user.user_id;
+    
+    // Read-only fields
+    const idDisplay = document.getElementById('userIdDisplay');
+    idDisplay.value = user.user_id;
+    idDisplay.readOnly = true;
+    idDisplay.disabled = true;
+    
+    const usernameDisplay = document.getElementById('userUsername');
+    usernameDisplay.value = user.username || 'N/A';
+    usernameDisplay.readOnly = true;
+    usernameDisplay.disabled = true;
+    
+    const createdDisplay = document.getElementById('userCreatedAt');
+    createdDisplay.value = user.created_at || user.CreatedAt || user.createdAt || 'N/A';
+    createdDisplay.readOnly = true;
+    createdDisplay.disabled = true;
+    
+    // Editable fields
+    document.getElementById('userName').value = user.full_name || '';
+    document.getElementById('userEmail').value = user.email || '';
+    document.getElementById('userDepartment').value = user.department || '';
+    document.getElementById('userRole').value = user.role || '';
+    document.getElementById('userStatus').value = user.status || '';
+    
+    const roleSelect = document.getElementById('userRole');
+    if (App.State && App.State.currentUser && String(App.State.currentUser.user_id) === String(userId)) {
+      roleSelect.disabled = true;
+    } else {
+      roleSelect.disabled = false;
+    }
+    
+    document.getElementById('userIdGroup').classList.remove('d-none');
+    document.getElementById('userUsernameGroup').classList.remove('d-none');
+    document.getElementById('userCreatedAtGroup').classList.remove('d-none');
+    
+    const pwdGroup = document.getElementById('userPasswordGroup');
+    const confirmPwdGroup = document.getElementById('userConfirmPasswordGroup');
+    pwdGroup.classList.add('d-none');
+    confirmPwdGroup.classList.add('d-none');
+    
+    document.getElementById('userPassword').removeAttribute('required');
+    document.getElementById('userConfirmPassword').removeAttribute('required');
+    
+    const saveBtn = document.getElementById('userSaveBtn');
+    if (saveBtn) {
+      saveBtn.classList.remove('d-none');
+      document.getElementById('userSaveBtnText').textContent = 'Update User';
+    }
+    
+    const errorAlert = document.getElementById('userModalError');
+    if (errorAlert) errorAlert.classList.add('d-none');
+    
+    if (!this.userModalInstance) {
+      const modalEl = document.getElementById('userModal');
+      if (modalEl) this.userModalInstance = new bootstrap.Modal(modalEl);
+    }
+    
+    if (this.userModalInstance) {
+      this.userModalInstance.show();
+    }
+  },
+
+  openDeleteUserModal: function(userId) {
+    if (App.State && App.State.currentUser && String(App.State.currentUser.user_id) === String(userId)) {
+      App.UI.showError("You cannot delete your own account.");
+      return;
+    }
+    
+    document.getElementById('userDeleteId').value = userId;
+    const modalEl = document.getElementById('userDeleteModal');
+    if (modalEl) {
+      const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+      modal.show();
+    }
+  },
+
+  openResetPasswordModal: function(userId) {
+    document.getElementById('userResetId').value = userId;
+    const modalEl = document.getElementById('userResetModal');
+    if (modalEl) {
+      const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+      modal.show();
+    }
+  },
+
   handleUserSubmit: function(e) {
     e.preventDefault();
     const form = e.target;
     
-    // Custom validation for passwords matching
-    const pwd = document.getElementById('userPassword').value;
-    const confirmPwd = document.getElementById('userConfirmPassword').value;
-    const confirmInput = document.getElementById('userConfirmPassword');
+    const originalId = document.getElementById('userOriginalId').value;
+    const isEdit = !!originalId;
     
-    if (pwd !== confirmPwd) {
-      confirmInput.setCustomValidity("Passwords do not match");
-    } else {
-      confirmInput.setCustomValidity("");
+    // Custom validation for passwords matching (only if not editing)
+    if (!isEdit) {
+      const pwd = document.getElementById('userPassword').value;
+      const confirmPwd = document.getElementById('userConfirmPassword').value;
+      const confirmInput = document.getElementById('userConfirmPassword');
+      
+      if (pwd !== confirmPwd) {
+        confirmInput.setCustomValidity("Passwords do not match");
+      } else {
+        confirmInput.setCustomValidity("");
+      }
     }
     
     if (!form.checkValidity()) {
@@ -117,33 +340,110 @@ App.Modules.users = {
     const userData = {
       full_name: document.getElementById('userName').value.trim(),
       email: emailVal,
-      username: emailVal.split('@')[0],
       department: document.getElementById('userDepartment').value,
       role: document.getElementById('userRole').value,
-      status: document.getElementById('userStatus').value,
-      password: pwd
+      status: document.getElementById('userStatus').value
     };
     
-    console.log("FRONTEND STEP 2: App.API.createUser called with:", userData);
-    App.API.createUser(userData)
-      .then(res => {
-        console.log("FRONTEND STEP 3: Promise resolved successfully", res);
-        this.setModalLoading(false);
-        if (this.userModalInstance) {
-          this.userModalInstance.hide();
+    if (!isEdit) {
+      userData.username = emailVal.split('@')[0];
+      userData.password = document.getElementById('userPassword').value;
+    }
+    
+    if (isEdit) {
+      console.log("FRONTEND STEP 2: App.API.updateUser called with:", userData);
+      App.API.updateUser(originalId, userData)
+        .then(res => {
+          this.setModalLoading(false);
+          if (this.userModalInstance) this.userModalInstance.hide();
+          App.UI.showSuccess("User updated successfully!");
+          this.load();
+        })
+        .catch(err => {
+          this.setModalLoading(false);
+          const errorAlert = document.getElementById('userModalError');
+          if (errorAlert) {
+            errorAlert.textContent = err.message || "Failed to update user.";
+            errorAlert.classList.remove('d-none');
+          }
+          App.UI.showError(err.message || "Failed to update user.");
+        });
+    } else {
+      console.log("FRONTEND STEP 2: App.API.createUser called with:", userData);
+      App.API.createUser(userData)
+        .then(res => {
+          this.setModalLoading(false);
+          if (this.userModalInstance) this.userModalInstance.hide();
+          App.UI.showSuccess("User created successfully!");
+          this.load();
+        })
+        .catch(err => {
+          this.setModalLoading(false);
+          const errorAlert = document.getElementById('userModalError');
+          if (errorAlert) {
+            errorAlert.textContent = err.message || "Failed to create user.";
+            errorAlert.classList.remove('d-none');
+          }
+          App.UI.showError(err.message || "Failed to create user.");
+        });
+    }
+  },
+
+  handleDeleteUser: function() {
+    const userId = document.getElementById('userDeleteId').value;
+    if (!userId) return;
+    
+    const btn = document.getElementById('userConfirmDeleteBtn');
+    const spinner = document.getElementById('userDeleteSpinner');
+    if (btn) btn.disabled = true;
+    if (spinner) spinner.classList.remove('d-none');
+    
+    App.API.deleteUser(userId)
+      .then(() => {
+        if (btn) btn.disabled = false;
+        if (spinner) spinner.classList.add('d-none');
+        
+        const modalEl = document.getElementById('userDeleteModal');
+        if (modalEl) {
+          const modal = bootstrap.Modal.getInstance(modalEl);
+          if (modal) modal.hide();
         }
-        App.UI.showSuccess("User created successfully!");
-        this.load(); // Refresh the list and stats
+        App.UI.showSuccess("User deleted successfully!");
+        this.load();
       })
       .catch(err => {
-        console.log("FRONTEND STEP 4: Promise rejected", err);
-        this.setModalLoading(false);
-        const errorAlert = document.getElementById('userModalError');
-        if (errorAlert) {
-          errorAlert.textContent = err.message || "Failed to create user.";
-          errorAlert.classList.remove('d-none');
+        if (btn) btn.disabled = false;
+        if (spinner) spinner.classList.add('d-none');
+        App.UI.showError(err.message || "Failed to delete user.");
+      });
+  },
+
+  handleResetPassword: function() {
+    const userId = document.getElementById('userResetId').value;
+    if (!userId) return;
+    
+    const btn = document.getElementById('userConfirmResetBtn');
+    const spinner = document.getElementById('userResetSpinner');
+    if (btn) btn.disabled = true;
+    if (spinner) spinner.classList.remove('d-none');
+    
+    App.API.resetPassword(userId)
+      .then(() => {
+        if (btn) btn.disabled = false;
+        if (spinner) spinner.classList.add('d-none');
+        
+        const modalEl = document.getElementById('userResetModal');
+        if (modalEl) {
+          const modal = bootstrap.Modal.getInstance(modalEl);
+          if (modal) modal.hide();
         }
-        App.UI.showError(err.message || "Failed to create user.");
+        App.UI.showSuccess("Password reset successfully!");
+        this.load();
+      })
+      .catch(err => {
+        if (btn) btn.disabled = false;
+        if (spinner) spinner.classList.add('d-none');
+        App.UI.showError(err.message || "Failed to reset password.");
       });
   },
 
@@ -249,6 +549,7 @@ App.Modules.users = {
           <td class="text-end">
             <button class="btn btn-sm btn-light text-primary me-1" data-action="view-user" data-id="${App.Utils.escapeHtml(String(user.user_id))}" title="View"><i class="bi bi-eye"></i></button>
             <button class="btn btn-sm btn-light text-warning me-1" data-action="edit-user" data-id="${App.Utils.escapeHtml(String(user.user_id))}" title="Edit"><i class="bi bi-pencil"></i></button>
+            <button class="btn btn-sm btn-light text-info me-1" data-action="reset-pwd-user" data-id="${App.Utils.escapeHtml(String(user.user_id))}" title="Reset Password"><i class="bi bi-key"></i></button>
             <button class="btn btn-sm btn-light text-danger" data-action="delete-user" data-id="${App.Utils.escapeHtml(String(user.user_id))}" title="Delete"><i class="bi bi-trash"></i></button>
           </td>
         </tr>

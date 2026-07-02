@@ -25,11 +25,20 @@ function hasRole(sessionToken, role) { return Controller.Session.hasRole(session
 // User API
 // ==========================================
 function createUser(userData) { return Controller.User.createUser(userData); }
-function getUserById(userId) { return Controller.User.getUserById(userId); }
+function getUserById(userId) { 
+  try { return JSON.parse(JSON.stringify(Controller.User.getUserById(userId) || {})); } catch(e) { return {}; }
+}
 function getUserByUsername(username) { return Controller.User.getUserByUsername(username); }
 // function getAllUsers() moved to Code.js
-function updateUser(userId, userData) { return Controller.User.updateUser(userId, userData); }
-function deleteUser(userId) { return Controller.User.deleteUser(userId); }
+function updateUser(userId, userData) { 
+  try { return JSON.parse(JSON.stringify(Controller.User.updateUser(userId, userData) || {})); } catch(e) { return {success:false, message:e.message}; }
+}
+function deleteUser(userId) { 
+  try { return JSON.parse(JSON.stringify(Controller.User.deleteUser(userId) || {})); } catch(e) { return {success:false, message:e.message}; }
+}
+function resetPassword(userId) {
+  try { return JSON.parse(JSON.stringify(Controller.User.resetPassword(userId) || {})); } catch(e) { return {success:false, message:e.message}; }
+}
 function deactivateUser(userId) { return Controller.User.deactivateUser(userId); }
 function activateUser(userId) { return Controller.User.activateUser(userId); }
 function searchUsers(keyword) { return Controller.User.searchUsers(keyword); }
