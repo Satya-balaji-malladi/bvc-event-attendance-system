@@ -159,6 +159,7 @@ App.Modules.events = {
         if (action === 'view-event') this.openViewEventModal(id);
         else if (action === 'edit-event') this.openEditEventModal(id);
         else if (action === 'delete-event') this.openDeleteEventModal(id);
+        else if (action === 'manage-participants') this.openManageParticipantsModal(id);
       });
     }
 
@@ -336,6 +337,7 @@ App.Modules.events = {
       let actionsHtml = `
         <button class="btn btn-sm btn-light text-primary me-1" data-action="view-event" data-id="${App.Utils.escapeHtml(evt.event_id)}" title="View"><i class="bi bi-eye"></i></button>
         <button class="btn btn-sm btn-light text-warning me-1" data-action="edit-event" data-id="${App.Utils.escapeHtml(evt.event_id)}" title="Edit"><i class="bi bi-pencil"></i></button>
+        <button class="btn btn-sm btn-light text-success me-1" data-action="manage-participants" data-id="${App.Utils.escapeHtml(evt.event_id)}" title="Manage Participants"><i class="bi bi-people"></i></button>
         <button class="btn btn-sm btn-light text-danger" data-action="delete-event" data-id="${App.Utils.escapeHtml(evt.event_id)}" title="Delete"><i class="bi bi-trash"></i></button>
       `;
 
@@ -432,6 +434,11 @@ App.Modules.events = {
           el.readOnly = false;
         }
       });
+      const attendanceTypeSelect = document.getElementById('eventAttendanceType');
+      if (attendanceTypeSelect) {
+        attendanceTypeSelect.disabled = false;
+        attendanceTypeSelect.value = 'Fixed';
+      }
     }
     
     document.getElementById('eventOriginalId').value = '';
@@ -841,6 +848,7 @@ App.Modules.events = {
       years: years,
       capacity: document.getElementById('eventCapacity').value,
       status: currentTargetStatus,
+      attendance_type: document.getElementById('eventAttendanceType') ? document.getElementById('eventAttendanceType').value : 'Fixed',
       
       created_by: App.State && App.State.currentUser ? App.State.currentUser.user_id : 'Unknown',
       action_by: App.State && App.State.currentUser ? App.State.currentUser.user_id : 'Unknown',
@@ -1078,6 +1086,109 @@ App.Modules.events = {
       if (stopGroup) stopGroup.classList.remove('d-none');
       if (document.getElementById('stopReason')) document.getElementById('stopReason').required = true;
     }
+  },
+
+  openManageParticipantsModal: function(eventId) {
+    const event = this.eventsData.find(e => String(e.event_id) === String(eventId));
+    if (!event) return;
+    
+    document.getElementById('mpEventId').value = eventId;
+    document.getElementById('mpEventName').textContent = event.event_name;
+    document.getElementById('mpEligibilityMessage').textContent = '';
+    document.getElementById('mpSearchRoll').value = '';
+    
+    // Bind Add button
+    const addBtn = document.getElementById('mpAddBtn');
+    addBtn.replaceWith(addBtn.cloneNode(true));
+    document.getElementById('mpAddBtn').addEventListener('click', () => this.addParticipant(eventId));
+
+    const modal = new bootstrap.Modal(document.getElementById('manageParticipantsModal'));
+    modal.show();
+    
+    this.loadParticipants(eventId, event);
+  },
+
+  loadParticipants: function(eventId, eventObj) {
+    document.getElementById('mpTableBody').innerHTML = '<tr><td colspan="7" class="text-center py-3">Loading participants...</td></tr>';
+    
+    App.API._call('getEventParticipants', eventId).then(res => {
+      const parts = res || [];
+      const isFixed = (eventObj.attendance_type || 'Fixed') === 'Fixed';
+      const activeCount = parts.filter(p => p.status === 'Active').length;
+      
+      const counterEl = document.getElementById('mpParticipantCounter');
+      if (isFixed) {
+        if (eventObj.capacity) {
+          counterEl.textContent = `${activeCount} / ${eventObj.capacity}`;
+        } else {
+          counterEl.textContent = `${activeCount} Participants`;
+        }
+      } else {
+        counterEl.textContent = 'Unlimited Participants';
+      }
+
+      const tbody = document.getElementById('mpTableBody');
+      if (parts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-5">No participants found</td></tr>';
+        return;
+      }
+      
+      let html = '';
+      parts.forEach(p => {
+        const badge = p.status === 'Active' ? 'bg-success' : 'bg-danger';
+        const actionBtn = p.status === 'Active' 
+          ? `<button class="btn btn-sm btn-outline-danger" onclick="App.Modules.events.removeParticipant('${eventId}', '${p.roll_number}')">Remove</button>`
+          : `<button class="btn btn-sm btn-outline-success" onclick="App.Modules.events.addParticipant('${eventId}', '${p.roll_number}')">Restore</button>`;
+          
+        html += `
+          <tr>
+            <td class="fw-bold">${App.Utils.escapeHtml(p.roll_number)}</td>
+            <td>${App.Utils.escapeHtml(p.student_name)}</td>
+            <td>${App.Utils.escapeHtml(p.department)}</td>
+            <td>${App.Utils.escapeHtml(p.year)}</td>
+            <td>${App.Utils.escapeHtml(p.section)}</td>
+            <td><span class="badge ${badge}">${App.Utils.escapeHtml(p.status)}</span></td>
+            <td class="text-end">${actionBtn}</td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+    }).catch(err => {
+      document.getElementById('mpTableBody').innerHTML = '<tr><td colspan="7" class="text-center text-danger py-3">Error loading participants</td></tr>';
+      App.ErrorHandler.handle(err);
+    });
+  },
+
+  addParticipant: function(eventId, rollNumberOpt) {
+    const roll = rollNumberOpt || document.getElementById('mpSearchRoll').value.trim();
+    if (!roll) {
+      document.getElementById('mpEligibilityMessage').textContent = 'Please enter a Roll Number.';
+      document.getElementById('mpEligibilityMessage').className = 'small mt-1 fw-bold text-danger';
+      return;
+    }
+    
+    document.getElementById('mpEligibilityMessage').textContent = 'Validating...';
+    document.getElementById('mpEligibilityMessage').className = 'small mt-1 fw-bold text-info';
+    
+    App.API._call('addParticipant', eventId, roll).then(res => {
+      document.getElementById('mpEligibilityMessage').textContent = res.message || 'Added successfully';
+      document.getElementById('mpEligibilityMessage').className = 'small mt-1 fw-bold text-success';
+      const event = this.eventsData.find(e => String(e.event_id) === String(eventId));
+      this.loadParticipants(eventId, event);
+    }).catch(err => {
+      document.getElementById('mpEligibilityMessage').textContent = err.message || 'Error adding participant';
+      document.getElementById('mpEligibilityMessage').className = 'small mt-1 fw-bold text-danger';
+    });
+  },
+
+  removeParticipant: function(eventId, roll) {
+    App.API._call('removeParticipant', eventId, roll).then(res => {
+      App.UI.showSuccess('Participant removed');
+      const event = this.eventsData.find(e => String(e.event_id) === String(eventId));
+      this.loadParticipants(eventId, event);
+    }).catch(err => {
+      App.ErrorHandler.handle(err);
+    });
   }
 };
 </script>

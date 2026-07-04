@@ -155,5 +155,30 @@ const SessionService = {
     
     const user = userRecords[0];
     return user.role === role;
+  },
+
+  /**
+   * Wraps an execution block with session validation.
+   * Ensures that only authenticated users can execute the callback.
+   * @param {string} sessionToken 
+   * @param {Function} callback - Function that takes userId as its argument.
+   * @returns {any} Result of the callback or an error object.
+   */
+  withSession: function(sessionToken, callback) {
+    if (!sessionToken || sessionToken.trim() === '') {
+      throw new Error('Authentication required. Missing session token.');
+    }
+    
+    const userId = this.getCurrentUser(sessionToken);
+    if (!userId) {
+      throw new Error('Invalid or expired session. Please log in again.');
+    }
+    
+    try {
+      return callback(userId);
+    } catch (error) {
+      Logger.log("Error in withSession execution: " + error.message);
+      throw error;
+    }
   }
 };

@@ -28,9 +28,10 @@ const AttendanceService = {
   /**
    * Marks attendance for a student at an event.
    * @param {object} attendanceData 
+   * @param {string} userId - Injected by SessionService
    * @returns {object} Standard response object.
    */
-  markAttendance: function(attendanceData) {
+  markAttendance: function(attendanceData, userId) {
     const validationResult = ValidationService.validateAttendance(attendanceData);
     if (!validationResult.valid) {
       return Utils.buildResponse(false, validationResult.errors.join(' '));
@@ -49,6 +50,32 @@ const AttendanceService = {
     const student = StudentService.getStudentByRollNumber(rollNumber);
     if (!student) {
       return Utils.buildResponse(false, CONFIG.MESSAGES.STUDENT_NOT_FOUND);
+    }
+    
+    // Validate Coordinator Ownership
+    const actionBy = userId; // Trust backend session over frontend payload
+    const user = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, 'user_id', actionBy)[0];
+    if (user && user.role === CONFIG.ROLES.COORDINATOR) {
+      if (event.coordinator_id !== actionBy) {
+        return Utils.buildResponse(false, 'Unauthorized: You can only mark attendance for your assigned events.');
+      }
+    }
+
+    // Sprint 1 Rules: Check Fixed/Open eligibility
+    const attendanceType = event.attendance_type || 'Fixed';
+    if (attendanceType === 'Fixed') {
+      const parts = DatabaseService.findByColumn(CONFIG.SHEETS.EVENT_PARTICIPANTS, 'event_id', eventId);
+      const isPart = parts.find(p => p.roll_number === rollNumber && p.status === 'Active');
+      if (!isPart) {
+        return Utils.buildResponse(false, 'Student is not an active participant for this Fixed event.');
+      }
+    } else {
+      // Open Event - Use ParticipantService.checkEligibility
+      const eligibility = ParticipantService.checkEligibility(eventId, rollNumber, actionBy);
+      // It might return false because they are already added, which is fine for attendance marking.
+      if (!eligibility.eligible && eligibility.reason.indexOf('Already Added') === -1) {
+         return Utils.buildResponse(false, eligibility.reason);
+      }
     }
 
     // Prevent duplicate attendance
@@ -83,9 +110,10 @@ const AttendanceService = {
   /**
    * Deletes an attendance record.
    * @param {string} attendanceId 
+   * @param {string} userId - Injected by SessionService
    * @returns {object} Standard response object.
    */
-  deleteAttendance: function(attendanceId) {
+  deleteAttendance: function(attendanceId, userId) {
     const sheetName = CONFIG.SHEETS.ATTENDANCE;
     
     const attendanceRecord = this.getAttendanceById(attendanceId);
@@ -94,6 +122,15 @@ const AttendanceService = {
     }
 
     const event = EventService.getEventById(attendanceRecord.event_id);
+    
+    // Validate Ownership for deletion
+    const user = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, 'user_id', userId)[0];
+    if (user && user.role === CONFIG.ROLES.COORDINATOR) {
+      if (event && event.coordinator_id !== userId) {
+        return Utils.buildResponse(false, 'Unauthorized: You can only delete attendance for your assigned events.');
+      }
+    }
+    
     if (event && event.status === CONFIG.EVENT_STATUS.COMPLETED) {
       return Utils.buildResponse(false, CONFIG.MESSAGES.EVENT_ALREADY_COMPLETED);
     }

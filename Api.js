@@ -10,25 +10,41 @@
 // ==========================================
 // Authentication API
 // ==========================================
-function login(credentials) { return Controller.Auth.login(credentials); }
-function logout(sessionToken) { return Controller.Auth.logout(sessionToken); }
-function authenticate(sessionToken) { return Controller.Auth.authenticate(sessionToken); }
+function login(credentials) { 
+  try { return JSON.parse(JSON.stringify(Controller.Auth.login(credentials) || {})); } catch(e) { return {success:false, message:e.message}; }
+}
+function logout(sessionToken) { 
+  try { return JSON.parse(JSON.stringify(Controller.Auth.logout(sessionToken) || {})); } catch(e) { return {success:false, message:e.message}; }
+}
+function authenticate(sessionToken) { 
+  try { return JSON.parse(JSON.stringify(Controller.Auth.authenticate(sessionToken) || {})); } catch(e) { return {success:false, message:e.message}; }
+}
 
 // ==========================================
 // Session API
 // ==========================================
-function validateSession(sessionToken) { return Controller.Session.validateSession(sessionToken); }
-function getCurrentUser(sessionToken) { return Controller.Session.getCurrentUser(sessionToken); }
-function hasRole(sessionToken, role) { return Controller.Session.hasRole(sessionToken, role); }
+function validateSession(sessionToken) { 
+  try { return JSON.parse(JSON.stringify(Controller.Session.validateSession(sessionToken) || {})); } catch(e) { return {success:false, message:e.message}; }
+}
+function getCurrentUser(sessionToken) { 
+  try { return JSON.parse(JSON.stringify(Controller.Session.getCurrentUser(sessionToken) || {})); } catch(e) { return {}; }
+}
+function hasRole(sessionToken, role) { 
+  try { return JSON.parse(JSON.stringify(Controller.Session.hasRole(sessionToken, role) || false)); } catch(e) { return false; }
+}
 
 // ==========================================
 // User API
 // ==========================================
-function createUser(userData) { return Controller.User.createUser(userData); }
+function createUser(userData) { 
+  try { return JSON.parse(JSON.stringify(Controller.User.createUser(userData) || {})); } catch(e) { return {success:false, message:e.message}; }
+}
 function getUserById(userId) { 
   try { return JSON.parse(JSON.stringify(Controller.User.getUserById(userId) || {})); } catch(e) { return {}; }
 }
-function getUserByUsername(username) { return Controller.User.getUserByUsername(username); }
+function getUserByUsername(username) { 
+  try { return JSON.parse(JSON.stringify(Controller.User.getUserByUsername(username) || {})); } catch(e) { return {}; }
+}
 // function getAllUsers() moved to Code.js
 function updateUser(userId, userData) { 
   try { return JSON.parse(JSON.stringify(Controller.User.updateUser(userId, userData) || {})); } catch(e) { return {success:false, message:e.message}; }
@@ -39,15 +55,25 @@ function deleteUser(userId) {
 function resetPassword(userId) {
   try { return JSON.parse(JSON.stringify(Controller.User.resetPassword(userId) || {})); } catch(e) { return {success:false, message:e.message}; }
 }
-function deactivateUser(userId) { return Controller.User.deactivateUser(userId); }
-function activateUser(userId) { return Controller.User.activateUser(userId); }
-function searchUsers(keyword) { return Controller.User.searchUsers(keyword); }
-function changePassword(userId, oldPassword, newPassword) { return Controller.User.changePassword(userId, oldPassword, newPassword); }
+function deactivateUser(userId) { 
+  try { return JSON.parse(JSON.stringify(Controller.User.deactivateUser(userId) || {})); } catch(e) { return {success:false, message:e.message}; }
+}
+function activateUser(userId) { 
+  try { return JSON.parse(JSON.stringify(Controller.User.activateUser(userId) || {})); } catch(e) { return {success:false, message:e.message}; }
+}
+function searchUsers(keyword) { 
+  try { return JSON.parse(JSON.stringify(Controller.User.searchUsers(keyword) || [])); } catch(e) { return []; }
+}
+function changePassword(userId, oldPassword, newPassword) { 
+  try { return JSON.parse(JSON.stringify(Controller.User.changePassword(userId, oldPassword, newPassword) || {})); } catch(e) { return {success:false, message:e.message}; }
+}
 
 // ==========================================
 // Student API
 // ==========================================
-function createStudent(studentData) { return Controller.Student.createStudent(studentData); }
+function createStudent(studentData) { 
+  try { return JSON.parse(JSON.stringify(Controller.Student.createStudent(studentData) || {})); } catch(e) { return {success:false, message:e.message}; }
+}
 function updateStudent(rollNumber, studentData) { 
   try { return JSON.parse(JSON.stringify(Controller.Student.updateStudent(rollNumber, studentData) || {})); } catch(e) { return {success:false, message:e.message}; }
 }
@@ -58,10 +84,18 @@ function getStudentByRollNumber(rollNumber) {
   try { return JSON.parse(JSON.stringify(Controller.Student.getStudentByRollNumber(rollNumber) || {})); } catch(e) { return {}; }
 }
 // function getAllStudents() moved to Code.js
-function searchStudents(keyword) { return Controller.Student.searchStudents(keyword); }
-function getStudentsByDepartment(department) { return Controller.Student.getStudentsByDepartment(department); }
-function getStudentsByYear(year) { return Controller.Student.getStudentsByYear(year); }
-function getStudentsBySection(section) { return Controller.Student.getStudentsBySection(section); }
+function searchStudents(keyword) { 
+  try { return JSON.parse(JSON.stringify(Controller.Student.searchStudents(keyword) || [])); } catch(e) { return []; }
+}
+function getStudentsByDepartment(department) { 
+  try { return JSON.parse(JSON.stringify(Controller.Student.getStudentsByDepartment(department) || [])); } catch(e) { return []; }
+}
+function getStudentsByYear(year) { 
+  try { return JSON.parse(JSON.stringify(Controller.Student.getStudentsByYear(year) || [])); } catch(e) { return []; }
+}
+function getStudentsBySection(section) { 
+  try { return JSON.parse(JSON.stringify(Controller.Student.getStudentsBySection(section) || [])); } catch(e) { return []; }
+}
 
 // ==========================================
 // Event API
@@ -79,38 +113,86 @@ function getEventById(eventId) {
   try { return JSON.parse(JSON.stringify(Controller.Event.getEventById(eventId) || {})); } catch(e) { return {}; }
 }
 // function getAllEvents() moved to Code.js
-function searchEvents(keyword) { return Controller.Event.searchEvents(keyword); }
-function getEventsByCoordinator(coordinatorId) { return Controller.Event.getEventsByCoordinator(coordinatorId); }
-function getEventsByStatus(status) { return Controller.Event.getEventsByStatus(status); }
-function getEventsByDate(date) { return Controller.Event.getEventsByDate(date); }
+function searchEvents(keyword) { 
+  try { return JSON.parse(JSON.stringify(Controller.Event.searchEvents(keyword) || [])); } catch(e) { return []; }
+}
+function getEventsByCoordinator(coordinatorId) { 
+  try { return JSON.parse(JSON.stringify(Controller.Event.getEventsByCoordinator(coordinatorId) || [])); } catch(e) { return []; }
+}
+function getEventsByStatus(status) { 
+  try { return JSON.parse(JSON.stringify(Controller.Event.getEventsByStatus(status) || [])); } catch(e) { return []; }
+}
+function getEventsByDate(date) { 
+  try { return JSON.parse(JSON.stringify(Controller.Event.getEventsByDate(date) || [])); } catch(e) { return []; }
+}
 
 
 // ==========================================
 // Attendance API
 // ==========================================
-function markAttendance(attendanceData) { return Controller.Attendance.markAttendance(attendanceData); }
-function deleteAttendance(attendanceId) { return Controller.Attendance.deleteAttendance(attendanceId); }
-function getAttendanceById(attendanceId) { return Controller.Attendance.getAttendanceById(attendanceId); }
+function markAttendance(attendanceData) { 
+  try { return JSON.parse(JSON.stringify(Controller.Attendance.markAttendance(attendanceData) || {})); } catch(e) { return {success:false, message:e.message}; }
+}
+function deleteAttendance(attendanceId) { 
+  try { return JSON.parse(JSON.stringify(Controller.Attendance.deleteAttendance(attendanceId) || {})); } catch(e) { return {success:false, message:e.message}; }
+}
+function getAttendanceById(attendanceId) { 
+  try { return JSON.parse(JSON.stringify(Controller.Attendance.getAttendanceById(attendanceId) || {})); } catch(e) { return {}; }
+}
 // function getAttendanceByEvent(eventId) moved to Code.js
-function getAttendanceByStudent(rollNumber) { return Controller.Attendance.getAttendanceByStudent(rollNumber); }
-function getAttendanceByDate(date) { return Controller.Attendance.getAttendanceByDate(date); }
-function getAttendanceByStatus(status) { return Controller.Attendance.getAttendanceByStatus(status); }
-function checkAttendanceExists(eventId, rollNumber) { return Controller.Attendance.checkAttendanceExists(eventId, rollNumber); }
-function getEventAttendanceCount(eventId) { return Controller.Attendance.getEventAttendanceCount(eventId); }
-function getStudentAttendanceCount(rollNumber) { return Controller.Attendance.getStudentAttendanceCount(rollNumber); }
-function getStudentAttendanceSummary(rollNumber) { return Controller.Attendance.getStudentAttendanceSummary(rollNumber); }
-function getOverallAttendanceStatistics() { return Controller.Attendance.getOverallAttendanceStatistics(); }
-function getAttendanceSummaryByEvent(eventId) { return Controller.Attendance.getAttendanceSummaryByEvent(eventId); }
+function getAttendanceByStudent(rollNumber) { 
+  try { return JSON.parse(JSON.stringify(Controller.Attendance.getAttendanceByStudent(rollNumber) || [])); } catch(e) { return []; }
+}
+function getAttendanceByDate(date) { 
+  try { return JSON.parse(JSON.stringify(Controller.Attendance.getAttendanceByDate(date) || [])); } catch(e) { return []; }
+}
+function getAttendanceByStatus(status) { 
+  try { return JSON.parse(JSON.stringify(Controller.Attendance.getAttendanceByStatus(status) || [])); } catch(e) { return []; }
+}
+function checkAttendanceExists(eventId, rollNumber) { 
+  try { return JSON.parse(JSON.stringify(Controller.Attendance.checkAttendanceExists(eventId, rollNumber) || {})); } catch(e) { return {success:false, message:e.message}; }
+}
+function getEventAttendanceCount(eventId) { 
+  try { return JSON.parse(JSON.stringify(Controller.Attendance.getEventAttendanceCount(eventId) || {})); } catch(e) { return {}; }
+}
+function getStudentAttendanceCount(rollNumber) { 
+  try { return JSON.parse(JSON.stringify(Controller.Attendance.getStudentAttendanceCount(rollNumber) || {})); } catch(e) { return {}; }
+}
+function getStudentAttendanceSummary(rollNumber) { 
+  try { return JSON.parse(JSON.stringify(Controller.Attendance.getStudentAttendanceSummary(rollNumber) || {})); } catch(e) { return {}; }
+}
+function getOverallAttendanceStatistics() { 
+  try { return JSON.parse(JSON.stringify(Controller.Attendance.getOverallAttendanceStatistics() || {})); } catch(e) { return {}; }
+}
+function getAttendanceSummaryByEvent(eventId) { 
+  try { return JSON.parse(JSON.stringify(Controller.Attendance.getAttendanceSummaryByEvent(eventId) || {})); } catch(e) { return {}; }
+}
 
 // ==========================================
 // Report API
 // ==========================================
 // function getDashboardSummary() moved to Code.js
-function getEventReport(eventId) { return Controller.Report.getEventReport(eventId); }
-function getStudentReport(rollNumber) { return Controller.Report.getStudentReport(rollNumber); }
-function getDepartmentReport(department) { return Controller.Report.getDepartmentReport(department); }
-function getYearWiseReport(year) { return Controller.Report.getYearWiseReport(year); }
-function getSectionReport(section) { return Controller.Report.getSectionReport(section); }
-function getDateWiseReport(date) { return Controller.Report.getDateWiseReport(date); }
-function getOverallAttendanceReport() { return Controller.Report.getOverallAttendanceReport(); }
-function getCoordinatorReport(coordinatorId) { return Controller.Report.getCoordinatorReport(coordinatorId); }
+function getEventReport(eventId) { 
+  try { return JSON.parse(JSON.stringify(Controller.Report.getEventReport(eventId) || {})); } catch(e) { return {}; }
+}
+function getStudentReport(rollNumber) { 
+  try { return JSON.parse(JSON.stringify(Controller.Report.getStudentReport(rollNumber) || {})); } catch(e) { return {}; }
+}
+function getDepartmentReport(department) { 
+  try { return JSON.parse(JSON.stringify(Controller.Report.getDepartmentReport(department) || {})); } catch(e) { return {}; }
+}
+function getYearWiseReport(year) { 
+  try { return JSON.parse(JSON.stringify(Controller.Report.getYearWiseReport(year) || {})); } catch(e) { return {}; }
+}
+function getSectionReport(section) { 
+  try { return JSON.parse(JSON.stringify(Controller.Report.getSectionReport(section) || {})); } catch(e) { return {}; }
+}
+function getDateWiseReport(date) { 
+  try { return JSON.parse(JSON.stringify(Controller.Report.getDateWiseReport(date) || {})); } catch(e) { return {}; }
+}
+function getOverallAttendanceReport() { 
+  try { return JSON.parse(JSON.stringify(Controller.Report.getOverallAttendanceReport() || {})); } catch(e) { return {}; }
+}
+function getCoordinatorReport(coordinatorId) { 
+  try { return JSON.parse(JSON.stringify(Controller.Report.getCoordinatorReport(coordinatorId) || {})); } catch(e) { return {}; }
+}

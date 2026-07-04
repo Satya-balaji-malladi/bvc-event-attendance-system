@@ -239,60 +239,74 @@ const EventService = {
 
   _evaluateEventStatus: function(event) {
     if (!event) return event;
+    try {
+      const now = new Date();
+      const nowMs = now.getTime();
+      let updated = false;
+      let newStatus = event.status;
 
-    const now = new Date();
-    const nowMs = now.getTime();
-    let updated = false;
-    let newStatus = event.status;
+      // Helper to parse date/time safely
+      const parseDateTime = (dStr, tStr) => {
+        if (!dStr) return 0;
+        let dt;
+        if (dStr instanceof Date) {
+          dt = new Date(dStr.getTime());
+        } else {
+          const str = String(dStr);
+          const dParts = str.split('-');
+          if (dParts.length === 3) {
+            dt = new Date(parseInt(dParts[0], 10), parseInt(dParts[1], 10) - 1, parseInt(dParts[2], 10));
+          } else {
+            dt = new Date(str);
+          }
+        }
+        
+        if (tStr) {
+          const tStrSafe = String(tStr);
+          const parts = tStrSafe.split(':');
+          if (parts.length >= 2) {
+            dt.setHours(parseInt(parts[0], 10), parseInt(parts[1], 10), 0, 0);
+          }
+        }
+        return isNaN(dt.getTime()) ? 0 : dt.getTime();
+      };
 
-    // Helper to parse date/time safely
-    const parseDateTime = (dStr, tStr) => {
-      if (!dStr) return 0;
-      const dParts = dStr.split('-');
-      let dt = new Date(parseInt(dParts[0], 10), parseInt(dParts[1], 10) - 1, parseInt(dParts[2], 10));
-      if (tStr) {
-        const parts = tStr.split(':');
-        if (parts.length >= 2) {
-          dt.setHours(parseInt(parts[0], 10), parseInt(parts[1], 10), 0, 0);
+      if (event.status === CONFIG.EVENT_STATUS.UPCOMING) {
+        const startMs = parseDateTime(event.start_date, event.start_time);
+        if (startMs > 0 && nowMs >= startMs) {
+          newStatus = CONFIG.EVENT_STATUS.ACTIVE;
+          event.status = newStatus;
+          event.started_at = now.toISOString();
+          event.started_by = 'System';
+          event.last_action = 'Started';
+          event.last_action_at = now.toISOString();
+          event.last_action_by = 'System';
+          updated = true;
         }
       }
-      return dt.getTime();
-    };
 
-    if (event.status === CONFIG.EVENT_STATUS.UPCOMING) {
-      const startMs = parseDateTime(event.start_date, event.start_time);
-      if (startMs > 0 && nowMs >= startMs) {
-        newStatus = CONFIG.EVENT_STATUS.ACTIVE;
-        event.status = newStatus;
-        event.started_at = now.toISOString();
-        event.started_by = 'System';
-        event.last_action = 'Started';
-        event.last_action_at = now.toISOString();
-        event.last_action_by = 'System';
-        updated = true;
+      if (event.status === CONFIG.EVENT_STATUS.ACTIVE) {
+        const endMs = parseDateTime(event.end_date, event.end_time);
+        // Auto complete if end time has passed
+        if (endMs > 0 && nowMs >= endMs) {
+          newStatus = CONFIG.EVENT_STATUS.COMPLETED;
+          event.status = newStatus;
+          event.completed_at = now.toISOString();
+          event.completed_by = 'System';
+          event.last_action = 'Completed';
+          event.last_action_at = now.toISOString();
+          event.last_action_by = 'System';
+          updated = true;
+        }
       }
-    }
 
-    if (event.status === CONFIG.EVENT_STATUS.ACTIVE) {
-      const endMs = parseDateTime(event.end_date, event.end_time);
-      // Auto complete if end time has passed
-      if (endMs > 0 && nowMs >= endMs) {
-        newStatus = CONFIG.EVENT_STATUS.COMPLETED;
-        event.status = newStatus;
-        event.completed_at = now.toISOString();
-        event.completed_by = 'System';
-        event.last_action = 'Completed';
-        event.last_action_at = now.toISOString();
-        event.last_action_by = 'System';
-        updated = true;
+      if (updated) {
+        this._ensureAuditColumns();
+        DatabaseService.updateRow(CONFIG.SHEETS.EVENTS, 'event_id', event.event_id, event);
       }
+    } catch(e) {
+      Logger.log("Error evaluating event status for event " + event.event_id + ": " + e.message);
     }
-
-    if (updated) {
-      this._ensureAuditColumns();
-      DatabaseService.updateRow(CONFIG.SHEETS.EVENTS, 'event_id', event.event_id, event);
-    }
-    
     return event;
   },
 
@@ -325,7 +339,7 @@ const EventService = {
       return evaluatedEvents;
     } catch (e) {
       Logger.log("Error in EventService.getAllEvents: " + e.message);
-      return [];
+      return [{ event_id: "ERR-101", event_name: "BACKEND ERROR: " + e.message, status: "Active" }];
     }
   },
 

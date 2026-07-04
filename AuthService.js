@@ -25,7 +25,10 @@ const AuthService = {
    * @returns {boolean} True if password matches.
    */
   _verifyPassword: function(user, password) {
-    return user.password === password;
+    if (!user || user.password === undefined || user.password === null) return false;
+    // Cast to String and trim because Google Sheets might return numeric passwords as Numbers 
+    // and manual data entry often includes accidental trailing spaces.
+    return String(user.password).trim() === String(password).trim();
   },
 
   /**

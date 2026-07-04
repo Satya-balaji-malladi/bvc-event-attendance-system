@@ -1,0 +1,136 @@
+<script>
+App.Modules.login = {
+  failedAttempts: 0,
+  lockoutTimer: null,
+
+  init: function() {
+    this.bindEvents();
+    this.loadSavedUsername();
+  },
+
+  bindEvents: function() {
+    const form = document.getElementById('loginForm');
+    const togglePwd = document.getElementById('togglePassword');
+    const pwdInput = document.getElementById('loginPassword');
+    
+    if (form) {
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.handleLogin();
+      });
+    }
+
+    if (togglePwd && pwdInput) {
+      togglePwd.addEventListener('click', () => {
+        const type = pwdInput.getAttribute('type') === 'password' ? 'text' : 'password';
+        pwdInput.setAttribute('type', type);
+        togglePwd.innerHTML = type === 'password' ? '<i class="bi bi-eye"></i>' : '<i class="bi bi-eye-slash"></i>';
+      });
+    }
+
+    // Caps Lock detection
+    if (pwdInput) {
+      pwdInput.addEventListener('keyup', (e) => {
+        const warning = document.getElementById('capsLockWarning');
+        if (e.getModifierState && e.getModifierState('CapsLock')) {
+          warning.classList.remove('d-none');
+        } else {
+          warning.classList.add('d-none');
+        }
+      });
+    }
+  },
+
+  loadSavedUsername: function() {
+    const saved = localStorage.getItem('bvc_remember_username');
+    if (saved) {
+      document.getElementById('loginUsername').value = saved;
+      document.getElementById('rememberMe').checked = true;
+    }
+  },
+
+  handleLogin: function() {
+    if (this.failedAttempts >= 5) {
+      App.UI.showError('Too many failed login attempts. Please wait 30 seconds.');
+      return;
+    }
+
+    const userIn = document.getElementById('loginUsername').value.trim();
+    const pwdIn = document.getElementById('loginPassword').value;
+    const remember = document.getElementById('rememberMe').checked;
+
+    if (!userIn || !pwdIn) {
+      App.UI.showError('Please enter both username and password.');
+      return;
+    }
+
+    this.setLoading(true);
+
+    App.API.login({ usernameOrEmail: userIn, password: pwdIn })
+      .then(res => {
+        if (res && res.success === true && res.session) {
+          this.failedAttempts = 0; // Reset
+          
+          if (remember) {
+            localStorage.setItem('bvc_remember_username', userIn);
+          } else {
+            localStorage.removeItem('bvc_remember_username');
+          }
+          
+          // Save session completely opaque to Auth handler
+          App.Auth.setSession(res.session.session_token, res.user);
+          
+          // Transition to App
+          App.Auth.transitionToApp();
+        } else {
+          this.handleFailedAttempt(res ? res.message : 'Invalid Credentials');
+        }
+      })
+      .catch(err => {
+        this.handleFailedAttempt(err.message || 'Invalid Username/Email or Password.');
+      })
+      .finally(() => {
+        this.setLoading(false);
+      });
+  },
+
+  handleFailedAttempt: function(msg) {
+    this.failedAttempts++;
+    App.UI.showError(msg);
+    if (this.failedAttempts >= 5) {
+      this.lockout();
+    }
+  },
+
+  lockout: function() {
+    App.UI.showError('Too many failed login attempts. Please wait 30 seconds.');
+    const btn = document.getElementById('loginSubmitBtn');
+    btn.disabled = true;
+    
+    if (this.lockoutTimer) clearTimeout(this.lockoutTimer);
+    this.lockoutTimer = setTimeout(() => {
+      this.failedAttempts = 0;
+      btn.disabled = false;
+    }, 30000);
+  },
+
+  setLoading: function(isLoading) {
+    const btn = document.getElementById('loginSubmitBtn');
+    const txt = btn.querySelector('.btn-text');
+    const spinner = document.getElementById('loginSpinner');
+    
+    btn.disabled = isLoading;
+    if (isLoading) {
+      txt.classList.add('invisible');
+      spinner.classList.remove('d-none');
+    } else {
+      txt.classList.remove('invisible');
+      spinner.classList.add('d-none');
+    }
+  },
+
+  destroy: function() {
+    if (this.lockoutTimer) clearTimeout(this.lockoutTimer);
+  }
+};
+</script>

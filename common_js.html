@@ -33,7 +33,7 @@ window.App = {
 
   // Config & Constants (No hardcoded values)
   Constants: {
-    MODULES: { DASHBOARD: 'dashboard', USERS: 'users', STUDENTS: 'students', EVENTS: 'events', ATTENDANCE: 'attendance', REPORTS: 'reports' },
+    MODULES: { DASHBOARD: 'dashboard', USERS: 'users', STUDENTS: 'students', EVENTS: 'events', ATTENDANCE: 'attendance', REPORTS: 'reports', SETTINGS: 'settings' },
     ROLES: { ADMIN: 'Admin', SUPER_ADMIN: 'Super Admin', COORDINATOR: 'Coordinator' },
     EVENT_STATUS: { DRAFT: 'Draft', UPCOMING: 'Upcoming', ACTIVE: 'Active', STOPPED: 'Stopped', COMPLETED: 'Completed', CANCELLED: 'Cancelled' },
     ATTENDANCE_STATUS: { PRESENT: 'Present', ABSENT: 'Absent' },
@@ -163,6 +163,9 @@ window.App = {
         if (App.Environment === 'production') {
           console.log("FRONTEND STEP 2.5: checking typeof google.script.run");
           if (typeof google.script.run[serverMethod] === 'function') {
+            const token = localStorage.getItem('bvc_session');
+            const callArgs = (serverMethod !== 'login' && serverMethod !== 'authenticate') ? [token, ...args] : args;
+            
             console.log("FRONTEND STEP 2.6: calling google.script.run." + serverMethod);
             google.script.run
               .withSuccessHandler((res) => {
@@ -187,7 +190,7 @@ window.App = {
                 App.LoadingManager.hide();
                 reject(err);
               })
-              [serverMethod](...args);
+              [serverMethod](...callArgs);
           } else {
             App.LoadingManager.hide();
             reject(new Error(`${App.Constants.MSGS.ERR_NOT_FOUND}: ${serverMethod}`));
@@ -202,6 +205,13 @@ window.App = {
       });
     },
     getDashboardSummary: function() { return this._call('getDashboardSummary'); },
+    getReportsDashboardSummary: function() { return this._call('getReportsDashboardSummary'); },
+    getEventReport: function(filters) { return this._call('getEventReport', filters); },
+    getStudentReport: function(rollNumber) { return this._call('getStudentReport', rollNumber); },
+    getDepartmentReport: function(department) { return this._call('getDepartmentReport', department); },
+    getCoordinatorReport: function(coordinatorId) { return this._call('getCoordinatorReport', coordinatorId); },
+    getDateRangeReport: function(fromDate, toDate) { return this._call('getDateRangeReport', fromDate, toDate); },
+    getDashboardData: function() { return this._call('getDashboardData'); },
     getAllEvents: function() { return this._call('getAllEvents'); },
     createEvent: function(eventData) { return this._call('createEvent', eventData); },
     updateEvent: function(eventId, eventData) { return this._call('updateEvent', eventId, eventData); },
@@ -218,6 +228,12 @@ window.App = {
     updateStudent: function(rollNumber, studentData) { return this._call('updateStudent', rollNumber, studentData); },
     deleteStudent: function(rollNumber) { return this._call('deleteStudent', rollNumber); },
     getStudentById: function(rollNumber) { return this._call('getStudentByRollNumber', rollNumber); },
+    getDepartmentReport: function(department) { return this._call('getDepartmentReport', department); },
+    getSettings: function() { return this._call('getSettings'); },
+    saveSettings: function(payload) { return this._call('saveSettings', payload); },
+    login: function(credentials) { return this._call('login', credentials); },
+    logout: function(sessionToken) { return this._call('logout', sessionToken); },
+    authenticate: function(sessionToken) { return this._call('authenticate', sessionToken); },
     getAttendanceByEvent: function(eventId) { return this._call('getAttendanceByEvent', eventId); },
     _getMock: function(m) {
       if (m === 'getDashboardSummary') return { report: { totalStudents: 1250, totalEvents: 45, totalAttendance: 15420, totalPresent: 14200, totalAbsent: 1220, attendancePercentage: 92.08 } };
@@ -254,9 +270,11 @@ window.App = {
         if (mod) {
           if (typeof mod.init === 'function') mod.init();
         } else {
+          console.error('[ROUTER] Module JS not registered for:', pageName, '| App.Modules keys:', Object.keys(App.Modules));
           App.Logger.warn(`Module ${pageName} logic not found.`);
         }
       } else {
+        console.error('[ROUTER] DOM element not found: #module-' + pageName);
         App.ErrorHandler.handle(new Error(`Template module-${pageName} missing.`));
       }
     }
@@ -272,7 +290,105 @@ window.App = {
   },
 
   // Modules Registry
-  Modules: {}
+  Modules: {},
+
+  // Services Registry
+  Services: {},
+
+  // Authentication Flow Manager
+  Auth: {
+    init: function() {
+      // Show splash screen
+      const splash = document.getElementById('splash-screen');
+      const text = document.getElementById('splash-text');
+      
+      const token = localStorage.getItem('bvc_session');
+      if (!token) {
+        setTimeout(() => this.showLogin(), 1000);
+        return;
+      }
+      
+      App.API.authenticate(token).then(res => {
+        if (res.success && res.data && res.data.user) {
+          App.State.currentUser = res.data.user;
+          this.transitionToApp(false);
+        } else {
+          this.logout(true); // invalid token
+        }
+      }).catch(err => {
+        console.error(err);
+        this.logout(true);
+      });
+    },
+
+    setSession: function(token, user) {
+      localStorage.setItem('bvc_session', token);
+      App.State.currentUser = user;
+    },
+
+    transitionToApp: function(fromLogin = true) {
+      document.getElementById('splash-screen').classList.add('d-none');
+      document.getElementById('auth-bg').classList.add('d-none');
+      document.getElementById('login-container').classList.add('d-none');
+      document.getElementById('error-container').classList.add('d-none');
+      
+      const appWrapper = document.getElementById('app-wrapper');
+      appWrapper.classList.remove('d-none');
+      
+      // Update UI Header
+      const userNameEl = document.getElementById('user-name');
+      if (userNameEl && App.State.currentUser) {
+        userNameEl.innerText = App.State.currentUser.full_name;
+      }
+
+      // Role Routing
+      if (fromLogin) {
+        if (App.State.currentUser && App.State.currentUser.role === App.Constants.ROLES.COORDINATOR) {
+          // If Coordinator, maybe redirect to events or dashboard
+          App.Router.navigate(App.Constants.MODULES.DASHBOARD);
+        } else {
+          App.Router.navigate(App.Constants.MODULES.DASHBOARD);
+        }
+      } else {
+        // If restored from refresh, restore last route or dashboard
+        App.Router.navigate(App.State.activeModule || App.Constants.MODULES.DASHBOARD);
+      }
+    },
+
+    showLogin: function(sessionExpired = false) {
+      document.getElementById('splash-screen').classList.add('d-none');
+      document.getElementById('app-wrapper').classList.add('d-none');
+      document.getElementById('error-container').classList.add('d-none');
+      
+      document.getElementById('auth-bg').classList.remove('d-none');
+      document.getElementById('login-container').classList.remove('d-none');
+      
+      if (App.Modules.login) App.Modules.login.init();
+      
+      if (sessionExpired) {
+        App.UI.showError('Session Expired. Please login again.');
+      }
+    },
+
+    logout: function(isExpired = false) {
+      const token = localStorage.getItem('bvc_session');
+      if (token && !isExpired) {
+        App.LoadingManager.show();
+        App.API.logout(token).finally(() => {
+          this._clearLocalState(isExpired);
+        });
+      } else {
+        this._clearLocalState(isExpired);
+      }
+    },
+
+    _clearLocalState: function(isExpired) {
+      localStorage.removeItem('bvc_session');
+      App.State.currentUser = null;
+      App.LoadingManager.hide(true);
+      this.showLogin(isExpired);
+    }
+  }
 };
 
 /**
@@ -306,7 +422,13 @@ document.addEventListener('DOMContentLoaded', () => {
     link.addEventListener('click', function(e) {
       e.preventDefault();
       const pageName = this.getAttribute('data-page');
-      if (!pageName || pageName === 'logout') return;
+      if (pageName === 'logout') {
+        if (confirm('Are you sure you want to logout?')) {
+           App.Auth.logout();
+        }
+        return;
+      }
+      if (!pageName) return;
       document.querySelectorAll('.sidebar-nav .nav-link').forEach(l => l.classList.remove('active'));
       this.classList.add('active');
       App.UI.updateBreadcrumb('Home', this.querySelector('.nav-text').innerText);
@@ -326,7 +448,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }, 1000);
 
-  // Boot default route
-  App.Router.navigate(App.Constants.MODULES.DASHBOARD);
+  // Boot Auth flow instead of default route
+  App.Auth.init();
 });
 </script>

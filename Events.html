@@ -172,6 +172,15 @@
               </div>
 
               <div class="col-md-6">
+                <label for="eventAttendanceType" class="form-label">Attendance Type <span class="text-danger">*</span></label>
+                <select class="form-select" id="eventAttendanceType" required>
+                  <option value="Fixed">Fixed</option>
+                  <option value="Open">Open</option>
+                </select>
+                <div class="invalid-feedback">Attendance Type is required.</div>
+              </div>
+
+              <div class="col-md-6">
                 <label for="eventStartDate" class="form-label">Start Date <span class="text-danger">*</span></label>
                 <input type="date" class="form-control" id="eventStartDate" required>
                 <div class="invalid-feedback">Start Date is required.</div>
@@ -368,6 +377,63 @@
   </div>
 
 </div>
+
+  <!-- Manage Participants Modal -->
+  <div class="modal fade" id="manageParticipantsModal" tabindex="-1" aria-labelledby="manageParticipantsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="manageParticipantsModalLabel">Manage Participants - <span id="mpEventName"></span></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="mpEventId">
+          <div class="row mb-3">
+            <div class="col-md-4">
+              <div class="p-3 bg-light rounded text-center h-100">
+                <h6 class="text-muted mb-1 small">Participant Summary</h6>
+                <h4 class="mb-0 fw-bold text-primary" id="mpParticipantCounter">Loading...</h4>
+              </div>
+            </div>
+            <div class="col-md-8">
+              <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body">
+                  <h6 class="card-title text-muted small">Add Participant</h6>
+                  <div class="input-group mb-2">
+                    <input type="text" id="mpSearchRoll" class="form-control" placeholder="Enter Roll Number...">
+                    <button class="btn btn-primary" id="mpAddBtn" type="button">Add Participant</button>
+                  </div>
+                  <div id="mpEligibilityMessage" class="small mt-1 fw-bold"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" id="mpTable">
+              <thead class="table-light">
+                <tr>
+                  <th>Roll Number</th>
+                  <th>Name</th>
+                  <th>Department</th>
+                  <th>Year</th>
+                  <th>Section</th>
+                  <th>Status</th>
+                  <th class="text-end">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="mpTableBody">
+                <tr><td colspan="7" class="text-center py-3">Loading participants...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer border-top-0 bg-light">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
 <style>
 .timeline-item {

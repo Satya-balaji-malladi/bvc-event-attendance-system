@@ -1,22 +1,241 @@
 <script>
-/**
- * ==========================================
- * ATTENDANCE MODULE
- * ==========================================
- */
 App.Modules.attendance = {
+  currentEventId: null,
+  attendanceData: [],
+  studentsData: [],
+
   init: function() {
-    App.Logger.info('Attendance init');
-    this.load();
+    this.bindEvents();
+    this.loadEventsDropdown();
+    this.loadStudentsData();
   },
-  load: function() {
-    // Implementation pending
+
+  bindEvents: function() {
+    const select = document.getElementById('attendanceEventSelect');
+    if (select) {
+      select.addEventListener('change', (e) => {
+        this.currentEventId = e.target.value;
+        if (this.currentEventId) {
+          document.getElementById('attendanceEntrySection').classList.remove('d-none');
+          this.loadAttendanceData();
+        } else {
+          document.getElementById('attendanceEntrySection').classList.add('d-none');
+          document.getElementById('attendance-table-body').innerHTML = '<tr><td colspan="6" class="text-center text-muted py-5">Please select an event</td></tr>';
+        }
+      });
+    }
+
+    const markBtn = document.getElementById('attMarkBtn');
+    if (markBtn) {
+      markBtn.addEventListener('click', () => this.markAttendance());
+    }
+
+    const rollInput = document.getElementById('attRollNumber');
+    if (rollInput) {
+      rollInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          this.markAttendance();
+        }
+      });
+    }
+    
+    const tbody = document.getElementById('attendance-table-body');
+    if (tbody) {
+      tbody.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action="delete-attendance"]');
+        if (btn) {
+          const id = btn.getAttribute('data-id');
+          this.deleteAttendance(id);
+        }
+      });
+    }
   },
+
+  loadStudentsData: function() {
+    App.API._call('getAllStudents').then(res => {
+      this.studentsData = res || [];
+    }).catch(console.error);
+  },
+
+  loadEventsDropdown: function() {
+    const userId = App.State.currentUser ? App.State.currentUser.user_id : null;
+    const role = App.State.currentUser ? App.State.currentUser.role : null;
+    
+    App.API._call('getAllEvents').then(events => {
+      const select = document.getElementById('attendanceEventSelect');
+      if (!select) return;
+      
+      select.innerHTML = '<option value="">Select Event...</option>';
+      let activeEvents = events.filter(e => e.status === 'Active' || e.status === 'Upcoming'); // Allow upcoming too for testing
+      
+      // Filter by coordinator if not admin
+      if (role === App.Constants.ROLES.COORDINATOR) {
+        activeEvents = activeEvents.filter(e => e.coordinator_id === userId);
+      }
+      
+      activeEvents.forEach(e => {
+        const option = document.createElement('option');
+        option.value = e.event_id;
+        option.textContent = `${e.event_name} (${e.start_date})`;
+        select.appendChild(option);
+      });
+    }).catch(err => App.ErrorHandler.handle(err));
+  },
+
+  loadAttendanceData: function() {
+    if (!this.currentEventId) return;
+    
+    document.getElementById('attendance-table-body').innerHTML = '<tr><td colspan="6" class="text-center py-5">Loading...</td></tr>';
+    
+    // Get both Attendance and Event data for analytics
+    Promise.all([
+      App.API._call('getAttendanceByEvent', this.currentEventId),
+      App.API._call('getEventById', this.currentEventId),
+      App.API._call('getEventParticipants', this.currentEventId)
+    ]).then(([attRes, eventRes, partsRes]) => {
+      this.attendanceData = attRes || [];
+      const eventObj = eventRes || {};
+      const parts = partsRes || [];
+      
+      this.updateAnalytics(eventObj, parts);
+      this.renderTable();
+    }).catch(err => {
+      document.getElementById('attendance-table-body').innerHTML = '<tr><td colspan="6" class="text-center text-danger py-5">Error loading attendance</td></tr>';
+      App.ErrorHandler.handle(err);
+    });
+  },
+
+  updateAnalytics: function(eventObj, parts) {
+    const isFixed = (eventObj.attendance_type || 'Fixed') === 'Fixed';
+    
+    let expected = 0;
+    if (isFixed) {
+      expected = parts.filter(p => p.status === 'Active').length;
+    } else {
+      let parsed = parseInt(eventObj.capacity);
+      expected = isNaN(parsed) ? 0 : parsed;
+    }
+    
+    let present = 0;
+    let absent = 0;
+    
+    this.attendanceData.forEach(a => {
+      if (a.status === 'Present') present++;
+      if (a.status === 'Absent') absent++;
+    });
+    
+    // If expected is 0 for Open events, expected becomes present count
+    if (!isFixed && expected < present) {
+      expected = present; // Dynamic expected for open events
+    }
+    
+    const percentage = expected === 0 ? 0 : Math.round((present / expected) * 100);
+    
+    document.getElementById('statExpected').textContent = expected === 0 && !isFixed ? '∞' : expected;
+    document.getElementById('statPresent').textContent = present;
+    document.getElementById('statAbsent').textContent = absent;
+    document.getElementById('statPercentage').textContent = percentage + '%';
+  },
+
+  renderTable: function() {
+    const tbody = document.getElementById('attendance-table-body');
+    if (!tbody) return;
+    
+    if (this.attendanceData.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-5">No attendance marked yet.</td></tr>';
+      return;
+    }
+    
+    // Sort descending by time
+    const sorted = [...this.attendanceData].sort((a, b) => new Date(b.attendance_time) - new Date(a.attendance_time));
+    
+    let html = '';
+    sorted.forEach(a => {
+      const student = this.studentsData.find(s => String(s.roll_number) === String(a.roll_number)) || {};
+      
+      html += `
+        <tr>
+          <td class="fw-bold">${App.Utils.escapeHtml(a.roll_number)}</td>
+          <td>${App.Utils.escapeHtml(student.student_name || 'Unknown')}</td>
+          <td>${App.Utils.escapeHtml(student.department || '-')}</td>
+          <td>${new Date(a.attendance_time).toLocaleTimeString()}</td>
+          <td><span class="badge bg-success">${App.Utils.escapeHtml(a.status)}</span></td>
+          <td class="text-end">
+            <button class="btn btn-sm btn-outline-danger" data-action="delete-attendance" data-id="${App.Utils.escapeHtml(a.attendance_id)}">
+              <i class="bi bi-trash"></i>
+            </button>
+          </td>
+        </tr>
+      `;
+    });
+    tbody.innerHTML = html;
+  },
+
+  markAttendance: function() {
+    if (!this.currentEventId) return;
+    const input = document.getElementById('attRollNumber');
+    const msg = document.getElementById('attMessage');
+    const roll = input.value.trim().toUpperCase();
+    
+    if (!roll) return;
+    
+    msg.textContent = 'Processing...';
+    msg.className = 'text-info';
+    input.disabled = true;
+    
+    const payload = {
+      event_id: this.currentEventId,
+      roll_number: roll,
+      status: 'Present',
+      action_by: App.State.currentUser.user_id
+    };
+    
+    App.API._call('markAttendance', payload).then(res => {
+      if (res.success) {
+        msg.textContent = `${roll} marked Present!`;
+        msg.className = 'text-success';
+        input.value = '';
+        input.focus();
+        this.loadAttendanceData();
+      } else {
+        msg.textContent = res.message || 'Failed';
+        msg.className = 'text-danger';
+        input.focus();
+        input.select();
+      }
+    }).catch(err => {
+      msg.textContent = err.message || 'Error';
+      msg.className = 'text-danger';
+      input.focus();
+      input.select();
+    }).finally(() => {
+      input.disabled = false;
+    });
+  },
+
+  deleteAttendance: function(id) {
+    if (!confirm('Are you sure you want to remove this attendance record?')) return;
+    
+    App.API._call('deleteAttendance', id).then(res => {
+      if (res.success) {
+        App.UI.showSuccess('Deleted successfully');
+        this.loadAttendanceData();
+      } else {
+        App.UI.showError(res.message);
+      }
+    }).catch(err => App.ErrorHandler.handle(err));
+  },
+  
   refresh: function() {
-    this.load();
+    this.loadEventsDropdown();
+    this.loadStudentsData();
+    if (this.currentEventId) this.loadAttendanceData();
   },
+  
   destroy: function() {
-    App.Logger.info('Attendance destroy');
+    this.currentEventId = null;
+    this.attendanceData = [];
   }
 };
 </script>

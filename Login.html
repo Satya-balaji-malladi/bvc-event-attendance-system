@@ -1,0 +1,83 @@
+<div class="login-wrapper d-flex align-items-center justify-content-center p-3 p-md-4">
+    <main class="login-main w-100 d-flex flex-column flex-lg-row rounded-5 shadow-lg overflow-hidden border bg-white">
+        
+        <!-- Left Panel with Background Image -->
+        <section class="d-none d-lg-flex w-50 position-relative flex-column justify-content-between text-white p-5">
+            <!-- Background Image & Overlay -->
+            <div class="login-bg-img"></div>
+            <div class="login-bg-overlay"></div>
+            
+            <div class="position-relative z-3">
+                <div class="login-logo-container bg-white rounded-circle shadow-sm mb-4 d-flex align-items-center justify-content-center overflow-hidden">
+                    <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQQlFZ_2u0RaNZlfgwlsn7JNBCW34KxzENz6uT3fX7IuA&s=10" alt="BVC Logo" class="w-100 h-100 object-fit-cover">
+                </div>
+                <h1 class="display-6 fw-bold text-white lh-sm">BVC ENGINEERING COLLEGE</h1>
+                <h2 class="fs-4 mt-2 fw-medium text-light">Event Attendance Management System</h2>
+                <p class="mt-4 text-white-50">Secure Digital Platform for Managing College Events, Participants and Attendance.</p>
+            </div>
+            <div class="position-relative z-3 small text-white-50">© 2026 BVC Engineering College</div>
+        </section>
+
+        <!-- Right Panel (Login Form) -->
+        <section class="login-right-panel w-100 w-lg-50 d-flex align-items-center justify-content-center p-4 p-lg-5 position-relative z-3 bg-white">
+            <div class="w-100" style="max-width: 400px;">
+                
+                <!-- Mobile Logo (Visible only on small screens) -->
+                <div class="d-lg-none d-flex justify-content-center mb-4">
+                    <div class="login-logo-container bg-white rounded-circle shadow-sm d-flex align-items-center justify-content-center overflow-hidden">
+                        <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQQlFZ_2u0RaNZlfgwlsn7JNBCW34KxzENz6uT3fX7IuA&s=10" alt="BVC Logo" class="w-100 h-100 object-fit-cover">
+                    </div>
+                </div>
+
+                <div class="mb-5 text-center text-lg-start">
+                    <h2 class="fs-2 fw-bold text-dark mb-2" style="letter-spacing: -0.5px;">Welcome Back</h2>
+                    <p class="text-secondary text-base">Sign in to access the Event Attendance Management System.</p>
+                </div>
+
+                <form id="loginForm" class="d-flex flex-column gap-4" novalidate>
+                    
+                    <!-- Username/Email -->
+                    <div>
+                        <label class="form-label small fw-semibold text-dark mb-2">Username or Email</label>
+                        <input type="text" id="loginUsername" placeholder="Enter Username or Email" required 
+                            class="form-control form-control-lg login-input">
+                    </div>
+
+                    <!-- Password -->
+                    <div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <label class="form-label small fw-semibold text-dark mb-0">Password</label>
+                            <a href="#" onclick="App.UI.showInfo('Contact System Administrator'); return false;" class="small text-decoration-none login-link transition">Forgot Password?</a>
+                        </div>
+                        <div class="position-relative">
+                            <input type="password" id="loginPassword" placeholder="••••••••" required 
+                                class="form-control form-control-lg login-input pe-5">
+                            <button type="button" id="togglePassword" aria-label="Toggle password visibility" class="btn position-absolute top-50 end-0 translate-middle-y text-secondary border-0 px-3 shadow-none toggle-pwd-btn">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        <div id="capsLockWarning" class="text-warning small mt-2 fw-medium d-none">
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>Caps Lock is ON
+                        </div>
+                    </div>
+
+                    <!-- Remember Me -->
+                    <div class="form-check mt-1">
+                        <input type="checkbox" id="rememberMe" class="form-check-input">
+                        <label for="rememberMe" class="form-check-label small fw-medium text-dark ms-1">Remember Me</label>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <button type="submit" id="loginSubmitBtn" class="btn btn-primary btn-lg w-100 fw-bold position-relative login-btn shadow mt-2">
+                        <span class="btn-text">Sign In</span>
+                        <div id="loginSpinner" class="d-none position-absolute top-50 start-50 translate-middle">
+                            <div class="spinner-border spinner-border-sm text-white" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </button>
+                </form>
+            </div>
+        </section>
+    </main>
+</div>

@@ -4,25 +4,42 @@
  */
 
 const DatabaseService = {
+  _cache: {},
+
   /**
-   * Gets the active spreadsheet using the ID from CONFIG.
+   * Gets the active spreadsheet using the ID from CONFIG, or active spreadsheet if ID is empty.
    * @returns {GoogleAppsScript.Spreadsheet.Spreadsheet}
    */
   getSpreadsheet: function() {
-    if (!CONFIG || !CONFIG.SPREADSHEET || !CONFIG.SPREADSHEET.ID) {
-      throw new Error('Spreadsheet ID is not defined in CONFIG.');
+    if (CONFIG && CONFIG.SPREADSHEET && CONFIG.SPREADSHEET.ID) {
+      return SpreadsheetApp.openById(CONFIG.SPREADSHEET.ID);
     }
-    return SpreadsheetApp.openById(CONFIG.SPREADSHEET.ID);
+    return SpreadsheetApp.getActiveSpreadsheet();
   },
 
   /**
-   * Gets a specific sheet by name.
+   * Helper function to get a sheet by name safely.
+   * Performs a case-insensitive and space-trimmed search if exact match fails.
    * @param {string} sheetName
    * @returns {GoogleAppsScript.Spreadsheet.Sheet}
    */
   getSheet: function(sheetName) {
     const ss = this.getSpreadsheet();
-    const sheet = ss.getSheetByName(sheetName);
+    let sheet = ss.getSheetByName(sheetName);
+    
+    // Fallback: Case-insensitive and space-trimmed search
+    if (!sheet) {
+      const allSheets = ss.getSheets();
+      const targetName = String(sheetName).trim().toLowerCase();
+      for (let i = 0; i < allSheets.length; i++) {
+        const sName = String(allSheets[i].getName()).trim().toLowerCase();
+        if (sName === targetName) {
+          sheet = allSheets[i];
+          break;
+        }
+      }
+    }
+    
     if (!sheet) {
       throw new Error('Sheet not found: ' + sheetName);
     }
@@ -58,6 +75,10 @@ const DatabaseService = {
    * @returns {object[]} Array of record objects.
    */
   readAllRows: function(sheetName) {
+    if (!this._cache) this._cache = {};
+    if (this._cache[sheetName]) {
+      return this._cache[sheetName];
+    }
     const sheet = this.getSheet(sheetName);
     const lastRow = sheet.getLastRow();
     const lastColumn = sheet.getLastColumn();
@@ -86,6 +107,7 @@ const DatabaseService = {
       Logger.log("STEP 5 - DatabaseService readAllRows for USERS: Length = " + records.length);
     }
 
+    this._cache[sheetName] = records;
     return records;
   },
 
@@ -96,6 +118,7 @@ const DatabaseService = {
    * @returns {boolean} True if inserted successfully.
    */
   insertRow: function(sheetName, recordData) {
+    if (this._cache) delete this._cache[sheetName];
     Logger.log("BACKEND STEP 5.1: DatabaseService.insertRow started for sheet: " + sheetName);
     const sheet = this.getSheet(sheetName);
     const headers = this.getHeaderRow(sheetName);
@@ -124,6 +147,7 @@ const DatabaseService = {
    * @returns {boolean} True if updated successfully.
    */
   updateRow: function(sheetName, searchColumn, searchValue, updateData) {
+    if (this._cache) delete this._cache[sheetName];
     const sheet = this.getSheet(sheetName);
     const records = this.readAllRows(sheetName);
     const headers = this.getHeaderRow(sheetName);
@@ -157,6 +181,7 @@ const DatabaseService = {
    * @returns {boolean} True if deleted successfully.
    */
   deleteRow: function(sheetName, searchColumn, searchValue) {
+    if (this._cache) delete this._cache[sheetName];
     const sheet = this.getSheet(sheetName);
     const records = this.readAllRows(sheetName);
     

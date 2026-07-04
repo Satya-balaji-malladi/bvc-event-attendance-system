@@ -1,0 +1,58 @@
+<script>
+App.Modules.settings = {
+  init: function() {
+    this.bindEvents();
+    this.loadSettings();
+  },
+
+  bindEvents: function() {
+    const form = document.getElementById('settingsForm');
+    if (form) {
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        this.saveSettings();
+      });
+    }
+  },
+
+  loadSettings: function() {
+    App.API._call('getSettings').then(res => {
+      const data = res.data || {};
+      if (data.collegeName) document.getElementById('setCollegeName').value = data.collegeName;
+      if (data.pagination) document.getElementById('setPagination').value = data.pagination;
+      if (data.adminEmail) document.getElementById('setAdminEmail').value = data.adminEmail;
+      if (data.theme) document.getElementById('setTheme').value = data.theme;
+    }).catch(console.error);
+  },
+
+  saveSettings: function() {
+    const payload = {
+      collegeName: document.getElementById('setCollegeName').value.trim(),
+      pagination: document.getElementById('setPagination').value,
+      adminEmail: document.getElementById('setAdminEmail').value.trim(),
+      theme: document.getElementById('setTheme').value
+    };
+    
+    App.LoadingManager.show();
+    App.API._call('saveSettings', payload).then(res => {
+      if (res.success) {
+        App.UI.showSuccess('Settings saved successfully');
+      } else {
+        App.UI.showError(res.message);
+      }
+    }).catch(err => {
+      App.ErrorHandler.handle(err);
+    }).finally(() => {
+      App.LoadingManager.hide();
+    });
+  },
+  
+  refresh: function() {
+    this.loadSettings();
+  },
+  
+  destroy: function() {
+    // cleanup
+  }
+};
+</script>

@@ -122,7 +122,11 @@ const StudentService = {
    * @returns {object[]} Array of all student objects.
    */
   getAllStudents: function() {
-    return DatabaseService.readAllRows(CONFIG.SHEETS.STUDENTS);
+    try {
+      return DatabaseService.readAllRows(CONFIG.SHEETS.STUDENTS);
+    } catch(e) {
+      return [{ roll_number: "ERR", student_name: "BACKEND ERROR: " + e.message, department: "ERR", year: 1 }];
+    }
   },
 
   /**

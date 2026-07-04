@@ -22,8 +22,10 @@ const CONFIG = {
     USERS: 'Users',
     STUDENTS: 'Students',
     EVENTS: 'Events',
+    EVENT_PARTICIPANTS: 'EventParticipants',
     ATTENDANCE: 'Attendance',
-    SESSIONS: 'Sessions'
+    SESSIONS: 'Sessions',
+    SETTINGS: 'Settings'
   },
 
   // 4. User Roles
@@ -45,6 +47,18 @@ const CONFIG = {
     STOPPED: 'Stopped',
     COMPLETED: 'Completed',
     CANCELLED: 'Cancelled'
+  },
+
+  // 6a. Event Types
+  EVENT_TYPE: {
+    FIXED: 'Fixed',
+    OPEN: 'Open'
+  },
+
+  // 6b. Participant Status
+  PARTICIPANT_STATUS: {
+    ACTIVE: 'Active',
+    REMOVED: 'Removed'
   },
 
   // 7. Attendance Status

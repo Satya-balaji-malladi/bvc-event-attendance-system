@@ -1,22 +1,479 @@
 <script>
 /**
- * ==========================================
- * REPORTS MODULE
- * ==========================================
+ * Reports Module UI Controller
  */
-App.Modules.reports = {
-  init: function() {
-    App.Logger.info('Reports init');
-    this.load();
-  },
-  load: function() {
-    // Implementation pending
-  },
-  refresh: function() {
-    this.load();
-  },
-  destroy: function() {
-    App.Logger.info('Reports destroy');
-  }
-};
+(function() {
+  const Reports = {
+    currentData: [],
+    filteredData: [],
+    currentPage: 1,
+    rowsPerPage: 25,
+    sortCol: null,
+    sortAsc: true,
+    currentReportType: 'event',
+
+    init: function() {
+      console.log('Initializing Reports Module...');
+      try {
+        this.bindEvents();
+        this.updateFilterUI('event');
+      } catch(e) {
+        console.error('[Reports] init setup error:', e);
+      }
+      this.loadGlobalSummary().finally(() => {
+        // Force-clear any stuck loading overlay when module finishes initialising
+        App.LoadingManager.hide(true);
+      });
+    },
+
+    bindEvents: function() {
+      const typeSelect = document.getElementById('reportTypeSelect');
+      if (typeSelect) {
+        typeSelect.addEventListener('change', (e) => {
+           this.updateFilterUI(e.target.value);
+        });
+      }
+
+      const form = document.getElementById('reportFilterForm');
+      if (form) {
+         form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.generateReport();
+         });
+      }
+
+      document.getElementById('btnResetFilters')?.addEventListener('click', () => {
+         document.getElementById('reportFilterForm').reset();
+         this.updateFilterUI('event');
+      });
+
+      document.getElementById('reportTableSearch')?.addEventListener('input', (e) => {
+         this.handleSearch(e.target.value);
+      });
+
+      document.getElementById('reportTableRowsPerPage')?.addEventListener('change', (e) => {
+         this.rowsPerPage = parseInt(e.target.value, 10);
+         this.currentPage = 1;
+         this.renderTableBody();
+      });
+
+      document.getElementById('btnExportCSV')?.addEventListener('click', () => this.exportCSV());
+      document.getElementById('btnPrintReport')?.addEventListener('click', () => this.printReport());
+    },
+
+    updateFilterUI: function(type) {
+      this.currentReportType = type;
+      // Hide all
+      ['EventId', 'RollNo', 'Department', 'Coordinator', 'Status', 'FromDate', 'ToDate'].forEach(f => {
+         const el = document.getElementById('filter' + f + 'Wrapper');
+         if (el) el.classList.add('d-none');
+      });
+
+      // Show relevant based on type
+      if (type === 'event') {
+         document.getElementById('filterEventIdWrapper').classList.remove('d-none');
+         document.getElementById('filterCoordinatorWrapper').classList.remove('d-none');
+         document.getElementById('filterStatusWrapper').classList.remove('d-none');
+      } else if (type === 'student') {
+         document.getElementById('filterRollNoWrapper').classList.remove('d-none');
+      } else if (type === 'department') {
+         document.getElementById('filterDepartmentWrapper').classList.remove('d-none');
+      } else if (type === 'coordinator') {
+         document.getElementById('filterCoordinatorWrapper').classList.remove('d-none');
+      } else if (type === 'daterange') {
+         document.getElementById('filterFromDateWrapper').classList.remove('d-none');
+         document.getElementById('filterToDateWrapper').classList.remove('d-none');
+      }
+    },
+
+    loadGlobalSummary: async function() {
+      try {
+        const res = await App.API._call('getReportsDashboardSummary');
+        console.log('[Reports] loadGlobalSummary raw res:', res);
+        // buildResponse spreads data at root level: { success, message, report }
+        // _call resolves with the full object when res.data is undefined
+        const r = (res && res.report) ? res.report
+                : (res && res.data && res.data.report) ? res.data.report
+                : null;
+        if (r) {
+           document.getElementById('gSumEvents').textContent = r.totalEvents;
+           document.getElementById('gSumStudents').textContent = r.totalStudents;
+           document.getElementById('gSumAttendance').textContent = r.totalAttendance;
+           document.getElementById('gSumRate').textContent = r.attendancePercentage + '%';
+           document.getElementById('gSumActive').textContent = r.activeEvents;
+           document.getElementById('gSumCompleted').textContent = r.completedEvents;
+           document.getElementById('gSumHighest').textContent = r.highestEvent;
+           document.getElementById('gSumLowest').textContent = r.lowestEvent;
+           document.getElementById('gSumHighest').title = r.highestEvent;
+           document.getElementById('gSumLowest').title = r.lowestEvent;
+        } else {
+           console.warn('[Reports] Summary data not found in response:', res);
+        }
+      } catch (error) {
+        console.error('Failed to load global summary:', error);
+      }
+    },
+
+    setLoading: function(isLoading) {
+       const loader = document.getElementById('reportTableLoading');
+       if (isLoading) {
+          loader.classList.remove('d-none');
+          document.getElementById('reportTableBody').innerHTML = '';
+       } else {
+          loader.classList.add('d-none');
+       }
+       document.getElementById('btnGenerateReport').disabled = isLoading;
+    },
+
+    generateReport: async function() {
+       this.setLoading(true);
+       try {
+          const type = this.currentReportType;
+          let res = null;
+
+          if (type === 'event') {
+             const filters = {
+                eventId: document.getElementById('filterEventId').value,
+                coordinatorId: document.getElementById('filterCoordinatorId').value,
+                status: document.getElementById('filterStatus').value
+             };
+             res = await App.API._call('getEventReport', filters);
+          } else if (type === 'student') {
+             const roll = document.getElementById('filterRollNo').value;
+             if (!roll) {
+                App.UI.showInfo('Please enter a Roll Number');
+                this.setLoading(false);
+                return;
+             }
+             res = await App.API._call('getStudentReport', roll);
+          } else if (type === 'department') {
+             const dept = document.getElementById('filterDepartment').value;
+             res = await App.API._call('getDepartmentReport', dept);
+          } else if (type === 'coordinator') {
+             const coord = document.getElementById('filterCoordinatorId').value;
+             res = await App.API._call('getCoordinatorReport', coord);
+          } else if (type === 'daterange') {
+             const from = document.getElementById('filterFromDate').value;
+             const to = document.getElementById('filterToDate').value;
+             if (!from || !to) {
+                App.UI.showInfo('Please select From and To dates');
+                this.setLoading(false);
+                return;
+             }
+             res = await App.API._call('getDateRangeReport', from, to);
+          }
+
+          console.log('[Reports] generateReport raw res:', res);
+          // buildResponse spreads data at root: { success, message, data: [...] } becomes { success, message, data }
+          // _call resolves with res when res.data is undefined, or res.data when present
+          // Normalize: check both res.data and res directly for the rows array
+          const rows = Array.isArray(res) ? res
+                     : (res && Array.isArray(res.data)) ? res.data
+                     : (res && res.data && Array.isArray(res.data.data)) ? res.data.data
+                     : (res && Array.isArray(res.data)) ? res.data
+                     : null;
+
+          if (rows !== null) {
+             this.currentData = rows;
+             this.filteredData = [...this.currentData];
+             this.currentPage = 1;
+             this.renderTableHeader();
+             this.renderTableBody();
+             App.UI.showSuccess('Report generated successfully');
+          } else if (res && res.success === false) {
+             throw new Error(res.message || 'Failed to generate report');
+          } else {
+             // Possibly an empty valid response
+             this.currentData = [];
+             this.filteredData = [];
+             this.renderTableHeader();
+             this.renderTableBody();
+             App.UI.showInfo('No records found for the selected filters');
+          }
+       } catch (error) {
+          console.error(error);
+          App.UI.showError('Error: ' + error.message);
+          document.getElementById('reportTableBody').innerHTML = '<tr><td class="text-center text-danger py-5" colspan="100%">Error generating report.</td></tr>';
+       } finally {
+          this.setLoading(false);
+       }
+    },
+
+    handleSearch: function(query) {
+       if (!query) {
+          this.filteredData = [...this.currentData];
+       } else {
+          query = query.toLowerCase();
+          this.filteredData = this.currentData.filter(row => {
+             return Object.values(row).some(val => String(val).toLowerCase().includes(query));
+          });
+       }
+       this.currentPage = 1;
+       this.renderTableBody();
+    },
+
+    handleSort: function(col) {
+       if (this.sortCol === col) {
+          this.sortAsc = !this.sortAsc;
+       } else {
+          this.sortCol = col;
+          this.sortAsc = true;
+       }
+
+       this.filteredData.sort((a, b) => {
+          let valA = a[col];
+          let valB = b[col];
+          if (typeof valA === 'string') valA = valA.toLowerCase();
+          if (typeof valB === 'string') valB = valB.toLowerCase();
+
+          if (valA < valB) return this.sortAsc ? -1 : 1;
+          if (valA > valB) return this.sortAsc ? 1 : -1;
+          return 0;
+       });
+
+       this.renderTableHeader();
+       this.renderTableBody();
+    },
+
+    getColumnsForType: function() {
+       switch(this.currentReportType) {
+          case 'event':
+          case 'daterange':
+             return [
+               { key: 'event_name', label: 'Event Name' },
+               { key: 'coordinator', label: 'Coordinator' },
+               { key: 'venue', label: 'Venue' },
+               { key: 'start_date', label: 'Start Date' },
+               { key: 'end_date', label: 'End Date' },
+               { key: 'participants', label: 'Participants' },
+               { key: 'present', label: 'Present' },
+               { key: 'absent', label: 'Absent' },
+               { key: 'attendance_percentage', label: 'Attendance %', suffix: '%' },
+               { key: 'status', label: 'Status' }
+             ];
+          case 'student':
+             return [
+               { key: 'roll_number', label: 'Roll Number' },
+               { key: 'student_name', label: 'Name' },
+               { key: 'department', label: 'Dept' },
+               { key: 'year', label: 'Year' },
+               { key: 'event_name', label: 'Event' },
+               { key: 'date', label: 'Date' },
+               { key: 'status', label: 'Status' }
+             ];
+          case 'department':
+             return [
+               { key: 'department', label: 'Department' },
+               { key: 'total_students', label: 'Total Students' },
+               { key: 'events_conducted', label: 'Events Conducted' },
+               { key: 'attendance_percentage', label: 'Attendance %', suffix: '%' }
+             ];
+          case 'coordinator':
+             return [
+               { key: 'coordinator', label: 'Coordinator' },
+               { key: 'events_managed', label: 'Events Managed' },
+               { key: 'participants', label: 'Participants' },
+               { key: 'attendance_records', label: 'Attendance Records' },
+               { key: 'last_activity', label: 'Last Activity' }
+             ];
+          default:
+             return [];
+       }
+    },
+
+    renderTableHeader: function() {
+       const cols = this.getColumnsForType();
+       if (cols.length === 0) return;
+
+       let html = '<tr>';
+       cols.forEach(c => {
+          let icon = '';
+          if (this.sortCol === c.key) {
+             icon = this.sortAsc ? ' <i class="bi bi-sort-up"></i>' : ' <i class="bi bi-sort-down"></i>';
+          }
+          html += `<th class="py-3" style="cursor:pointer;" data-sort="${c.key}">${c.label}${icon}</th>`;
+       });
+       html += '</tr>';
+       const header = document.getElementById('reportTableHeader');
+       header.innerHTML = html;
+
+       // Bind sort events
+       header.querySelectorAll('th[data-sort]').forEach(th => {
+          th.addEventListener('click', (e) => {
+             this.handleSort(e.currentTarget.getAttribute('data-sort'));
+          });
+       });
+    },
+
+    renderTableBody: function() {
+       const tbody = document.getElementById('reportTableBody');
+       const cols = this.getColumnsForType();
+
+       if (this.filteredData.length === 0) {
+          tbody.innerHTML = `<tr><td class="text-center text-muted py-5" colspan="${cols.length}">
+            <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+            No Records Found
+          </td></tr>`;
+          this.updatePagination();
+          return;
+       }
+
+       const start = (this.currentPage - 1) * this.rowsPerPage;
+       const end = start + this.rowsPerPage;
+       const paginated = this.filteredData.slice(start, end);
+
+       let html = '';
+       paginated.forEach(row => {
+          html += '<tr>';
+          cols.forEach(c => {
+             let val = row[c.key];
+             if (val === undefined || val === null) val = '-';
+             if (c.suffix) val = val + c.suffix;
+             
+             if (c.key === 'status') {
+                let badgeClass = 'bg-secondary';
+                if (val === 'Active' || val === 'Present') badgeClass = 'bg-success';
+                else if (val === 'Completed') badgeClass = 'bg-primary';
+                else if (val === 'Absent') badgeClass = 'bg-danger';
+                val = `<span class="badge ${badgeClass}">${val}</span>`;
+             }
+             
+             html += `<td>${val}</td>`;
+          });
+          html += '</tr>';
+       });
+
+       tbody.innerHTML = html;
+       this.updatePagination();
+    },
+
+    updatePagination: function() {
+       const total = this.filteredData.length;
+       const start = total === 0 ? 0 : (this.currentPage - 1) * this.rowsPerPage + 1;
+       const end = Math.min(this.currentPage * this.rowsPerPage, total);
+       document.getElementById('reportTableInfo').textContent = `Showing ${start} to ${end} of ${total} records`;
+
+       const totalPages = Math.ceil(total / this.rowsPerPage);
+       const pagination = document.getElementById('reportTablePagination');
+       
+       let html = '';
+       html += `<li class="page-item ${this.currentPage === 1 ? 'disabled' : ''}">
+                 <a class="page-link" href="#" data-page="${this.currentPage - 1}">Previous</a>
+               </li>`;
+       
+       for (let i = 1; i <= totalPages; i++) {
+          if (i === 1 || i === totalPages || (i >= this.currentPage - 1 && i <= this.currentPage + 1)) {
+             html += `<li class="page-item ${i === this.currentPage ? 'active' : ''}">
+                       <a class="page-link" href="#" data-page="${i}">${i}</a>
+                     </li>`;
+          } else if (i === this.currentPage - 2 || i === this.currentPage + 2) {
+             html += `<li class="page-item disabled"><a class="page-link" href="#">...</a></li>`;
+          }
+       }
+
+       html += `<li class="page-item ${this.currentPage === totalPages || totalPages === 0 ? 'disabled' : ''}">
+                 <a class="page-link" href="#" data-page="${this.currentPage + 1}">Next</a>
+               </li>`;
+       
+       pagination.innerHTML = html;
+
+       pagination.querySelectorAll('.page-link[data-page]').forEach(a => {
+          a.addEventListener('click', (e) => {
+             e.preventDefault();
+             const page = parseInt(e.target.getAttribute('data-page'), 10);
+             if (page > 0 && page <= totalPages) {
+                this.currentPage = page;
+                this.renderTableBody();
+             }
+          });
+       });
+    },
+
+    exportCSV: function() {
+       if (this.currentData.length === 0) {
+          App.UI.showInfo('No data to export. Please generate a report first.');
+          return;
+       }
+       const cols = this.getColumnsForType();
+       let csv = cols.map(c => '"' + c.label + '"').join(',') + '\n';
+       
+       this.currentData.forEach(row => {
+          csv += cols.map(c => {
+             let val = row[c.key];
+             if (val === undefined || val === null) val = '';
+             return '"' + String(val).replace(/"/g, '""') + '"';
+          }).join(',') + '\n';
+       });
+
+       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+       const url = URL.createObjectURL(blob);
+       const link = document.createElement('a');
+       link.setAttribute('href', url);
+       link.setAttribute('download', `Report_${this.currentReportType}_${new Date().getTime()}.csv`);
+       document.body.appendChild(link);
+       link.click();
+       document.body.removeChild(link);
+    },
+
+    printReport: function() {
+       if (this.currentData.length === 0) {
+          App.UI.showInfo('No data to print. Please generate a report first.');
+          return;
+       }
+
+       document.getElementById('printReportTitle').textContent = 
+          document.getElementById('reportTypeSelect').options[document.getElementById('reportTypeSelect').selectedIndex].text;
+       
+       document.getElementById('printGeneratedBy').textContent = 'Generated By: ' + (App.Auth.currentUser?.full_name || 'System User');
+       document.getElementById('printGeneratedOn').textContent = 'Date: ' + new Date().toLocaleString();
+       
+       // Build filters string
+       let filters = [];
+       const type = this.currentReportType;
+       if (type === 'event') {
+          if (document.getElementById('filterEventId').value) filters.push('Event: ' + document.getElementById('filterEventId').value);
+          if (document.getElementById('filterCoordinatorId').value) filters.push('Coordinator: ' + document.getElementById('filterCoordinatorId').value);
+          if (document.getElementById('filterStatus').value) filters.push('Status: ' + document.getElementById('filterStatus').value);
+       } else if (type === 'student') {
+          filters.push('Roll No: ' + document.getElementById('filterRollNo').value);
+       } else if (type === 'department') {
+          if (document.getElementById('filterDepartment').value) filters.push('Dept: ' + document.getElementById('filterDepartment').value);
+       } else if (type === 'daterange') {
+          filters.push('From: ' + document.getElementById('filterFromDate').value);
+          filters.push('To: ' + document.getElementById('filterToDate').value);
+       }
+       document.getElementById('printAppliedFilters').innerHTML = '<strong>Filters:</strong> ' + (filters.length > 0 ? filters.join(', ') : 'None');
+
+       const cols = this.getColumnsForType();
+       let thead = '<tr>' + cols.map(c => `<th>${c.label}</th>`).join('') + '</tr>';
+       document.getElementById('printTableHeader').innerHTML = thead;
+
+       let tbody = '';
+       this.currentData.forEach(row => {
+          tbody += '<tr>';
+          cols.forEach(c => {
+             let val = row[c.key];
+             if (val === undefined || val === null) val = '-';
+             if (c.suffix) val = val + c.suffix;
+             tbody += `<td>${val}</td>`;
+          });
+          tbody += '</tr>';
+       });
+       document.getElementById('printTableBody').innerHTML = tbody;
+
+       const printContent = document.getElementById('printContainer').innerHTML;
+       const originalContent = document.body.innerHTML;
+
+       document.body.innerHTML = printContent;
+       window.print();
+       document.body.innerHTML = originalContent;
+       
+       // Re-initialize app after print rewrites DOM
+       window.location.reload();
+    }
+  };
+
+
+  App.Modules.reports = Reports;
+})();
 </script>

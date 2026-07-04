@@ -1,0 +1,184 @@
+<style>
+/* Login Wrapper */
+.login-wrapper {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: #f3f4f6; /* Fallback */
+}
+
+/* Background Animation */
+.login-bg-img {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: url('https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ4X3C0wYOYaVhll0WWZQ8Y4OicLnTDPVwC73tpTraRIQ&s=10') no-repeat center center;
+  background-size: cover;
+  z-index: 1;
+  animation: bgZoom 30s infinite alternate linear;
+  filter: brightness(60%);
+}
+
+@keyframes bgZoom {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.1); }
+}
+
+/* Dark Gradient Overlay */
+.login-bg-overlay {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: linear-gradient(to right, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.3) 100%);
+  z-index: 2;
+}
+
+/* Base Container positioning over background */
+.login-wrapper .container-fluid {
+  position: relative;
+  z-index: 3;
+}
+
+/* Left Panel */
+.text-subtitle {
+  color: #D1D5DB;
+}
+.text-desc {
+  color: rgba(255, 255, 255, 0.75);
+}
+.accent-line {
+  height: 4px;
+  width: 60px;
+  background: #2563EB;
+  border-radius: 2px;
+}
+
+/* Right Panel specific */
+.login-right-panel {
+  backdrop-filter: blur(8px); /* Blur behind the entire right side slightly if desired, or just the card. Spec says blur behind login card. We'll leave it to the card. */
+}
+
+/* Glass Login Card */
+.login-glass-card {
+  width: 100%;
+  max-width: 400px;
+  padding: 40px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
+  animation: cardFadeUp 0.8s ease-out forwards;
+}
+
+@keyframes cardFadeUp {
+  0% { opacity: 0; transform: translateY(30px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Logo */
+.login-logo {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  animation: logoFade 1s ease-in forwards;
+}
+
+@keyframes logoFade {
+  0% { opacity: 0; transform: scale(0.9); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* Text Colors */
+.text-heading { color: #111827; }
+.text-label { color: #374151; }
+.text-link { color: #2563EB; transition: color 0.3s; }
+.text-link:hover { color: #1E3A8A; }
+.login-footer {
+  color: #6B7280;
+  font-size: 0.8rem;
+  letter-spacing: 0.5px;
+}
+
+/* Inputs */
+.login-input-group .form-control,
+.login-input-group .input-group-text {
+  height: 50px;
+  background-color: #ffffff !important;
+}
+
+.login-input-group {
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 300ms ease;
+  border: 1px solid transparent;
+}
+
+.login-input-group:focus-within {
+  border-color: #2563EB;
+  box-shadow: 0 0 0 0.25rem rgba(37, 99, 235, 0.25);
+}
+
+.login-input-group .form-control::placeholder {
+  color: #9CA3AF;
+}
+
+.login-input-group .form-control:focus {
+  box-shadow: none;
+}
+
+/* Button */
+.login-btn {
+  height: 52px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #2563EB 0%, #1E3A8A 100%);
+  border: none;
+  transition: transform 300ms ease, box-shadow 300ms ease;
+}
+
+.login-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
+}
+
+.login-btn:active {
+  transform: translateY(0);
+}
+
+/* Animations for inputs */
+.loginForm .mb-4 {
+  animation: slideUp 0.6s ease-out forwards;
+  opacity: 0;
+}
+
+.loginForm .mb-4:nth-child(1) { animation-delay: 0.1s; }
+.loginForm .mb-4:nth-child(2) { animation-delay: 0.2s; }
+.loginForm .mb-4:nth-child(3) { animation-delay: 0.3s; }
+.login-btn { animation: slideUp 0.6s ease-out 0.4s forwards; opacity: 0; }
+
+@keyframes slideUp {
+  0% { opacity: 0; transform: translateY(15px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Custom Additions for Tailwind Replacement */
+.login-logo-container {
+  width: 70px;
+  height: 70px;
+}
+
+.login-input {
+  border-radius: 0.75rem;
+  transition: all 0.2s;
+}
+
+.login-input:focus {
+  box-shadow: 0 0 0 0.25rem rgba(37, 99, 235, 0.25);
+  border-color: #2563eb;
+}
+
+.toggle-pwd-btn:focus {
+  color: #2563eb !important;
+}
+</style>

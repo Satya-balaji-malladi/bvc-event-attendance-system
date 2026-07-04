@@ -21,14 +21,37 @@
 </head>
 <body>
 
-  <!-- Full Page Loader -->
+  <!-- Full Page Loader (Generic) -->
   <div id="page-loader" class="loader-overlay d-none">
     <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
       <span class="visually-hidden">Loading...</span>
     </div>
   </div>
 
-  <div class="wrapper">
+  <!-- Splash Screen -->
+  <div id="splash-screen" class="splash-overlay d-flex flex-column justify-content-center align-items-center">
+    <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQQlFZ_2u0RaNZlfgwlsn7JNBCW34KxzENz6uT3fX7IuA&s=10" alt="BVC Logo" class="splash-logo mb-4 shadow-sm rounded-circle">
+    <div class="spinner-border text-primary mb-3 splash-spinner" role="status"></div>
+    <h5 id="splash-text" class="text-dark fw-medium">Checking Session...</h5>
+  </div>
+
+  <!-- Auth Background -->
+  <div id="auth-bg" class="auth-bg d-none">
+    <div class="auth-overlay"></div>
+  </div>
+
+  <!-- Login Module Container -->
+  <div id="login-container" class="d-none">
+    <?!= include('Login'); ?>
+  </div>
+
+  <!-- Error Module Container -->
+  <div id="error-container" class="d-none">
+    <!-- Rendered dynamically -->
+  </div>
+
+  <!-- Main Application Wrapper -->
+  <div class="wrapper d-none" id="app-wrapper">
     <!-- Sidebar Component -->
     <?!= include('Sidebar'); ?>
 
@@ -84,6 +107,10 @@
 
           <div id="module-reports" class="app-module d-none">
             <?!= include('Reports'); ?>
+          </div>
+
+          <div id="module-settings" class="app-module d-none">
+            <?!= include('Settings'); ?>
           </div>
 
         </div>

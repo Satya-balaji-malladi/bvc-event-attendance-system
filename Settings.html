@@ -1,0 +1,42 @@
+<div class="card h-100 border-0 shadow-sm module-card">
+  <div class="card-header bg-white border-bottom-0 pt-4 px-4">
+    <h5 class="fw-semibold mb-0">System Settings</h5>
+  </div>
+  <div class="card-body p-4">
+    <form id="settingsForm">
+      <div class="row mb-4">
+        <div class="col-md-6">
+          <label class="form-label text-muted small">College Name</label>
+          <input type="text" class="form-control" id="setCollegeName" value="BVC Engineering College" required>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label text-muted small">Default Pagination Limit</label>
+          <select class="form-select" id="setPagination">
+            <option value="10">10 Rows</option>
+            <option value="25">25 Rows</option>
+            <option value="50">50 Rows</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="row mb-4">
+        <div class="col-md-6">
+          <label class="form-label text-muted small">Admin Notification Email</label>
+          <input type="email" class="form-control" id="setAdminEmail" placeholder="admin@bvcgroup.in">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label text-muted small">System Theme</label>
+          <select class="form-select" id="setTheme">
+            <option value="light">Light Mode</option>
+            <option value="dark">Dark Mode</option>
+          </select>
+        </div>
+      </div>
+      
+      <hr>
+      <div class="d-flex justify-content-end mt-4">
+        <button type="submit" class="btn btn-primary px-5">Save Settings</button>
+      </div>
+    </form>
+  </div>
+</div>

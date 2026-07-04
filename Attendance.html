@@ -1,22 +1,81 @@
 <div class="card h-100 border-0 shadow-sm module-card">
   <div class="card-header bg-white border-bottom-0 pt-4 px-4 d-flex justify-content-between align-items-center">
     <h5 class="fw-semibold mb-0">Attendance Tracking</h5>
-    <button class="btn btn-success" data-action="mark-attendance"><i class="bi bi-qr-code-scan me-2"></i>Mark Attendance</button>
+    <div>
+      <select id="attendanceEventSelect" class="form-select d-inline-block w-auto me-2">
+        <option value="">Select Event...</option>
+      </select>
+    </div>
   </div>
   <div class="card-body p-4">
+    <div id="attendanceEntrySection" class="d-none mb-4">
+      
+      <!-- Analytics Dashboard -->
+      <div class="row mb-4" id="attendanceAnalyticsBoard">
+        <div class="col-md-3">
+          <div class="card bg-primary text-white text-center border-0 h-100">
+            <div class="card-body py-3">
+              <h6 class="text-uppercase small mb-1 opacity-75">Expected</h6>
+              <h2 class="mb-0 fw-bold" id="statExpected">0</h2>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card bg-success text-white text-center border-0 h-100">
+            <div class="card-body py-3">
+              <h6 class="text-uppercase small mb-1 opacity-75">Present</h6>
+              <h2 class="mb-0 fw-bold" id="statPresent">0</h2>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card bg-danger text-white text-center border-0 h-100">
+            <div class="card-body py-3">
+              <h6 class="text-uppercase small mb-1 opacity-75">Absent</h6>
+              <h2 class="mb-0 fw-bold" id="statAbsent">0</h2>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <div class="card bg-info text-white text-center border-0 h-100">
+            <div class="card-body py-3">
+              <h6 class="text-uppercase small mb-1 opacity-75">Attendance %</h6>
+              <h2 class="mb-0 fw-bold" id="statPercentage">0%</h2>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="row">
+        <div class="col-md-6 offset-md-3">
+          <div class="card bg-light border-0">
+            <div class="card-body text-center">
+              <h6>Manual Entry</h6>
+              <div class="input-group mb-3">
+                <input type="text" id="attRollNumber" class="form-control form-control-lg" placeholder="Enter Roll Number (e.g. 21B91A0501)">
+                <button class="btn btn-primary btn-lg" id="attMarkBtn">Mark Present</button>
+              </div>
+              <div id="attMessage" class="fw-bold"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
     <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
+      <table class="table table-hover align-middle mb-0" id="attendanceTable">
         <thead class="table-light">
           <tr>
-            <th>Record ID</th>
-            <th>Student Roll</th>
-            <th>Event ID</th>
+            <th>Roll Number</th>
+            <th>Name</th>
+            <th>Department</th>
+            <th>Time</th>
             <th>Status</th>
-            <th>Timestamp</th>
+            <th class="text-end">Actions</th>
           </tr>
         </thead>
         <tbody id="attendance-table-body">
-          <tr><td colspan="5" class="text-center text-muted py-5">No attendance records found</td></tr>
+          <tr><td colspan="6" class="text-center text-muted py-5">Please select an event</td></tr>
         </tbody>
       </table>
     </div>

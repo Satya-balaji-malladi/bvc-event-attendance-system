@@ -22,22 +22,19 @@ App.Modules.dashboard = {
     }
 
     // Reference-counted loading happens inside API wrapper automatically
-    Promise.all([
-      App.API.getDashboardSummary(),
-      App.API.getAllEvents(),
-      App.API.getAllUsers(),
-      App.API.getAllStudents()
-    ])
-    .then(([summaryRes, eventsRes, usersRes, studentsRes]) => {
-      console.log("Summary Response:", summaryRes);
-      console.log("Events Response:", eventsRes);
-      console.log("Users Response:", usersRes);
-      console.log("Students Response:", studentsRes);
-
-      if (!summaryRes) console.error("API returned null:", "getDashboardSummary");
-      if (!eventsRes) console.error("API returned null:", "getAllEvents");
-      if (!usersRes) console.error("API returned null:", "getAllUsers");
-      if (!studentsRes) console.error("API returned null:", "getAllStudents");
+    App.API.getDashboardData()
+    .then(dataRes => {
+      console.log("Dashboard Data Response:", dataRes);
+      if (!dataRes) console.error("API returned null:", "getDashboardData");
+      if (dataRes && dataRes.error) {
+        alert("BACKEND ERROR: " + dataRes.error);
+        console.error("Backend Error from getDashboardData:", dataRes.error);
+      }
+      
+      const summaryRes = dataRes?.summary || {};
+      const eventsRes = dataRes?.events || [];
+      const usersRes = dataRes?.users || [];
+      const studentsRes = dataRes?.students || [];
 
       const summary = summaryRes?.report || summaryRes || {};
       let events = eventsRes?.data || eventsRes || [];
