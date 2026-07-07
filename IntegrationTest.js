@@ -169,43 +169,60 @@ const IntegrationTest = {
     Logger.log('====================================');
 
     const eventId = 'EVT-9999';
-    const coordUserId = 'USR002'; // assumed to exist
 
+    // Cleanup any leftovers first
     try { DatabaseService.hardDelete(CONFIG.SHEETS.EVENTS, 'Event ID', eventId); } catch(e) {}
+    try { DatabaseService.hardDelete(CONFIG.SHEETS.USERS, 'Username', 'integ_coord_test'); } catch(e) {}
+
+    // Create a real Coordinator user
+    const coordUserData = {};
+    coordUserData[CONFIG.COLUMNS.USER_FIRST_NAME] = 'Integration';
+    coordUserData[CONFIG.COLUMNS.USER_LAST_NAME] = 'Coordinator';
+    coordUserData[CONFIG.COLUMNS.USER_EMAIL_ADDRESS] = 'integ.coord@bvc.edu.in';
+    coordUserData[CONFIG.COLUMNS.USER_USERNAME] = 'integ_coord_test';
+    coordUserData[CONFIG.COLUMNS.USER_ROLE] = CONFIG.ROLES.COORDINATOR;
+    coordUserData[CONFIG.COLUMNS.USER_STATUS] = CONFIG.USER_STATUS.ACTIVE;
+    coordUserData['Status'] = CONFIG.USER_STATUS.ACTIVE;
+    coordUserData['Password'] = 'Test@1234';
+    const coordRes = UserService.createUser(coordUserData, 'USR001');
+    IntegrationAssertions.assertSuccess(coordRes, 'Coordinator user creation failed');
+    const actualCoordId = (coordRes.user && coordRes.user[CONFIG.COLUMNS.USER_ID])
+      || (coordRes.data && coordRes.data.user && coordRes.data.user[CONFIG.COLUMNS.USER_ID]);
+    Logger.log('Resolved actualCoordId: ' + actualCoordId);
+    IntegrationAssertions.assertNotNull(actualCoordId, 'Coordinator User ID is null');
 
     // Create Event
     const nowStr = Utils.formatDate(new Date());
-    const eventPayload = {
-      [CONFIG.COLUMNS.EVENT_ID]: eventId,
-      [CONFIG.COLUMNS.EVENT_NAME]: 'Integration Event',
-      [CONFIG.COLUMNS.VENUE || 'Venue']: 'Location A',
-      [CONFIG.COLUMNS.COORDINATOR_ID]: coordUserId,
-      [CONFIG.COLUMNS.STATUS]: CONFIG.EVENT_STATUS.ACTIVE || 'Active',
-      [CONFIG.COLUMNS.START_DATE]: nowStr,
-      [CONFIG.COLUMNS.END_DATE]: nowStr,
-      [CONFIG.COLUMNS.START_TIME]: '09:00',
-      [CONFIG.COLUMNS.END_TIME]: '11:00',
-      [CONFIG.COLUMNS.ATTENDANCE_TYPE || 'Attendance Type']: 'Fixed',
-      [CONFIG.COLUMNS.CREATED_BY]: 'USR001'
-    };
+    const eventPayload = {};
+    eventPayload[CONFIG.COLUMNS.EVENT_ID] = eventId;
+    eventPayload[CONFIG.COLUMNS.EVENT_NAME] = 'Integration Event';
+    eventPayload[CONFIG.COLUMNS.VENUE] = 'Location A';
+    eventPayload[CONFIG.COLUMNS.COORDINATOR_ID] = actualCoordId;
+    eventPayload[CONFIG.COLUMNS.STATUS] = CONFIG.EVENT_STATUS.UPCOMING || 'Upcoming';
+    eventPayload[CONFIG.COLUMNS.START_DATE] = nowStr;
+    eventPayload[CONFIG.COLUMNS.END_DATE] = nowStr;
+    eventPayload[CONFIG.COLUMNS.START_TIME] = '09:00';
+    eventPayload[CONFIG.COLUMNS.END_TIME] = '11:00';
+    eventPayload[CONFIG.COLUMNS.ATTENDANCE_TYPE || 'Attendance Type'] = 'Fixed';
+    eventPayload[CONFIG.COLUMNS.CREATED_BY] = 'USR001';
     const eventRes = EventService.createEvent(eventPayload);
     IntegrationAssertions.assertSuccess(eventRes, 'Event creation failed');
 
     // Update Event
-    const updatePayload = {
-      [CONFIG.COLUMNS.VENUE || 'Venue']: 'Location B'
-    };
+    const updatePayload = {};
+    updatePayload[CONFIG.COLUMNS.VENUE] = 'Location B';
     const updateRes = EventService.updateEvent(eventId, updatePayload);
     IntegrationAssertions.assertSuccess(updateRes, 'Event update failed');
 
     // Assign Coordinator
-    const assignRes = CoordinatorService.assignCoordinator(eventId, coordUserId, 'Coordinator', 'USR001', 'Remarks');
+    const assignRes = CoordinatorService.assignCoordinator(eventId, actualCoordId, 'Coordinator', 'USR001', 'Remarks');
     IntegrationAssertions.assertSuccess(assignRes, 'Coordinator assignment failed');
-    const assignmentId = assignRes.data && assignRes.data.assignment ? assignRes.data.assignment['Assignment ID'] : null;
+    const assignmentId = (assignRes.assignment && assignRes.assignment['Assignment ID'])
+      || (assignRes.data && assignRes.data.assignment && assignRes.data.assignment['Assignment ID']);
     IntegrationAssertions.assertNotNull(assignmentId, 'Assignment ID is empty');
 
     // Verify Coordinator Assignment
-    IntegrationAssertions.assertCoordinatorAssigned(coordUserId, eventId, 'Coordinator not assigned in DB');
+    IntegrationAssertions.assertCoordinatorAssigned(actualCoordId, eventId, 'Coordinator not assigned in DB');
 
     // Remove Coordinator
     const removeRes = CoordinatorService.removeCoordinator(assignmentId, 'USR001');
@@ -214,6 +231,7 @@ const IntegrationTest = {
     // Cleanup
     DatabaseService.hardDelete(CONFIG.SHEETS.EVENTS, 'Event ID', eventId);
     if (assignmentId) DatabaseService.hardDelete(CONFIG.SHEETS.EVENT_COORDINATORS, 'Assignment ID', assignmentId);
+    DatabaseService.hardDelete(CONFIG.SHEETS.USERS, 'Username', 'integ_coord_test');
     Logger.log('✅ PASS: Event & Coordinator Lifecycle verified.');
     Logger.log('');
   },
