@@ -165,6 +165,14 @@ const UserService = {
   // Public API (backward compatible signatures)
   // ==============================
 
+  /**
+   * Returns the raw user record for a given userId, or null if not found.
+   * Used by EventService and other services to validate coordinators.
+   */
+  getUserById: function(userId) {
+    return this._getUserByIdRecord(userId);
+  },
+
   createUser: function(userData) {
     try {
       if (!userData) return Utils.buildResponse(false, (CONFIG.MESSAGES && CONFIG.MESSAGES.USER_CREATE_FAILED) ? CONFIG.MESSAGES.USER_CREATE_FAILED : 'User data missing');

@@ -229,8 +229,10 @@ insertRows: function(sheetName, records) {
 
     const now = new Date().toISOString();
     const rows = records.map(function(record) {
-      // Fix 1: Generate ID before validation
-      record[CONFIG.ID_COLUMNS[logicalKey]] = DatabaseService.generateNextId(logicalKey);
+      // Fix 1: Generate ID before validation — only if not already set by caller
+      if (!record[CONFIG.ID_COLUMNS[logicalKey]]) {
+        record[CONFIG.ID_COLUMNS[logicalKey]] = DatabaseService.generateNextId(logicalKey);
+      }
       DatabaseService.validateRecord(logicalKey, record);
       
       if (CONFIG.COLUMNS.CREATED_AT) record[CONFIG.COLUMNS.CREATED_AT] = now;

@@ -596,6 +596,52 @@ const Utils = {
     }
   },
 
+  sanitizeEvent: function(event) {
+    try {
+      if (!event) return null;
+      const safeEvent = this.deepClone(event);
+      
+      const mappings = [
+        { key: 'eventId', snakeKey: 'event_id', sheetKey: CONFIG.COLUMNS.EVENT_ID },
+        { key: 'eventName', snakeKey: 'event_name', sheetKey: CONFIG.COLUMNS.EVENT_NAME },
+        { key: 'description', snakeKey: 'description', sheetKey: CONFIG.COLUMNS.DESCRIPTION },
+        { key: 'startDate', snakeKey: 'start_date', sheetKey: CONFIG.COLUMNS.START_DATE },
+        { key: 'endDate', snakeKey: 'end_date', sheetKey: CONFIG.COLUMNS.END_DATE },
+        { key: 'startTime', snakeKey: 'start_time', sheetKey: CONFIG.COLUMNS.START_TIME },
+        { key: 'endTime', snakeKey: 'end_time', sheetKey: CONFIG.COLUMNS.END_TIME },
+        { key: 'venue', snakeKey: 'venue', sheetKey: CONFIG.COLUMNS.VENUE },
+        { key: 'coordinatorId', snakeKey: 'coordinator_id', sheetKey: CONFIG.COLUMNS.COORDINATOR_ID },
+        { key: 'departments', snakeKey: 'departments', sheetKey: CONFIG.COLUMNS.DEPARTMENTS },
+        { key: 'years', snakeKey: 'years', sheetKey: CONFIG.COLUMNS.YEARS },
+        { key: 'capacity', snakeKey: 'capacity', sheetKey: CONFIG.COLUMNS.CAPACITY },
+        { key: 'status', snakeKey: 'status', sheetKey: CONFIG.COLUMNS.STATUS }
+      ];
+
+      mappings.forEach(m => {
+        var val = event[m.sheetKey] !== undefined ? event[m.sheetKey] : (event[m.key] !== undefined ? event[m.key] : event[m.snakeKey]);
+        
+        // Handle Event Status sheet mapping fallback
+        if (m.key === 'status' && val === undefined) {
+          val = event['Event Status'] !== undefined ? event['Event Status'] : event['status'];
+        }
+
+        if (val !== undefined) {
+          safeEvent[m.key] = val;
+          safeEvent[m.snakeKey] = val;
+          safeEvent[m.sheetKey] = val;
+          if (m.key === 'status') {
+            safeEvent['Event Status'] = val;
+          }
+        }
+      });
+
+      return safeEvent;
+    } catch (e) {
+      Logger.log('Utils.sanitizeEvent error: ' + (e && e.message ? e.message : e));
+      return null;
+    }
+  },
+
   // ==========================================
   // ID / FORMATTING HELPERS
   // ==========================================

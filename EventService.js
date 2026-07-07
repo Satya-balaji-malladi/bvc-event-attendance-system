@@ -14,8 +14,22 @@ const EventService = {
     // Handles values like "HH:mm", "HH:mm:ss" and Date objects as best-effort.
     try {
       if (timeValue === null || timeValue === undefined) return '';
+
+      // If it is a Date object, format to HH:mm directly
+      if (timeValue instanceof Date || (typeof timeValue === 'object' && typeof timeValue.getHours === 'function')) {
+        return Utilities.formatDate(timeValue, CONFIG.DATE_TIME.TIMEZONE, 'HH:mm');
+      }
+
       var s = String(timeValue).trim();
       if (!s) return '';
+
+      // If it's a full date-time string containing time
+      if (s.includes('1899') || s.includes('GMT') || (s.length > 8 && !isNaN(Date.parse(s)))) {
+        var parsedDate = new Date(s);
+        if (!isNaN(parsedDate.getTime())) {
+          return Utilities.formatDate(parsedDate, CONFIG.DATE_TIME.TIMEZONE, 'HH:mm');
+        }
+      }
 
       // If already HH:mm:ss keep first HH:mm
       // e.g. "09:30:00" -> "09:30"
@@ -71,7 +85,7 @@ const EventService = {
 
       var c = CONFIG || {};
       var cols = c.COLUMNS || {};
-      var statusKey = cols.STATUS || null;
+      var statusKey = eventRecord['Event Status'] !== undefined ? 'Event Status' : (cols.STATUS || null);
 
       // If sheet already has status, keep it.
       if (statusKey && eventRecord[statusKey]) {
@@ -171,7 +185,7 @@ const EventService = {
       // ValidationService uses venueId key but existing service uses COLUMNS.VENUE.
       // Keep backward-compatible by passing COLUMNS.VENUE.
       out.venueId = eventData && eventData[CONFIG.COLUMNS.VENUE] !== undefined ? eventData[CONFIG.COLUMNS.VENUE] : (eventData && eventData.venueId);
-      out.status = eventData && eventData[CONFIG.COLUMNS.STATUS] !== undefined ? eventData[CONFIG.COLUMNS.STATUS] : (eventData && eventData.status);
+      out.status = eventData && (eventData[CONFIG.COLUMNS.EVENT_STATUS] !== undefined ? eventData[CONFIG.COLUMNS.EVENT_STATUS] : (eventData[CONFIG.COLUMNS.STATUS] !== undefined ? eventData[CONFIG.COLUMNS.STATUS] : eventData.status));
       return out;
     } catch (e) {
       Logger.log('EventService._getEventValidationPayload_ error: ' + (e && e.message ? e.message : e));
@@ -183,7 +197,7 @@ const EventService = {
         startTime: eventData && eventData[CONFIG.COLUMNS.START_TIME],
         endTime: eventData && eventData[CONFIG.COLUMNS.END_TIME],
         venueId: eventData && eventData[CONFIG.COLUMNS.VENUE],
-        status: eventData && eventData[CONFIG.COLUMNS.STATUS]
+        status: eventData && (eventData[CONFIG.COLUMNS.EVENT_STATUS] !== undefined ? eventData[CONFIG.COLUMNS.EVENT_STATUS] : eventData[CONFIG.COLUMNS.STATUS])
       };
     }
   },
@@ -272,7 +286,7 @@ const EventService = {
         [CONFIG.COLUMNS.DEPARTMENTS]: eventData[CONFIG.COLUMNS.DEPARTMENTS],
         [CONFIG.COLUMNS.YEARS]: eventData[CONFIG.COLUMNS.YEARS],
         [CONFIG.COLUMNS.CAPACITY]: eventData[CONFIG.COLUMNS.CAPACITY],
-        [CONFIG.COLUMNS.STATUS]: eventData[CONFIG.COLUMNS.STATUS] || CONFIG.EVENT_STATUS.DRAFT,
+        [CONFIG.COLUMNS.EVENT_STATUS]: eventData[CONFIG.COLUMNS.EVENT_STATUS] || eventData[CONFIG.COLUMNS.STATUS] || CONFIG.EVENT_STATUS.DRAFT,
         [CONFIG.COLUMNS.DELETION_FLAG]: false,
         [CONFIG.COLUMNS.CREATED_AT]: nowIso,
         [CONFIG.COLUMNS.CREATED_BY]: eventData[CONFIG.COLUMNS.CREATED_BY] || 'Unknown',
@@ -336,6 +350,14 @@ const EventService = {
 
       const updatedEvent = Object.assign({}, existingEvent, eventData);
       updatedEvent[CONFIG.COLUMNS.UPDATED_AT] = new Date().toISOString();
+
+      // Ensure status is written to the correct physical sheet column
+      if (eventData[CONFIG.COLUMNS.STATUS] !== undefined) {
+        updatedEvent[CONFIG.COLUMNS.EVENT_STATUS] = eventData[CONFIG.COLUMNS.STATUS];
+      }
+      if (eventData[CONFIG.COLUMNS.EVENT_STATUS] !== undefined) {
+        updatedEvent[CONFIG.COLUMNS.EVENT_STATUS] = eventData[CONFIG.COLUMNS.EVENT_STATUS];
+      }
 
       var updatedByKey = CONFIG.COLUMNS && CONFIG.COLUMNS.UPDATED_BY ? CONFIG.COLUMNS.UPDATED_BY : null;
       if (updatedByKey) {
@@ -420,6 +442,31 @@ const EventService = {
       const eventsSheet = CONFIG.SHEETS.EVENTS;
       if (!DatabaseService.exists(eventsSheet, CONFIG.COLUMNS.EVENT_ID, eventId)) {
         return Utils.buildResponse(false, CONFIG.MESSAGES.EVENT_NOT_FOUND);
+      }
+
+      const headers = DatabaseService.getHeaderRow(eventsSheet);
+      const hasDeletionFlagCol = headers.indexOf(CONFIG.COLUMNS.DELETION_FLAG) !== -1;
+
+      if (!hasDeletionFlagCol) {
+        // Fallback to hard delete if spreadsheet schema does not support soft deletes
+        DatabaseService.hardDelete(eventsSheet, CONFIG.COLUMNS.EVENT_ID, eventId);
+        this._invalidateCaches_();
+        try {
+          AuditService.logAction(
+            updatedBy || 'Unknown',
+            'EventService',
+            'DELETE_EVENT',
+            eventId,
+            'Event',
+            'Event hard deleted (schema fallback)',
+            '',
+            'SUCCESS',
+            updatedBy || 'Unknown'
+          );
+        } catch (error) {
+          Logger.log(error);
+        }
+        return Utils.buildResponse(true, CONFIG.MESSAGES.EVENT_DELETED);
       }
 
       var nowIso = new Date().toISOString();
@@ -516,18 +563,17 @@ const EventService = {
         return idStr.indexOf(kw) !== -1 || nameStr.indexOf(kw) !== -1 || venueStr.indexOf(kw) !== -1;
       });
     } catch (error) {
--      Logger.log("EventService.searchEvents error: " + error.message);
-+      Logger.log("EventService.searchEvents error: " + (error && error.message ? error.message : error));
-       return [];
-     }
-   },
+      Logger.log("EventService.searchEvents error: " + (error && error.message ? error.message : error));
+      return [];
+    }
+  },
 
   getEventsByCoordinator: function(coordinatorId) {
     try {
       if (!coordinatorId) return [];
       const records = DatabaseService.findByColumn(CONFIG.SHEETS.EVENTS, CONFIG.COLUMNS.COORDINATOR_ID, coordinatorId);
       const filtered = records.filter(e => !e[CONFIG.COLUMNS.DELETION_FLAG]);
-      return filtered.map(e => Utils.sanitizeEvent(this._evaluateEventStatus(e)));
+      return filtered.map(e => Utils.sanitizeEvent(this._evaluateEventStatus_(e)));
     } catch (error) {
       Logger.log("EventService.getEventsByCoordinator error: " + error.message);
       return [];
@@ -537,9 +583,9 @@ const EventService = {
   getEventsByStatus: function(status) {
     try {
       if (!status) return [];
-      const records = DatabaseService.findByColumn(CONFIG.SHEETS.EVENTS, CONFIG.COLUMNS.STATUS, status);
+      const records = DatabaseService.findByColumn(CONFIG.SHEETS.EVENTS, CONFIG.COLUMNS.EVENT_STATUS, status);
       const filtered = records.filter(e => !e[CONFIG.COLUMNS.DELETION_FLAG]);
-      return filtered.map(e => Utils.sanitizeEvent(this._evaluateEventStatus(e))).filter(e => e[CONFIG.COLUMNS.STATUS] === status);
+      return filtered.map(e => Utils.sanitizeEvent(this._evaluateEventStatus_(e))).filter(e => e[CONFIG.COLUMNS.STATUS] === status);
     } catch (error) {
       Logger.log("EventService.getEventsByStatus error: " + error.message);
       return [];
@@ -552,7 +598,7 @@ const EventService = {
       const targetDate = Utils.formatDate(date);
       const allEvents = DatabaseService.readAllRows(CONFIG.SHEETS.EVENTS) || [];
       const filtered = allEvents.filter(e => !e[CONFIG.COLUMNS.DELETION_FLAG]);
-      return filtered.map(e => this._evaluateEventStatus(e))
+      return filtered.map(e => this._evaluateEventStatus_(e))
         .filter(event => Utils.formatDate(event[CONFIG.COLUMNS.START_DATE]) === targetDate)
         .map(e => Utils.sanitizeEvent(e));
     } catch (error) {

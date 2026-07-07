@@ -83,7 +83,20 @@ const CONFIG = {
     EVENT_NAME: 'Event Name',
     EVENT_BARCODE_ATTENDANCE: 'Barcode Attendance',
     EVENT_MANUAL_ATTENDANCE: 'Manual Attendance',
-    EVENT_STATUS: 'Status',
+    EVENT_STATUS: 'Event Status',
+    VENUE: 'Location',
+    COORDINATOR_ID: 'Organizer',
+    START_DATE: 'Start Date',
+    END_DATE: 'End Date',
+    START_TIME: 'Start Time',
+    END_TIME: 'End Time',
+    DESCRIPTION: 'Description',
+    DEPARTMENTS: 'Departments',
+    YEARS: 'Years',
+    CAPACITY: 'Capacity',
+    LAST_ACTION: 'Last Action',
+    LAST_ACTION_AT: 'Last Action At',
+    LAST_ACTION_BY: 'Last Action By',
 
     // Attendance
     ATTENDANCE_ID: 'Attendance ID',
@@ -184,7 +197,7 @@ const CONFIG = {
     AUDITLOGS: ['Log ID', 'User ID', 'Module', 'Action'],
     DEPARTMENTS: ['Department ID', 'Department Name', 'Status'],
     EVENT_COORDINATORS: ['Assignment ID', 'Event ID', 'User ID'],
-    EVENTS: ['Event ID', 'Event Name', 'Barcode Attendance', 'Manual Attendance', 'Status'],
+    EVENTS: ['Event ID', 'Event Name', 'Event Status'],
     GENERATED_REPORTS: ['Report ID', 'Event ID', 'Generated Date', 'Status'],
     NOTIFICATIONS: ['Notification ID', 'User ID', 'Message', 'Status'],
     SESSIONS: ['Session ID', 'User ID', 'Session Token'],
@@ -219,7 +232,18 @@ const CONFIG = {
     DEPARTMENT_ACTIVATE_FAILED: "Department activation failed.",
     DEPARTMENT_DEACTIVATED: "Department deactivated successfully.",
     DEPARTMENT_DEACTIVATE_FAILED: "Department deactivation failed.",
-    DEPARTMENT_NOT_FOUND: "Department not found."
+    DEPARTMENT_NOT_FOUND: "Department not found.",
+
+    // Event Messages
+    INVALID_COORDINATOR: "Invalid or inactive coordinator specified.",
+    EVENT_ALREADY_EXISTS: "An event with the same name, date, time and venue already exists.",
+    EVENT_CREATED: "Event created successfully.",
+    EVENT_CREATE_FAILED: "Event creation failed.",
+    EVENT_UPDATED: "Event updated successfully.",
+    EVENT_UPDATE_FAILED: "Event update failed.",
+    EVENT_DELETED: "Event deleted successfully.",
+    EVENT_DELETE_FAILED: "Event deletion failed.",
+    EVENT_NOT_FOUND: "Event not found."
   },
 
   ROLES: {
