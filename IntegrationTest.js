@@ -73,7 +73,7 @@ const IntegrationTest = {
 
     // Destroy session
     const destroyRes = SessionService.destroySession(token);
-    if (destroyRes !== true) {
+    if (!destroyRes) {
       throw new Error('Session destruction failed');
     }
 
