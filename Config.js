@@ -60,7 +60,7 @@ const CONFIG = {
     STUDENT_DEPARTMENT_ID: "Department ID",
     STUDENT_YEAR: "Year",
     STUDENT_SECTION: "Section",
-    STUDENT_STATUS: "Status",
+    STUDENT_STATUS: "Student Status",
 
     // Student Optional Columns
     STUDENT_EMAIL: "Email Address",
@@ -170,6 +170,7 @@ const CONFIG = {
     AUDITLOGS: 'Log ID',
     DEPARTMENTS: 'Department ID',
     EVENT_COORDINATORS: 'Assignment ID',
+    EVENT_PARTICIPANTS: 'Participant ID',
     EVENTS: 'Event ID',
     GENERATED_REPORTS: 'Report ID',
     NOTIFICATIONS: 'Notification ID',
@@ -184,6 +185,7 @@ const CONFIG = {
     AUDITLOGS: { prefix: 'LOG', digits: 6 },
     DEPARTMENTS: { prefix: 'DEP', digits: 3 },
     EVENT_COORDINATORS: { prefix: 'ASN', digits: 5 },
+    EVENT_PARTICIPANTS: { prefix: 'ASN', digits: 5 },
     EVENTS: { prefix: 'EVT', digits: 4 },
     GENERATED_REPORTS: { prefix: 'RPT', digits: 6 },
     NOTIFICATIONS: { prefix: 'NOT', digits: 6 },
@@ -197,6 +199,7 @@ const CONFIG = {
     AUDITLOGS: ['Log ID', 'User ID', 'Module', 'Action'],
     DEPARTMENTS: ['Department ID', 'Department Name', 'Status'],
     EVENT_COORDINATORS: ['Assignment ID', 'Event ID', 'User ID'],
+    EVENT_PARTICIPANTS: ['Participant ID', 'Event ID', 'Roll Number'],
     EVENTS: ['Event ID', 'Event Name', 'Event Status'],
     GENERATED_REPORTS: ['Report ID', 'Event ID', 'Generated Date', 'Status'],
     NOTIFICATIONS: ['Notification ID', 'User ID', 'Message', 'Status'],

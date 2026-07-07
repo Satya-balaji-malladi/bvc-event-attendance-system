@@ -11,10 +11,10 @@ const ParticipantService = {
   // Fetch all participants for a specific event
   getEventParticipants: function(eventId, userId) {
     // 1. Verify coordinator ownership (if not Admin)
-    const user = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, 'user_id', userId)[0];
-    if (user && user.role === CONFIG.ROLES.COORDINATOR) {
-      const event = DatabaseService.findByColumn(CONFIG.SHEETS.EVENTS, 'event_id', eventId)[0];
-      if (!event || event.coordinator_id !== userId) {
+    const user = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, CONFIG.COLUMNS.USER_ID || 'User ID', userId)[0];
+    if (user && user[CONFIG.COLUMNS.ROLE || 'Role'] === CONFIG.ROLES.COORDINATOR) {
+      const event = DatabaseService.findByColumn(CONFIG.SHEETS.EVENTS, CONFIG.COLUMNS.EVENT_ID || 'Event ID', eventId)[0];
+      if (!event || event[CONFIG.COLUMNS.COORDINATOR_ID || 'Organizer'] !== userId) {
         throw new Error('Unauthorized: You can only manage participants for your assigned events.');
       }
     } else if (!user) {
@@ -22,18 +22,18 @@ const ParticipantService = {
     }
 
     // 2. Fetch participants
-    const participants = DatabaseService.findByColumn(CONFIG.SHEETS.EVENT_PARTICIPANTS, 'event_id', eventId);
+    const participants = DatabaseService.findByColumn(CONFIG.SHEETS.EVENT_PARTICIPANTS, 'Event ID', eventId);
 
     // 3. Join with Students data
     const allStudents = DatabaseService.readAllRows(CONFIG.SHEETS.STUDENTS);
     const enriched = (participants || []).map(p => {
-      const student = (allStudents || []).find(s => s.roll_number === p.roll_number) || {};
+      const student = (allStudents || []).find(s => s['Roll Number'] === p['Roll Number']) || {};
       return {
         ...p,
-        student_name: student.student_name || 'Unknown',
-        department: student.department || 'Unknown',
-        year: student.year || 'Unknown',
-        section: student.section || 'Unknown'
+        student_name: student['Student Name'] || 'Unknown',
+        department: student['Department ID'] || 'Unknown',
+        year: student['Year'] || 'Unknown',
+        section: student['Section'] || 'Unknown'
       };
     });
     
@@ -42,13 +42,13 @@ const ParticipantService = {
 
   // Check if a student is eligible for an event
   checkEligibility: function(eventId, rollNumber, userId) {
-    const studentRecords = DatabaseService.findByColumn(CONFIG.SHEETS.STUDENTS, 'roll_number', rollNumber);
+    const studentRecords = DatabaseService.findByColumn(CONFIG.SHEETS.STUDENTS, 'Roll Number', rollNumber);
     if (studentRecords.length === 0) {
       return { eligible: false, reason: `Student Not Found: Roll Number ${rollNumber} does not exist.` };
     }
     const student = studentRecords[0];
 
-    const eventRecords = DatabaseService.findByColumn(CONFIG.SHEETS.EVENTS, 'event_id', eventId);
+    const eventRecords = DatabaseService.findByColumn(CONFIG.SHEETS.EVENTS, 'Event ID', eventId);
     if (eventRecords.length === 0) {
       return { eligible: false, reason: 'Event Not Found.' };
     }
@@ -56,27 +56,28 @@ const ParticipantService = {
 
     // Check if already an active participant
     const partsAll = DatabaseService.readAllRows(CONFIG.SHEETS.EVENT_PARTICIPANTS);
-    const existing = (partsAll || []).filter(p => p.event_id === eventId && p.roll_number === rollNumber);
-    // NOTE: CONFIG.PARTICIPANT_STATUS.REMOVED/ACTIVE may differ across versions.
-    // Backward compatibility: treat missing CONFIG.PARTICIPANT_STATUS.ACTIVE as 'Active'.
-    var activeStatus = (CONFIG.PARTICIPANT_STATUS && CONFIG.PARTICIPANT_STATUS.ACTIVE) ? CONFIG.PARTICIPANT_STATUS.ACTIVE : 'Active';
-    if (existing.length > 0 && existing[0].status === activeStatus) {
+    const existing = (partsAll || []).filter(p => p['Event ID'] === eventId && p['Roll Number'] === rollNumber);
+    
+    // Physical sheet validation restricts Status to 'Confirmed', 'Waitlisted', 'Cancelled'.
+    // We treat 'Confirmed' as the active registration status.
+    const activeStatus = 'Confirmed';
+    if (existing.length > 0 && existing[0]['Registration Status'] === activeStatus) {
       return { eligible: false, reason: 'Already Added: This student is already an active participant.' };
     }
 
     // Check Department Mismatch
-    if (event.departments) {
-      const allowedDepts = event.departments.split(',').map(d => d.trim());
-      if (allowedDepts.length > 0 && !allowedDepts.includes(student.department)) {
-        return { eligible: false, reason: `Department mismatch: Allowed Departments: ${allowedDepts.join(', ')} | Student Department: ${student.department}` };
+    if (event['Departments']) {
+      const allowedDepts = event['Departments'].split(',').map(d => d.trim());
+      if (allowedDepts.length > 0 && !allowedDepts.includes(student['Department ID'])) {
+        return { eligible: false, reason: `Department mismatch: Allowed Departments: ${allowedDepts.join(', ')} | Student Department: ${student['Department ID']}` };
       }
     }
 
     // Check Year Mismatch
-    if (event.years) {
-      const allowedYears = event.years.split(',').map(y => y.trim());
-      if (allowedYears.length > 0 && !allowedYears.includes(String(student.year))) {
-        return { eligible: false, reason: `Year mismatch: Allowed Years: ${allowedYears.join(', ')} | Student Year: ${student.year}` };
+    if (event['Years']) {
+      const allowedYears = event['Years'].split(',').map(y => y.trim());
+      if (allowedYears.length > 0 && !allowedYears.includes(String(student['Year']))) {
+        return { eligible: false, reason: `Year mismatch: Allowed Years: ${allowedYears.join(', ')} | Student Year: ${student['Year']}` };
       }
     }
 
@@ -84,16 +85,15 @@ const ParticipantService = {
   },
 
   // Private helper: composite key fields used for best-effort updates/search.
-  // TODO: Replace with a dedicated Participant primary key column once EVENT_PARTICIPANTS schema is confirmed.
   _participantKeyFields: function() {
-    return { eventIdField: 'event_id', rollNumberField: 'roll_number' };
+    return { eventIdField: 'Event ID', rollNumberField: 'Roll Number' };
   },
 
   addParticipant: function(eventId, rollNumber, userId) {
-    const user = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, 'user_id', userId)[0];
-    if (user && user.role === CONFIG.ROLES.COORDINATOR) {
-      const event = DatabaseService.findByColumn(CONFIG.SHEETS.EVENTS, 'event_id', eventId)[0];
-      if (!event || event.coordinator_id !== userId) {
+    const user = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, CONFIG.COLUMNS.USER_ID || 'User ID', userId)[0];
+    if (user && user[CONFIG.COLUMNS.ROLE || 'Role'] === CONFIG.ROLES.COORDINATOR) {
+      const event = DatabaseService.findByColumn(CONFIG.SHEETS.EVENTS, CONFIG.COLUMNS.EVENT_ID || 'Event ID', eventId)[0];
+      if (!event || event[CONFIG.COLUMNS.COORDINATOR_ID || 'Organizer'] !== userId) {
         throw new Error('Unauthorized: You can only manage participants for your assigned events.');
       }
     }
@@ -108,30 +108,18 @@ const ParticipantService = {
     const partsAll = DatabaseService.readAllRows(CONFIG.SHEETS.EVENT_PARTICIPANTS);
     const existing = (partsAll || []).filter(p => p[keyFields.eventIdField] === eventId && p[keyFields.rollNumberField] === rollNumber);
 
-    var activeStatus = (CONFIG.PARTICIPANT_STATUS && CONFIG.PARTICIPANT_STATUS.ACTIVE) ? CONFIG.PARTICIPANT_STATUS.ACTIVE : 'Active';
+    const activeStatus = 'Confirmed';
 
     if (existing.length > 0) {
-      // Update status to active (avoid writeAll; use updateRow per row contract)
       const existingRec = existing[0];
-      const updated = {
-        ...existingRec,
-        status: activeStatus,
-        added_at: new Date().toISOString(),
-        added_by: userId
-      };
-
-      // updateRow requires a key/value pair and a partial updates object.
-      // Use EVENT_PARTICIPANTS composite match via event_id + roll_number best-effort.
-      // TODO: If CONFIG provides dedicated participant primary key column(s), switch to that key for safer updates.
       const updates = {
-        status: updated.status,
-        added_at: updated.added_at,
-        added_by: updated.added_by
+        'Registration Status': activeStatus,
+        'Registration Timestamp': new Date().toISOString(),
+        'Created By': userId,
+        'Updated At': new Date().toISOString()
       };
 
-      // Best-effort: update by roll_number if event_id isn't supported as key.
-      // Backward compatible: preserve current behavior by attempting event_id match first.
-      DatabaseService.updateRow(CONFIG.SHEETS.EVENT_PARTICIPANTS, 'event_id', eventId, updates);
+      DatabaseService.updateRow(CONFIG.SHEETS.EVENT_PARTICIPANTS, 'Roll Number', rollNumber, updates);
 
       var resp = { success: true, message: 'Participant restored successfully.' };
       try {
@@ -163,13 +151,19 @@ const ParticipantService = {
 
       return resp;
     } else {
-      // New insert
+      // New insert matching cell validations: type must be 'Pre-Registered', status must be 'Confirmed'
       const newParticipant = {
-        event_id: eventId,
-        roll_number: rollNumber,
-        added_at: new Date().toISOString(),
-        added_by: userId,
-        status: activeStatus
+        'Event ID': eventId,
+        'Roll Number': rollNumber,
+        'Registration Timestamp': new Date().toISOString(),
+        'Created By': userId,
+        'Registration Status': activeStatus,
+        'Registration Type': 'Pre-Registered',
+        'Attendance Status': 'Absent',
+        'Approval Status': 'Approved',
+        'Created At': new Date().toISOString(),
+        'Updated At': new Date().toISOString(),
+        'Deletion Flag': false
       };
       DatabaseService.insertRow(CONFIG.SHEETS.EVENT_PARTICIPANTS, newParticipant);
 
@@ -195,10 +189,10 @@ const ParticipantService = {
   },
 
   removeParticipant: function(eventId, rollNumber, userId) {
-    const user = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, 'user_id', userId)[0];
-    if (user && user.role === CONFIG.ROLES.COORDINATOR) {
-      const event = DatabaseService.findByColumn(CONFIG.SHEETS.EVENTS, 'event_id', eventId)[0];
-      if (!event || event.coordinator_id !== userId) {
+    const user = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, CONFIG.COLUMNS.USER_ID || 'User ID', userId)[0];
+    if (user && user[CONFIG.COLUMNS.ROLE || 'Role'] === CONFIG.ROLES.COORDINATOR) {
+      const event = DatabaseService.findByColumn(CONFIG.SHEETS.EVENTS, CONFIG.COLUMNS.EVENT_ID || 'Event ID', eventId)[0];
+      if (!event || event[CONFIG.COLUMNS.COORDINATOR_ID || 'Organizer'] !== userId) {
         throw new Error('Unauthorized: You can only manage participants for your assigned events.');
       }
     }
@@ -210,14 +204,10 @@ const ParticipantService = {
       throw new Error('Participant not found.');
     }
 
-    // CONFIG.PARTICIPANT_STATUS.REMOVED may not exist in all versions.
-    // TODO: Align participant status enum with CONFIG.PARTICIPANT_STATUS values once Sheets schema is confirmed.
-    var removedStatus = (CONFIG.PARTICIPANT_STATUS && CONFIG.PARTICIPANT_STATUS.REMOVED) ? CONFIG.PARTICIPANT_STATUS.REMOVED : 'Removed';
+    const removedStatus = 'Cancelled';
     var removedRec = allParts[idx];
 
-    // Best-effort soft delete using updateRow.
-    // TODO: Use dedicated participant primary key column once available.
-    DatabaseService.updateRow(CONFIG.SHEETS.EVENT_PARTICIPANTS, 'roll_number', removedRec.roll_number, { status: removedStatus });
+    DatabaseService.updateRow(CONFIG.SHEETS.EVENT_PARTICIPANTS, 'Roll Number', removedRec['Roll Number'], { 'Registration Status': removedStatus, 'Updated At': new Date().toISOString() });
 
     var resp = { success: true, message: 'Participant removed successfully.' };
     try {
