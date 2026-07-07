@@ -103,7 +103,7 @@ const IntegrationTest = {
     Logger.log('====================================');
 
     const depId = 'DEP999';
-    const rollNo = '99A81A9999';
+    const rollNo = '23A91A0599';
 
     // Cleanup first
     try { DatabaseService.hardDelete(CONFIG.SHEETS.DEPARTMENTS, 'Department ID', depId); } catch(e) {}
@@ -123,6 +123,7 @@ const IntegrationTest = {
     studentData[CONFIG.COLUMNS.STUDENT_NAME] = 'Integration Student';
     studentData[CONFIG.COLUMNS.STUDENT_DEPARTMENT_ID] = depId;
     studentData[CONFIG.COLUMNS.STUDENT_YEAR] = '3';
+    studentData[CONFIG.COLUMNS.STUDENT_SECTION] = 'A';
     studentData[CONFIG.COLUMNS.STUDENT_STATUS] = 'Active';
     studentData[CONFIG.COLUMNS.STUDENT_EMAIL] = 'test@bvc.edu.in';
     const studentRes = StudentService.createStudent(studentData, 'USR001');
