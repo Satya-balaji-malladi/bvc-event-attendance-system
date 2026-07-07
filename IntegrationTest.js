@@ -110,11 +110,22 @@ const IntegrationTest = {
     try { DatabaseService.hardDelete(CONFIG.SHEETS.STUDENTS, 'Roll Number', rollNo); } catch(e) {}
 
     // Create Department
-    const depRes = DepartmentService.createDepartment(depId, 'Test Integration Department', 'Active');
+    const departmentData = {};
+    departmentData[CONFIG.COLUMNS.DEPARTMENT_CODE] = depId;
+    departmentData[CONFIG.COLUMNS.DEPARTMENT_NAME] = 'Test Integration Department';
+    departmentData[CONFIG.COLUMNS.STATUS || 'Status'] = 'Active';
+    const depRes = DepartmentService.createDepartment(departmentData, 'USR001');
     IntegrationAssertions.assertSuccess(depRes, 'Department creation failed');
 
     // Create Student
-    const studentRes = StudentService.createStudent(rollNo, 'Integration Student', depId, 3, 'Active', 'test@bvc.edu.in');
+    const studentData = {};
+    studentData[CONFIG.COLUMNS.STUDENT_ROLL_NUMBER] = rollNo;
+    studentData[CONFIG.COLUMNS.STUDENT_NAME] = 'Integration Student';
+    studentData[CONFIG.COLUMNS.STUDENT_DEPARTMENT_ID] = depId;
+    studentData[CONFIG.COLUMNS.STUDENT_YEAR] = '3';
+    studentData[CONFIG.COLUMNS.STUDENT_STATUS] = 'Active';
+    studentData[CONFIG.COLUMNS.STUDENT_EMAIL] = 'test@bvc.edu.in';
+    const studentRes = StudentService.createStudent(studentData, 'USR001');
     IntegrationAssertions.assertSuccess(studentRes, 'Student creation failed');
 
     // Update Student
@@ -155,11 +166,27 @@ const IntegrationTest = {
 
     // Create Event
     const nowStr = Utils.formatDate(new Date());
-    const eventRes = EventService.createEvent(eventId, 'Integration Event', 'Location A', coordUserId, 'Active', nowStr, nowStr, '09:00', '11:00', 'Fixed');
+    const eventPayload = {
+      [CONFIG.COLUMNS.EVENT_ID]: eventId,
+      [CONFIG.COLUMNS.EVENT_NAME]: 'Integration Event',
+      [CONFIG.COLUMNS.VENUE || 'Venue']: 'Location A',
+      [CONFIG.COLUMNS.COORDINATOR_ID]: coordUserId,
+      [CONFIG.COLUMNS.STATUS]: CONFIG.EVENT_STATUS.ACTIVE || 'Active',
+      [CONFIG.COLUMNS.START_DATE]: nowStr,
+      [CONFIG.COLUMNS.END_DATE]: nowStr,
+      [CONFIG.COLUMNS.START_TIME]: '09:00',
+      [CONFIG.COLUMNS.END_TIME]: '11:00',
+      [CONFIG.COLUMNS.ATTENDANCE_TYPE || 'Attendance Type']: 'Fixed',
+      [CONFIG.COLUMNS.CREATED_BY]: 'USR001'
+    };
+    const eventRes = EventService.createEvent(eventPayload);
     IntegrationAssertions.assertSuccess(eventRes, 'Event creation failed');
 
     // Update Event
-    const updateRes = EventService.updateEvent(eventId, { 'Venue': 'Location B' });
+    const updatePayload = {
+      [CONFIG.COLUMNS.VENUE || 'Venue']: 'Location B'
+    };
+    const updateRes = EventService.updateEvent(eventId, updatePayload);
     IntegrationAssertions.assertSuccess(updateRes, 'Event update failed');
 
     // Assign Coordinator
