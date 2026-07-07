@@ -8,34 +8,37 @@ const ReportService = {
   _getCache: function(userId) {
     if (this._requestCache) return this._requestCache;
 
-    // Best-effort: keep all expensive reads in one place and reuse in public methods.
-    // TODO: If CONFIG.COLUMNS mapping differs from sheet headers (roll_number/user_id/event_id),
-    // adjust mapping or switch to CONFIG-driven lookups.
     const allEvents = EventService.getAllEvents() || [];
-    const allStudents = StudentService.getAllStudents() || [];
+    const allStudentsResponse = StudentService.getAllStudents();
+    const allStudents = (allStudentsResponse && allStudentsResponse.success) ? allStudentsResponse.students : [];
     const allAttendance = DatabaseService.readAllRows(CONFIG.SHEETS.ATTENDANCE) || [];
     const allUsers = DatabaseService.readAllRows(CONFIG.SHEETS.USERS) || [];
     const allParticipants = DatabaseService.readAllRows(CONFIG.SHEETS.EVENT_PARTICIPANTS) || [];
 
     const studentMap = new Map();
     (allStudents || []).forEach(s => {
-      // roll_number is used throughout existing logic.
-      studentMap.set(s.roll_number, s);
+      const roll = s['Roll Number'] || s.roll_number || s.rollNumber;
+      if (roll) studentMap.set(String(roll).trim().toUpperCase(), s);
     });
 
     const userMap = new Map();
     (allUsers || []).forEach(u => {
-      userMap.set(String(u.user_id), u);
+      const uId = u['User ID'] || u.user_id || u.userId;
+      if (uId) userMap.set(String(uId).trim(), u);
     });
 
-    const userRecord = userMap.get(String(userId));
+    const userRecord = userMap.get(String(userId).trim());
     let authorizedEvents = allEvents;
-    if (userRecord && userRecord.role === CONFIG.ROLES.COORDINATOR) {
-      authorizedEvents = (allEvents || []).filter(e => String(e.coordinator_id) === String(userId));
+    const userRole = userRecord ? (userRecord['Role'] || userRecord.role) : null;
+    if (userRecord && userRole === CONFIG.ROLES.COORDINATOR) {
+      authorizedEvents = (allEvents || []).filter(e => String(e.coordinator_id || e.coordinatorId || e['Organizer']).trim() === String(userId).trim());
     }
 
-    const authorizedEventIds = new Set((authorizedEvents || []).map(e => e.event_id));
-    const authorizedAttendance = (allAttendance || []).filter(a => authorizedEventIds.has(a.event_id));
+    const authorizedEventIds = new Set((authorizedEvents || []).map(e => e.event_id || e.eventId || e['Event ID']));
+    const authorizedAttendance = (allAttendance || []).filter(a => {
+      const eId = a['Event ID'] || a.event_id || a.eventId;
+      return authorizedEventIds.has(eId);
+    });
 
     this._requestCache = {
       events: allEvents,
@@ -60,15 +63,21 @@ const ReportService = {
 
   _getCoordinatorName: function(coordinatorId) {
     if (!coordinatorId) return 'Unknown';
-    const records = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, 'user_id', coordinatorId);
-    if (records && records.length > 0) return records[0].full_name;
+    const records = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, 'User ID', coordinatorId);
+    if (records && records.length > 0) {
+      const u = records[0];
+      return u.full_name || (u['First Name'] && u['Last Name'] ? u['First Name'] + ' ' + u['Last Name'] : 'Unknown');
+    }
     return 'Unknown';
   },
 
   _enforceCoordinatorPermissions: function(events, userId) {
-    const userRecords = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, 'user_id', userId);
-    if (userRecords.length > 0 && userRecords[0].role === CONFIG.ROLES.COORDINATOR) {
-      return events.filter(e => String(e.coordinator_id) === String(userId));
+    const userRecords = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, 'User ID', userId);
+    if (userRecords.length > 0) {
+      const role = userRecords[0]['Role'] || userRecords[0].role;
+      if (role === CONFIG.ROLES.COORDINATOR) {
+        return events.filter(e => String(e.coordinator_id || e.coordinatorId || e['Organizer']) === String(userId));
+      }
     }
     return events;
   },
@@ -81,7 +90,7 @@ const ReportService = {
       const attendance = cache.attendance;
 
       let totalAttendance = attendance.length;
-      let totalPresent = attendance.filter(a => a.status === CONFIG.ATTENDANCE_STATUS.PRESENT).length;
+      let totalPresent = attendance.filter(a => (a['Attendance Status'] || a.status) === CONFIG.ATTENDANCE_STATUS.PRESENT).length;
       let totalAbsent = totalAttendance - totalPresent;
 
       const report = {
@@ -107,7 +116,7 @@ const ReportService = {
       let authorizedAttendance = cache.authorizedAttendance;
 
       let totalAttendance = authorizedAttendance.length;
-      let totalPresent = authorizedAttendance.filter(a => a.status === CONFIG.ATTENDANCE_STATUS.PRESENT).length;
+      let totalPresent = authorizedAttendance.filter(a => (a['Attendance Status'] || a.status) === CONFIG.ATTENDANCE_STATUS.PRESENT).length;
       let completedEvents = 0;
       let activeEvents = 0;
 
@@ -117,22 +126,26 @@ const ReportService = {
       let lowestRate = 101;
 
       events.forEach(event => {
-        if (event.status === CONFIG.EVENT_STATUS.COMPLETED) completedEvents++;
-        if (event.status === CONFIG.EVENT_STATUS.ACTIVE) activeEvents++;
+        const eId = event.event_id || event.eventId || event['Event ID'];
+        const eName = event.event_name || event.eventName || event['Event Name'];
+        const eStatus = event.status || event['Event Status'];
 
-        const eventAtt = authorizedAttendance.filter(a => a.event_id === event.event_id);
+        if (eStatus === CONFIG.EVENT_STATUS.COMPLETED) completedEvents++;
+        if (eStatus === CONFIG.EVENT_STATUS.ACTIVE) activeEvents++;
+
+        const eventAtt = authorizedAttendance.filter(a => String(a['Event ID'] || a.event_id) === String(eId));
         const eventTotal = eventAtt.length;
-        const eventPresent = eventAtt.filter(a => a.status === CONFIG.ATTENDANCE_STATUS.PRESENT).length;
+        const eventPresent = eventAtt.filter(a => (a['Attendance Status'] || a.status) === CONFIG.ATTENDANCE_STATUS.PRESENT).length;
         
         if (eventTotal > 0) {
            const rate = this._calculatePercentage(eventPresent, eventTotal);
            if (rate > highestRate) {
              highestRate = rate;
-             highestEvent = event.event_name;
+             highestEvent = eName;
            }
            if (rate < lowestRate) {
              lowestRate = rate;
-             lowestEvent = event.event_name;
+             lowestEvent = eName;
            }
         }
       });
@@ -161,14 +174,15 @@ const ReportService = {
       const authorizedAttendance = cache.authorizedAttendance;
 
       // Apply Filters
-      if (filters.eventId) events = events.filter(e => e.event_id === filters.eventId);
-      if (filters.coordinatorId) events = events.filter(e => String(e.coordinator_id) === String(filters.coordinatorId));
-      if (filters.status) events = events.filter(e => e.status === filters.status);
+      if (filters.eventId) events = events.filter(e => (e.event_id || e.eventId || e['Event ID']) === filters.eventId);
+      if (filters.coordinatorId) events = events.filter(e => String(e.coordinator_id || e.coordinatorId || e['Organizer']) === String(filters.coordinatorId));
+      if (filters.status) events = events.filter(e => (e.status || e['Event Status']) === filters.status);
       if (filters.fromDate && filters.toDate) {
          const from = new Date(filters.fromDate).getTime();
          const to = new Date(filters.toDate).getTime();
          events = events.filter(e => {
-            const t = new Date(e.start_date).getTime();
+            const startDateVal = e.start_date || e['Start Date'];
+            const t = new Date(startDateVal).getTime();
             return t >= from && t <= to;
          });
       }
@@ -177,30 +191,38 @@ const ReportService = {
       let totalParticipants = 0;
 
       const data = events.map(event => {
-        const eventAtt = authorizedAttendance.filter(a => a.event_id === event.event_id);
+        const eId = event.event_id || event.eventId || event['Event ID'];
+        const eName = event.event_name || event.eventName || event['Event Name'];
+        const eStatus = event.status || event['Event Status'];
+        const eVenue = event.venue || event.venueName || event['Location'] || 'N/A';
+        const eStartDate = event.start_date || event['Start Date'];
+        const eEndDate = event.end_date || event['End Date'];
+
+        const eventAtt = authorizedAttendance.filter(a => String(a['Event ID'] || a.event_id) === String(eId));
         const eventTotal = eventAtt.length;
-        const eventPresent = eventAtt.filter(a => a.status === CONFIG.ATTENDANCE_STATUS.PRESENT).length;
+        const eventPresent = eventAtt.filter(a => (a['Attendance Status'] || a.status) === CONFIG.ATTENDANCE_STATUS.PRESENT).length;
         const eventAbsent = eventTotal - eventPresent;
 
         totalParticipants += eventTotal;
         totalPresent += eventPresent;
         
-        const coordinatorRecord = cache.userMap.get(String(event.coordinator_id));
-        const coordinatorName = coordinatorRecord ? coordinatorRecord.full_name : 'Unknown';
+        const cId = event.coordinator_id || event.coordinatorId || event['Organizer'];
+        const coordinatorRecord = cache.userMap.get(String(cId));
+        const coordinatorName = coordinatorRecord ? (coordinatorRecord.full_name || (coordinatorRecord['First Name'] && coordinatorRecord['Last Name'] ? coordinatorRecord['First Name'] + ' ' + coordinatorRecord['Last Name'] : 'Unknown')) : 'Unknown';
 
         return {
-          event_name: event.event_name,
+          event_name: eName,
           coordinator: coordinatorName,
-          venue: event.venue || 'N/A',
-          start_date: Utils.formatDate(event.start_date),
-          end_date: Utils.formatDate(event.end_date),
+          venue: eVenue,
+          start_date: Utils.formatDate(eStartDate),
+          end_date: Utils.formatDate(eEndDate),
           participants: eventTotal,
           present: eventPresent,
           absent: eventAbsent,
           attendance_percentage: this._calculatePercentage(eventPresent, eventTotal),
-          status: event.status
+          status: eStatus
         };
-});
+      });
 
       const resp = Utils.buildResponse(true, 'Report generated', { 
         summary: { total: events.length, present: totalPresent, percentage: this._calculatePercentage(totalPresent, totalParticipants) },
@@ -248,29 +270,36 @@ const ReportService = {
       const student = cache.studentMap.get(rollNumber);
       if (!student) return Utils.buildResponse(false, 'Student not found.');
       
-      if (!student.year) {
+      const sYear = student['Year'] || student.year;
+      const sRoll = student['Roll Number'] || student.roll_number || student.rollNumber;
+      const sName = student['Student Name'] || student.student_name || student.studentName;
+      const sDept = student['Department ID'] || student.department;
+
+      if (!sYear) {
         return Utils.buildResponse(false, 'Student excluded due to missing Year information.');
       }
 
-      const allAttendance = cache.authorizedAttendance.filter(a => a.roll_number === rollNumber);
+      const allAttendance = cache.authorizedAttendance.filter(a => String(a['Roll Number'] || a.roll_number) === String(sRoll));
+      const presentCount = allAttendance.filter(a => (a['Attendance Status'] || a.status) === CONFIG.ATTENDANCE_STATUS.PRESENT).length;
       
       const summary = {
         totalEvents: allAttendance.length,
-        present: allAttendance.filter(a => a.status === CONFIG.ATTENDANCE_STATUS.PRESENT).length
+        present: presentCount
       };
       
       const data = allAttendance.map(r => {
-        const evt = cache.events.find(e => e.event_id === r.event_id) || {};
+        const rEventId = r['Event ID'] || r.event_id;
+        const evt = cache.events.find(e => (e.event_id || e.eventId || e['Event ID']) === rEventId) || {};
         return {
-          roll_number: student.roll_number,
-          student_name: student.student_name,
-          department: student.department,
-          year: student.year,
+          roll_number: sRoll,
+          student_name: sName,
+          department: sDept,
+          year: sYear,
           events_participated: summary.totalEvents,
           attendance_percentage: this._calculatePercentage(summary.present, summary.totalEvents),
-          event_name: evt.event_name || 'Unknown',
-          date: Utils.formatDate(evt.start_date),
-          status: r.status
+          event_name: evt.event_name || evt.eventName || 'Unknown',
+          date: Utils.formatDate(evt.start_date || evt['Start Date'] || r['Timestamp']),
+          status: r['Attendance Status'] || r.status
         };
       });
 
@@ -290,25 +319,31 @@ const ReportService = {
       
       // Filter out missing years and report count
       const initialCount = students.length;
-      students = students.filter(s => s.year);
+      students = students.filter(s => s['Year'] || s.year);
       const excludedCount = initialCount - students.length;
       
-      if (department) students = students.filter(s => s.department === department);
+      if (department) students = students.filter(s => (s['Department ID'] || s.department) === department);
       
       const authorizedAttendance = cache.authorizedAttendance;
 
       const deptStats = {};
       students.forEach(s => {
-        if (!deptStats[s.department]) deptStats[s.department] = { students: 0, attendanceTotal: 0, present: 0, events: new Set() };
-        deptStats[s.department].students++;
+        const sDept = s['Department ID'] || s.department;
+        if (!deptStats[sDept]) deptStats[sDept] = { students: 0, attendanceTotal: 0, present: 0, events: new Set() };
+        deptStats[sDept].students++;
       });
 
       authorizedAttendance.forEach(a => {
-        const stu = cache.studentMap.get(a.roll_number);
-        if (stu && stu.year && (!department || stu.department === department)) {
-          deptStats[stu.department].attendanceTotal++;
-          deptStats[stu.department].events.add(a.event_id);
-          if (a.status === CONFIG.ATTENDANCE_STATUS.PRESENT) deptStats[stu.department].present++;
+        const aRoll = a['Roll Number'] || a.roll_number;
+        const stu = cache.studentMap.get(aRoll);
+        if (stu && (stu['Year'] || stu.year)) {
+          const sDept = stu['Department ID'] || stu.department;
+          if (!department || sDept === department) {
+            if (!deptStats[sDept]) deptStats[sDept] = { students: 0, attendanceTotal: 0, present: 0, events: new Set() };
+            deptStats[sDept].attendanceTotal++;
+            deptStats[sDept].events.add(a['Event ID'] || a.event_id);
+            if ((a['Attendance Status'] || a.status) === CONFIG.ATTENDANCE_STATUS.PRESENT) deptStats[sDept].present++;
+          }
         }
       });
 
@@ -330,8 +365,9 @@ const ReportService = {
   getCoordinatorReport: function(userId, targetCoordinatorId) {
     try {
       const cache = this._getCache(userId);
-      const userRecords = cache.userMap.get(String(userId));
-      if (userRecords && userRecords.role === CONFIG.ROLES.COORDINATOR) {
+      const currentUser = cache.userMap.get(String(userId));
+      const currentUserRole = currentUser ? (currentUser['Role'] || currentUser.role) : null;
+      if (currentUser && currentUserRole === CONFIG.ROLES.COORDINATOR) {
          if (targetCoordinatorId && String(targetCoordinatorId) !== String(userId)) {
             return Utils.buildResponse(false, 'Unauthorized. Coordinators can only view their own report.');
          }
@@ -339,25 +375,32 @@ const ReportService = {
       }
 
       let allUsers = cache.users;
-      let coordinators = allUsers.filter(u => u.role === CONFIG.ROLES.COORDINATOR);
-      if (targetCoordinatorId) coordinators = coordinators.filter(c => String(c.user_id) === String(targetCoordinatorId));
+      let coordinators = allUsers.filter(u => (u['Role'] || u.role) === CONFIG.ROLES.COORDINATOR);
+      if (targetCoordinatorId) coordinators = coordinators.filter(c => String(c['User ID'] || c.user_id) === String(targetCoordinatorId));
 
       const allEvents = cache.events;
       const allAttendance = cache.attendance;
 
       const data = coordinators.map(coord => {
-        const events = allEvents.filter(e => String(e.coordinator_id) === String(coord.user_id));
-        const eventIds = new Set(events.map(e => e.event_id));
-        const attendance = allAttendance.filter(a => eventIds.has(a.event_id));
+        const cId = coord['User ID'] || coord.user_id;
+        const cFullName = coord.full_name || (coord['First Name'] && coord['Last Name'] ? coord['First Name'] + ' ' + coord['Last Name'] : 'Unknown');
+
+        const events = allEvents.filter(e => String(e.coordinator_id || e.coordinatorId || e['Organizer']) === String(cId));
+        const eventIds = new Set(events.map(e => e.event_id || e.eventId || e['Event ID']));
+        const attendance = allAttendance.filter(a => eventIds.has(a['Event ID'] || a.event_id));
         
         let lastActivity = 'N/A';
         if (attendance.length > 0) {
-           const latest = attendance.sort((a,b) => new Date(b.attendance_time) - new Date(a.attendance_time))[0];
-           lastActivity = Utils.formatDate(latest.attendance_time);
+           const latest = attendance.slice().sort((a,b) => {
+             const timeA = new Date(a['Timestamp'] || a['Date'] || a.attendance_time).getTime();
+             const timeB = new Date(b['Timestamp'] || b['Date'] || b.attendance_time).getTime();
+             return timeB - timeA;
+           })[0];
+           lastActivity = Utils.formatDate(latest['Timestamp'] || latest['Date'] || latest.attendance_time);
         }
 
         return {
-          coordinator: coord.full_name,
+          coordinator: cFullName,
           events_managed: events.length,
           participants: attendance.length,
           attendance_records: attendance.length,
@@ -379,23 +422,29 @@ const ReportService = {
     try {
       const cache = this._getCache(userId);
       const threshold = filters.threshold ? Number(filters.threshold) : 75;
-      let students = cache.students.filter(s => s.year && s.status !== CONFIG.STUDENT_STATUS.INACTIVE);
-      if (filters.department) students = students.filter(s => s.department === filters.department);
-      if (filters.year) students = students.filter(s => String(s.year) === String(filters.year));
+      let students = cache.students.filter(s => (s['Year'] || s.year) && (s['Student Status'] || s.status) !== 'Inactive');
+      
+      if (filters.department) students = students.filter(s => (s['Department ID'] || s.department) === filters.department);
+      if (filters.year) students = students.filter(s => String(s['Year'] || s.year) === String(filters.year));
 
       const data = [];
       students.forEach(student => {
-        const records = cache.authorizedAttendance.filter(a => a.roll_number === student.roll_number);
+        const sRoll = student['Roll Number'] || student.roll_number;
+        const sName = student['Student Name'] || student.student_name;
+        const sDept = student['Department ID'] || student.department;
+        const sYear = student['Year'] || student.year;
+
+        const records = cache.authorizedAttendance.filter(a => String(a['Roll Number'] || a.roll_number) === String(sRoll));
         if (records.length === 0) return;
-        const present = records.filter(a => a.status === CONFIG.ATTENDANCE_STATUS.PRESENT).length;
+        const present = records.filter(a => (a['Attendance Status'] || a.status) === CONFIG.ATTENDANCE_STATUS.PRESENT).length;
         const total = records.length;
         const pct = this._calculatePercentage(present, total);
         if (pct < threshold) {
           data.push({
-            roll_number: student.roll_number,
-            student_name: student.student_name,
-            department: student.department,
-            year: student.year,
+            roll_number: sRoll,
+            student_name: sName,
+            department: sDept,
+            year: sYear,
             events_enrolled: total,
             present: present,
             absent: total - present,
@@ -422,16 +471,21 @@ const ReportService = {
       const stats = {};
 
       cache.authorizedAttendance.forEach(a => {
-        if (a.status !== CONFIG.ATTENDANCE_STATUS.PRESENT) return;
-        const stu = cache.studentMap.get(a.roll_number);
-        if (!stu || !stu.year) return;
-        if (filters.department && stu.department !== filters.department) return;
-        if (filters.year && String(stu.year) !== String(filters.year)) return;
-        if (!stats[a.roll_number]) {
-          stats[a.roll_number] = { roll_number: a.roll_number, student_name: stu.student_name, department: stu.department, year: stu.year, events_attended: 0, events: new Set() };
+        if ((a['Attendance Status'] || a.status) !== CONFIG.ATTENDANCE_STATUS.PRESENT) return;
+        const aRoll = a['Roll Number'] || a.roll_number;
+        const stu = cache.studentMap.get(aRoll);
+        if (!stu || !(stu['Year'] || stu.year)) return;
+        const sDept = stu['Department ID'] || stu.department;
+        const sYear = stu['Year'] || stu.year;
+        const sName = stu['Student Name'] || stu.student_name;
+
+        if (filters.department && sDept !== filters.department) return;
+        if (filters.year && String(sYear) !== String(filters.year)) return;
+        if (!stats[aRoll]) {
+          stats[aRoll] = { roll_number: aRoll, student_name: sName, department: sDept, year: sYear, events_attended: 0, events: new Set() };
         }
-        stats[a.roll_number].events_attended++;
-        stats[a.roll_number].events.add(a.event_id);
+        stats[aRoll].events_attended++;
+        stats[aRoll].events.add(a['Event ID'] || a.event_id);
       });
 
       const data = Object.values(stats)
@@ -448,27 +502,31 @@ const ReportService = {
   getAbsentStudents: function(userId, filters = {}) {
     try {
       const cache = this._getCache(userId);
-      let records = cache.authorizedAttendance.filter(a => a.status === CONFIG.ATTENDANCE_STATUS.ABSENT);
-      if (filters.eventId) records = records.filter(a => a.event_id === filters.eventId);
+      let records = cache.authorizedAttendance.filter(a => (a['Attendance Status'] || a.status) === CONFIG.ATTENDANCE_STATUS.ABSENT);
+      if (filters.eventId) records = records.filter(a => (a['Event ID'] || a.event_id) === filters.eventId);
       if (filters.department) {
         records = records.filter(a => {
-          const stu = cache.studentMap.get(a.roll_number);
-          return stu && stu.department === filters.department;
+          const aRoll = a['Roll Number'] || a.roll_number;
+          const stu = cache.studentMap.get(aRoll);
+          return stu && (stu['Department ID'] || stu.department) === filters.department;
         });
       }
 
       const data = records.map(a => {
-        const stu = cache.studentMap.get(a.roll_number) || {};
-        const evt = cache.events.find(e => e.event_id === a.event_id) || {};
+        const aRoll = a['Roll Number'] || a.roll_number;
+        const aEventId = a['Event ID'] || a.event_id;
+        const stu = cache.studentMap.get(aRoll) || {};
+        const evt = cache.events.find(e => (e.event_id || e.eventId || e['Event ID']) === aEventId) || {};
+        
         return {
-          roll_number: a.roll_number,
-          student_name: stu.student_name || 'Unknown',
-          department: stu.department || 'N/A',
-          year: stu.year || 'N/A',
-          event_name: evt.event_name || 'Unknown',
-          event_id: a.event_id,
-          date: Utils.formatDate(evt.start_date || a.attendance_time),
-          status: a.status
+          roll_number: aRoll,
+          student_name: stu['Student Name'] || stu.student_name || 'Unknown',
+          department: stu['Department ID'] || stu.department || 'N/A',
+          year: stu['Year'] || stu.year || 'N/A',
+          event_name: evt.event_name || evt.eventName || 'Unknown',
+          event_id: aEventId,
+          date: Utils.formatDate(evt.start_date || evt['Start Date'] || a['Timestamp']),
+          status: a['Attendance Status'] || a.status
         };
       });
 
@@ -481,23 +539,27 @@ const ReportService = {
   getYearWiseReport: function(userId, year) {
     try {
       const cache = this._getCache(userId);
-      let students = cache.students.filter(s => s.year);
-      if (year) students = students.filter(s => String(s.year) === String(year));
+      let students = cache.students.filter(s => s['Year'] || s.year);
+      if (year) students = students.filter(s => String(s['Year'] || s.year) === String(year));
 
       const yearStats = {};
       students.forEach(s => {
-        if (!yearStats[s.year]) yearStats[s.year] = { year: s.year, total_students: 0, present: 0, attendance_total: 0, events: new Set() };
-        yearStats[s.year].total_students++;
+        const sYear = s['Year'] || s.year;
+        if (!yearStats[sYear]) yearStats[sYear] = { year: sYear, total_students: 0, present: 0, attendance_total: 0, events: new Set() };
+        yearStats[sYear].total_students++;
       });
 
       cache.authorizedAttendance.forEach(a => {
-        const stu = cache.studentMap.get(a.roll_number);
-        if (!stu || !stu.year) return;
-        if (year && String(stu.year) !== String(year)) return;
-        if (!yearStats[stu.year]) yearStats[stu.year] = { year: stu.year, total_students: 0, present: 0, attendance_total: 0, events: new Set() };
-        yearStats[stu.year].attendance_total++;
-        yearStats[stu.year].events.add(a.event_id);
-        if (a.status === CONFIG.ATTENDANCE_STATUS.PRESENT) yearStats[stu.year].present++;
+        const aRoll = a['Roll Number'] || a.roll_number;
+        const stu = cache.studentMap.get(aRoll);
+        if (!stu || !(stu['Year'] || stu.year)) return;
+        const sYear = stu['Year'] || stu.year;
+
+        if (year && String(sYear) !== String(year)) return;
+        if (!yearStats[sYear]) yearStats[sYear] = { year: sYear, total_students: 0, present: 0, attendance_total: 0, events: new Set() };
+        yearStats[sYear].attendance_total++;
+        yearStats[sYear].events.add(a['Event ID'] || a.event_id);
+        if ((a['Attendance Status'] || a.status) === CONFIG.ATTENDANCE_STATUS.PRESENT) yearStats[sYear].present++;
       });
 
       const data = Object.values(yearStats).map(ys => ({
@@ -542,28 +604,33 @@ const ReportService = {
         const targetMonth = Number(filters.month);
         const targetYear = Number(filters.year);
         events = events.filter(e => {
-          const d = new Date(e.start_date);
+          const startDateVal = e.start_date || e['Start Date'];
+          const d = new Date(startDateVal);
           return d.getMonth() + 1 === targetMonth && d.getFullYear() === targetYear;
         });
       } else if (filters.fromDate && filters.toDate) {
         const from = new Date(filters.fromDate).getTime();
         const to = new Date(filters.toDate).getTime();
         events = events.filter(e => {
-          const t = new Date(e.start_date).getTime();
+          const startDateVal = e.start_date || e['Start Date'];
+          const t = new Date(startDateVal).getTime();
           return t >= from && t <= to;
         });
       }
 
       const monthMap = {};
       events.forEach(event => {
-        const d = new Date(event.start_date);
-        const key = d.getFullYear() + '-' + Utils._padNumber(d.getMonth() + 1, 2);
+        const eId = event.event_id || event.eventId || event['Event ID'];
+        const startDateVal = event.start_date || event['Start Date'];
+
+        const d = new Date(startDateVal);
+        const key = d.getFullYear() + '-' + Utils.padNumber(d.getMonth() + 1, 2);
         if (!monthMap[key]) monthMap[key] = { month: key, events_count: 0, participants: 0, present: 0, absent: 0 };
         monthMap[key].events_count++;
-        const eventAtt = cache.authorizedAttendance.filter(a => a.event_id === event.event_id);
+        const eventAtt = cache.authorizedAttendance.filter(a => String(a['Event ID'] || a.event_id) === String(eId));
         monthMap[key].participants += eventAtt.length;
-        monthMap[key].present += eventAtt.filter(a => a.status === CONFIG.ATTENDANCE_STATUS.PRESENT).length;
-        monthMap[key].absent += eventAtt.filter(a => a.status === CONFIG.ATTENDANCE_STATUS.ABSENT).length;
+        monthMap[key].present += eventAtt.filter(a => (a['Attendance Status'] || a.status) === CONFIG.ATTENDANCE_STATUS.PRESENT).length;
+        monthMap[key].absent += eventAtt.filter(a => (a['Attendance Status'] || a.status) === CONFIG.ATTENDANCE_STATUS.ABSENT).length;
       });
 
       const data = Object.values(monthMap).map(m => ({
@@ -589,20 +656,24 @@ const ReportService = {
         const from = new Date(filters.fromDate).getTime();
         const to = new Date(filters.toDate).getTime();
         events = events.filter(e => {
-          const t = new Date(e.start_date).getTime();
+          const startDateVal = e.start_date || e['Start Date'];
+          const t = new Date(startDateVal).getTime();
           return t >= from && t <= to;
         });
       }
 
       const trendMap = {};
       events.forEach(event => {
-        const d = new Date(event.start_date);
-        const period = d.getFullYear() + '-' + Utils._padNumber(d.getMonth() + 1, 2);
+        const eId = event.event_id || event.eventId || event['Event ID'];
+        const startDateVal = event.start_date || event['Start Date'];
+
+        const d = new Date(startDateVal);
+        const period = d.getFullYear() + '-' + Utils.padNumber(d.getMonth() + 1, 2);
         if (!trendMap[period]) trendMap[period] = { period: period, events: 0, total_attendance: 0, present: 0 };
         trendMap[period].events++;
-        const eventAtt = cache.authorizedAttendance.filter(a => a.event_id === event.event_id);
+        const eventAtt = cache.authorizedAttendance.filter(a => String(a['Event ID'] || a.event_id) === String(eId));
         trendMap[period].total_attendance += eventAtt.length;
-        trendMap[period].present += eventAtt.filter(a => a.status === CONFIG.ATTENDANCE_STATUS.PRESENT).length;
+        trendMap[period].present += eventAtt.filter(a => (a['Attendance Status'] || a.status) === CONFIG.ATTENDANCE_STATUS.PRESENT).length;
       });
 
       const data = Object.values(trendMap).map(t => ({
@@ -624,28 +695,37 @@ const ReportService = {
   getCancelledEvents: function(userId, filters = {}) {
     try {
       const cache = this._getCache(userId);
-      let events = cache.authorizedEvents.filter(e => e.status === CONFIG.EVENT_STATUS.CANCELLED);
-      if (filters.coordinatorId) events = events.filter(e => String(e.coordinator_id) === String(filters.coordinatorId));
+      let events = cache.authorizedEvents.filter(e => (e.status || e['Event Status']) === CONFIG.EVENT_STATUS.CANCELLED);
+      if (filters.coordinatorId) events = events.filter(e => String(e.coordinator_id || e.coordinatorId || e['Organizer']) === String(filters.coordinatorId));
       if (filters.fromDate && filters.toDate) {
         const from = new Date(filters.fromDate).getTime();
         const to = new Date(filters.toDate).getTime();
         events = events.filter(e => {
-          const t = new Date(e.start_date).getTime();
+          const startDateVal = e.start_date || e['Start Date'];
+          const t = new Date(startDateVal).getTime();
           return t >= from && t <= to;
         });
       }
 
       const data = events.map(event => {
-        const coordinatorRecord = cache.userMap.get(String(event.coordinator_id));
+        const cId = event.coordinator_id || event.coordinatorId || event['Organizer'];
+        const eId = event.event_id || event.eventId || event['Event ID'];
+        const eName = event.event_name || event.eventName || event['Event Name'];
+        const eStatus = event.status || event['Event Status'];
+        const eVenue = event.venue || event.venueName || event['Location'] || 'N/A';
+        const eStartDate = event.start_date || event['Start Date'];
+        const eEndDate = event.end_date || event['End Date'];
+
+        const coordinatorRecord = cache.userMap.get(String(cId));
         return {
-          event_id: event.event_id,
-          event_name: event.event_name,
-          coordinator: coordinatorRecord ? coordinatorRecord.full_name : 'Unknown',
-          venue: event.venue || 'N/A',
-          start_date: Utils.formatDate(event.start_date),
-          end_date: Utils.formatDate(event.end_date),
-          status: event.status,
-          cancellation_reason: event.cancellation_reason || 'N/A'
+          event_id: eId,
+          event_name: eName,
+          coordinator: coordinatorRecord ? (coordinatorRecord.full_name || (coordinatorRecord['First Name'] + ' ' + coordinatorRecord['Last Name'])) : 'Unknown',
+          venue: eVenue,
+          start_date: Utils.formatDate(eStartDate),
+          end_date: Utils.formatDate(eEndDate),
+          status: eStatus,
+          cancellation_reason: event.cancellation_reason || event['Remarks'] || 'N/A'
         };
       });
 
@@ -659,32 +739,38 @@ const ReportService = {
     try {
       const cache = this._getCache(userId);
       const currentUser = cache.userMap.get(String(userId));
-      if (currentUser && currentUser.role === CONFIG.ROLES.COORDINATOR) {
+      const currentUserRole = currentUser ? (currentUser['Role'] || currentUser.role) : null;
+      if (currentUser && currentUserRole === CONFIG.ROLES.COORDINATOR) {
         if (coordinatorId && String(coordinatorId) !== String(userId)) {
           return Utils.buildResponse(false, 'Unauthorized. Coordinators can only view their own performance.');
         }
         coordinatorId = userId;
       }
 
-      let coordinators = cache.users.filter(u => u.role === CONFIG.ROLES.COORDINATOR);
-      if (coordinatorId) coordinators = coordinators.filter(c => String(c.user_id) === String(coordinatorId));
+      let coordinators = cache.users.filter(u => (u['Role'] || u.role) === CONFIG.ROLES.COORDINATOR);
+      if (coordinatorId) coordinators = coordinators.filter(c => String(c['User ID'] || c.user_id) === String(coordinatorId));
 
       const data = coordinators.map(coord => {
-        const events = cache.events.filter(e => String(e.coordinator_id) === String(coord.user_id));
-        const eventIds = new Set(events.map(e => e.event_id));
-        const attendance = cache.attendance.filter(a => eventIds.has(a.event_id));
-        const present = attendance.filter(a => a.status === CONFIG.ATTENDANCE_STATUS.PRESENT).length;
-        const completed = events.filter(e => e.status === CONFIG.EVENT_STATUS.COMPLETED).length;
-        const cancelled = events.filter(e => e.status === CONFIG.EVENT_STATUS.CANCELLED).length;
-        const active = events.filter(e => e.status === CONFIG.EVENT_STATUS.ACTIVE).length;
+        const cId = coord['User ID'] || coord.user_id;
+        const cFullName = coord.full_name || (coord['First Name'] && coord['Last Name'] ? coord['First Name'] + ' ' + coord['Last Name'] : 'Unknown');
+
+        const events = cache.events.filter(e => String(e.coordinator_id || e.coordinatorId || e['Organizer']) === String(cId));
+        const eventIds = new Set(events.map(e => e.event_id || e.eventId || e['Event ID']));
+        const attendance = cache.attendance.filter(a => eventIds.has(a['Event ID'] || a.event_id));
+        const present = attendance.filter(a => (a['Attendance Status'] || a.status) === CONFIG.ATTENDANCE_STATUS.PRESENT).length;
+        
+        const completed = events.filter(e => (e.status || e['Event Status']) === CONFIG.EVENT_STATUS.COMPLETED).length;
+        const cancelled = events.filter(e => (e.status || e['Event Status']) === CONFIG.EVENT_STATUS.CANCELLED).length;
+        const active = events.filter(e => (e.status || e['Event Status']) === CONFIG.EVENT_STATUS.ACTIVE).length;
 
         let avgRate = 0;
         let eventRates = 0;
         events.forEach(event => {
-          const eventAtt = attendance.filter(a => a.event_id === event.event_id);
+          const eId = event.event_id || event.eventId || event['Event ID'];
+          const eventAtt = attendance.filter(a => String(a['Event ID'] || a.event_id) === String(eId));
           if (eventAtt.length > 0) {
             avgRate += this._calculatePercentage(
-              eventAtt.filter(a => a.status === CONFIG.ATTENDANCE_STATUS.PRESENT).length,
+              eventAtt.filter(a => (a['Attendance Status'] || a.status) === CONFIG.ATTENDANCE_STATUS.PRESENT).length,
               eventAtt.length
             );
             eventRates++;
@@ -692,8 +778,8 @@ const ReportService = {
         });
 
         return {
-          coordinator: coord.full_name,
-          coordinator_id: coord.user_id,
+          coordinator: cFullName,
+          coordinator_id: cId,
           events_managed: events.length,
           events_completed: completed,
           events_active: active,
@@ -717,26 +803,36 @@ const ReportService = {
       const cache = this._getCache(userId);
       const student = cache.studentMap.get(rollNumber);
       if (!student) return Utils.buildResponse(false, 'Student not found.');
-      if (!student.year) return Utils.buildResponse(false, 'Student excluded due to missing Year information.');
+      
+      const sYear = student['Year'] || student.year;
+      const sRoll = student['Roll Number'] || student.roll_number;
+      const sName = student['Student Name'] || student.student_name;
+      const sDept = student['Department ID'] || student.department;
 
-      const records = cache.authorizedAttendance.filter(a => a.roll_number === rollNumber);
-      const present = records.filter(a => a.status === CONFIG.ATTENDANCE_STATUS.PRESENT).length;
+      if (!sYear) return Utils.buildResponse(false, 'Student excluded due to missing Year information.');
+
+      const records = cache.authorizedAttendance.filter(a => String(a['Roll Number'] || a.roll_number) === String(sRoll));
+      const present = records.filter(a => (a['Attendance Status'] || a.status) === CONFIG.ATTENDANCE_STATUS.PRESENT).length;
 
       const data = records.map(r => {
-        const evt = cache.events.find(e => e.event_id === r.event_id) || {};
-        const coordinatorRecord = cache.userMap.get(String(evt.coordinator_id));
+        const rEventId = r['Event ID'] || r.event_id;
+        const evt = cache.events.find(e => (e.event_id || e.eventId || e['Event ID']) === rEventId) || {};
+        const cId = evt.coordinator_id || evt.coordinatorId || evt['Organizer'];
+        const coordinatorRecord = cache.userMap.get(String(cId));
+        const coordinatorName = coordinatorRecord ? (coordinatorRecord.full_name || (coordinatorRecord['First Name'] && coordinatorRecord['Last Name'] ? coordinatorRecord['First Name'] + ' ' + coordinatorRecord['Last Name'] : 'Unknown')) : 'Unknown';
+
         return {
-          roll_number: student.roll_number,
-          student_name: student.student_name,
-          department: student.department,
-          year: student.year,
-          event_id: r.event_id,
-          event_name: evt.event_name || 'Unknown',
-          venue: evt.venue || 'N/A',
-          coordinator: coordinatorRecord ? coordinatorRecord.full_name : 'Unknown',
-          date: Utils.formatDate(evt.start_date || r.attendance_time),
-          attendance_time: Utils.formatDate(r.attendance_time),
-          status: r.status
+          roll_number: sRoll,
+          student_name: sName,
+          department: sDept,
+          year: sYear,
+          event_id: rEventId,
+          event_name: evt.event_name || evt.eventName || 'Unknown',
+          venue: evt.venue || evt.venueName || evt['Location'] || 'N/A',
+          coordinator: coordinatorName,
+          date: Utils.formatDate(evt.start_date || evt['Start Date'] || r['Timestamp']),
+          attendance_time: Utils.formatDate(r['Timestamp'] || r['Date'] || r.attendance_time),
+          status: r['Attendance Status'] || r.status
         };
       }).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
@@ -750,6 +846,111 @@ const ReportService = {
         data: data
       });
     } catch (error) {
+      return Utils.buildResponse(false, error.message);
+    }
+  },
+
+  // ============================================================
+  // DATABASE AND EXPORT PROCESSORS
+  // ============================================================
+
+  getReportById: function(reportId) {
+    if (!reportId) return null;
+    const records = DatabaseService.findByColumn(CONFIG.SHEETS.GENERATED_REPORTS, 'Report ID', reportId) || [];
+    return records.length > 0 ? records[0] : null;
+  },
+
+  getGeneratedReports: function(userId) {
+    const all = DatabaseService.readAllRows(CONFIG.SHEETS.GENERATED_REPORTS) || [];
+    const user = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, 'User ID', userId)[0];
+    const role = user ? (user['Role'] || user.role) : null;
+    if (user && role === CONFIG.ROLES.COORDINATOR) {
+      return all.filter(r => String(r['Generated By User ID']) === String(userId));
+    }
+    return all;
+  },
+
+  deleteReport: function(reportId, userId) {
+    try {
+      const record = this.getReportById(reportId);
+      if (!record) return Utils.buildResponse(false, 'Report not found.');
+      DatabaseService.hardDelete(CONFIG.SHEETS.GENERATED_REPORTS, 'Report ID', reportId);
+      
+      const check = this.getReportById(reportId);
+      if (!check) {
+        try {
+          AuditService.logAction(userId, 'ReportService', 'DELETE_REPORT', reportId, 'Report', 'Report deleted', '', 'SUCCESS', userId);
+        } catch(e) {}
+        return Utils.buildResponse(true, 'Report deleted successfully.');
+      }
+      return Utils.buildResponse(false, 'Failed to delete report.');
+    } catch(error) {
+      return Utils.buildResponse(false, error.message);
+    }
+  },
+
+  _createReportRecord: function(eventId, userId, name, type, pdf, excel, csv) {
+    const reportId = IdService.generateReportId();
+    const now = new Date();
+    const nowStr = Utils.formatDate(now);
+    const timeStr = Utilities.formatDate(now, CONFIG.DATE_TIME.TIMEZONE || 'Asia/Kolkata', 'HH:mm:ss');
+    const record = {
+      'Report ID': reportId,
+      'Event ID': eventId || '',
+      'Generated By User ID': userId || 'System',
+      'Report Name': name || 'Report-' + reportId,
+      'Report Type': type || 'Attendance',
+      'Generated Date': nowStr,
+      'Generated Time': timeStr,
+      'Generated Timestamp': now.toISOString(),
+      'Report Status': 'Completed',
+      'Status': 'Completed',
+      'PDF Available': pdf ? 'Yes' : 'No',
+      'Excel Available': excel ? 'Yes' : 'No',
+      'CSV Available': csv ? 'Yes' : 'No',
+      'Print Available': 'Yes',
+      'Total Downloads': 0,
+      'Last Downloaded By': '',
+      'Last Downloaded Date': '',
+      'File Path': '/reports/' + reportId.toLowerCase(),
+      'Remarks': 'Export generated by system.'
+    };
+    DatabaseService.insertRow(CONFIG.SHEETS.GENERATED_REPORTS, record);
+    return reportId;
+  },
+
+  generatePDF: function(eventId, userId) {
+    try {
+      const reportId = this._createReportRecord(eventId, userId, 'Attendance PDF Export - ' + eventId, 'Attendance Summary', true, false, false);
+      try {
+        AuditService.logAction(userId, 'ReportService', 'GENERATE_PDF', reportId, 'Report', 'PDF generated', '', 'SUCCESS', userId);
+      } catch(e) {}
+      return Utils.buildResponse(true, 'PDF generated successfully.', { reportId: reportId });
+    } catch(error) {
+      return Utils.buildResponse(false, error.message);
+    }
+  },
+
+  generateExcel: function(eventId, userId) {
+    try {
+      const reportId = this._createReportRecord(eventId, userId, 'Attendance Excel Export - ' + eventId, 'Participant List', false, true, false);
+      try {
+        AuditService.logAction(userId, 'ReportService', 'GENERATE_EXCEL', reportId, 'Report', 'Excel generated', '', 'SUCCESS', userId);
+      } catch(e) {}
+      return Utils.buildResponse(true, 'Excel generated successfully.', { reportId: reportId });
+    } catch(error) {
+      return Utils.buildResponse(false, error.message);
+    }
+  },
+
+  generateCSV: function(eventId, userId) {
+    try {
+      const reportId = this._createReportRecord(eventId, userId, 'Attendance CSV Export - ' + eventId, 'Detailed Attendance', false, false, true);
+      try {
+        AuditService.logAction(userId, 'ReportService', 'GENERATE_CSV', reportId, 'Report', 'CSV generated', '', 'SUCCESS', userId);
+      } catch(e) {}
+      return Utils.buildResponse(true, 'CSV generated successfully.', { reportId: reportId });
+    } catch(error) {
       return Utils.buildResponse(false, error.message);
     }
   }
