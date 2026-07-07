@@ -106,6 +106,19 @@ App.Modules.events = {
           created_at: e.created_at || e.CreatedAt || e.createdAt || 'N/A'
         }));
         
+        // Auto-complete expired events
+        this.eventsData = this.eventsData.map(e => {
+          const eventDateTime = `${e.end_date} ${e.end_time}`;
+          const eventEndTime = new Date(eventDateTime);
+          const now = new Date();
+          
+          // If end_date + end_time is in the past and status is Active or Upcoming, mark as Completed
+          if ((e.status === 'Active' || e.status === 'Upcoming') && eventEndTime < now) {
+            e.status = 'Completed';
+          }
+          return e;
+        });
+        
         this.applyFilters();
       })
       .catch(err => {

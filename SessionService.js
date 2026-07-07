@@ -1,184 +1,399 @@
 /**
+ * SessionService.gs
  * Service for handling user sessions and authorization.
  * Exclusively manages session state and validation.
  */
 const SessionService = {
-  
+
+  // ======== Internal helpers ========
+
   /**
-   * Generates a random session token.
-   * @returns {string} Session token.
+   * Resolves a column header key using CONFIG.COLUMNS first.
+   * If missing, falls back to the existing header name already used by this project.
+   * IMPORTANT: Never invent new header names.
    */
+  _col: function(configKey, fallbackHeaderName, todoTag) {
+    try {
+      if (CONFIG && CONFIG.COLUMNS && CONFIG.COLUMNS[configKey]) return CONFIG.COLUMNS[configKey];
+      // Fallback: keep the original header name used by this project.
+      // TODO: Move this header mapping into CONFIG.COLUMNS.
+      // (todoTag is only used to locate the specific TODO in code reviews)
+      if (todoTag) {
+        // Intentionally no-op; the TODO marker is below at call sites.
+      }
+      return fallbackHeaderName;
+    } catch (e) {
+      Logger.log('SessionService._col error: ' + (e && e.message ? e.message : e));
+      return fallbackHeaderName;
+    }
+  },
+
+  // Token generator: uses Utils.generateUUID if available, else falls back to Utilities.getUuid.
   generateSessionToken: function() {
-    return Utilities.getUuid();
-  },
-
-  /**
-   * Creates a new session for the given user.
-   * @param {object} user - The user object containing user_id.
-   * @returns {object} The created session object.
-   */
-  createSession: function(user) {
-    if (!user || !user.user_id) {
-      throw new Error('Invalid user object provided for session creation.');
+    try {
+      if (Utils && typeof Utils.generateUUID === 'function') return Utils.generateUUID();
+      return Utilities.getUuid();
+    } catch (e) {
+      Logger.log('SessionService.generateSessionToken error: ' + (e && e.message ? e.message : e));
+      return Utilities.getUuid();
     }
-
-    const sessionId = IdService.generateSessionId();
-    const sessionToken = this.generateSessionToken();
-    const loginTime = Utils.getCurrentTimestamp();
-    
-    // Calculate expiry time: 8 hours from login
-    const expiryTime = new Date(loginTime.getTime() + (8 * 60 * 60 * 1000));
-    
-    const sessionData = {
-      session_id: sessionId,
-      user_id: user.user_id,
-      session_token: sessionToken,
-      login_time: loginTime,
-      expiry_time: expiryTime,
-      status: CONFIG.SESSION_STATUS.ACTIVE,
-      created_by: user.user_id,
-      created_at: loginTime
-    };
-
-    DatabaseService.insertRow(CONFIG.SHEETS.SESSIONS, sessionData);
-
-    return sessionData;
   },
 
-  /**
-   * Retrieves a session record by its token.
-   * @param {string} sessionToken 
-   * @returns {object|null} The session record or null if not found.
-   */
+createSession: function(user) {
+  try {
+    if (!user) throw new Error('User is required');
+
+    var userIdCol = CONFIG.COLUMNS.SESSION_USER_ID;
+    var userId = user[userIdCol];
+    if (Utils.checkEmptyValue(userId)) throw new Error('Invalid user');
+
+    var sessionId = IdService.generateSessionId();
+    var sessionToken = this.generateSessionToken();
+
+    // Use Date objects directly
+    const loginTime = new Date();
+    const expiryTime = new Date(
+      loginTime.getTime() + CONFIG.SECURITY.SESSION_TIMEOUT_MINUTES * 60000
+    );
+
+    var c = CONFIG.COLUMNS;
+    var updates = {};
+
+    updates[c.SESSION_ID] = sessionId;
+    updates[c.SESSION_USER_ID] = userId;
+    updates[c.SESSION_USERNAME] = user[CONFIG.COLUMNS.USER_USERNAME] || "";
+    updates[c.SESSION_TOKEN] = sessionToken;
+
+    // Store Date objects instead of milliseconds
+    updates[c.SESSION_LOGIN_TIMESTAMP] = loginTime;
+    updates[c.EXPIRY_TIME] = expiryTime;
+    updates[c.SESSION_STATUS] = CONFIG.SESSION_STATUS.ACTIVE;
+    updates[c.SESSION_LAST_ACTIVITY_TIMESTAMP] = loginTime;
+
+    if (c.CREATED_BY) updates[c.CREATED_BY] = userId;
+    if (c.CREATED_AT) updates[c.CREATED_AT] = loginTime;
+
+    DatabaseService.insertRow(CONFIG.SHEETS.SESSIONS, updates);
+    return updates;
+  } catch (error) {
+    Logger.log('SessionService.createSession error: ' + (error && error.message ? error.message : error));
+    throw new Error((CONFIG.MESSAGES && CONFIG.MESSAGES.SESSION_CREATE_FAILED) ? CONFIG.MESSAGES.SESSION_CREATE_FAILED : 'Session creation failed');
+  }
+}
+,
   getSession: function(sessionToken) {
-    if (Utils.checkEmptyValue(sessionToken)) return null;
-    
-    const records = DatabaseService.findByColumn(CONFIG.SHEETS.SESSIONS, 'session_token', sessionToken);
-    
-    if (records.length > 0) {
-      return records[0];
+    try {
+      if (Utils.checkEmptyValue(sessionToken)) return null;
+
+      // Prefer CONFIG.COLUMNS; fallback only to existing header name used by this project.
+      var tokenCol = (CONFIG.COLUMNS && CONFIG.COLUMNS.SESSION_TOKEN) ? CONFIG.COLUMNS.SESSION_TOKEN : null;
+      if (!tokenCol) {
+        // TODO: Move SESSION_TOKEN header into CONFIG.COLUMNS.
+        tokenCol = 'Session Token';
+      }
+
+      var records = DatabaseService.findByColumn(CONFIG.SHEETS.SESSIONS, tokenCol, sessionToken, { caseSensitive: true, strict: true });
+      return records && records.length ? records[0] : null;
+    } catch (error) {
+      Logger.log('SessionService.getSession error: ' + (error && error.message ? error.message : error));
+      return null;
     }
-    return null;
   },
 
-  /**
-   * Internal helper to validate a session record.
-   * @param {object} session - The session record object.
-   * @param {string} sessionToken - The token for the session.
-   * @returns {boolean} True if the session is valid.
-   */
   _validateSessionRecord: function(session, sessionToken) {
+    try {
+      if (!session) return false;
+
+      var c = CONFIG.COLUMNS || {};
+
+      var statusCol = c.STATUS || 'Status'; // TODO: Move STATUS header into CONFIG.COLUMNS for sessions
+      var expiryCol = c.EXPIRY_TIME || 'Expiry Time'; // TODO: Move EXPIRY_TIME header into CONFIG.COLUMNS
+      var lastActivityCol = c.LAST_ACTIVITY || null;
+      var tokenCol = c.SESSION_TOKEN || 'Session Token'; // TODO: Move SESSION_TOKEN header into CONFIG.COLUMNS
+
+      if (String(session[statusCol]) !== String(CONFIG.SESSION_STATUS.ACTIVE)) return false;
+
+      var currentTime = Utils.getCurrentTimestamp();
+      var expiryTime = session[expiryCol];
+
+      if (currentTime > Number(expiryTime || 0)) {
+        this.expireSession(sessionToken);
+        return false;
+      }
+
+      if (lastActivityCol && session[lastActivityCol] !== undefined) {
+        var updates = {};
+        updates[lastActivityCol] = currentTime;
+        DatabaseService.updateRow(CONFIG.SHEETS.SESSIONS, tokenCol, sessionToken, updates);
+      }
+
+      return true;
+    } catch (error) {
+      Logger.log('SessionService._validateSessionRecord error: ' + (error && error.message ? error.message : error));
+      return false;
+    }
+  },
+
+  validateSession: function(sessionToken) {
+  try {
+    var session = this.getSession(sessionToken);
     if (!session) return false;
-    
-    if (session.status !== CONFIG.SESSION_STATUS.ACTIVE) return false;
-    
-    const currentTime = Utils.getCurrentTimestamp().getTime();
-    const expiryTime = new Date(session.expiry_time).getTime();
-    
+
+    var c = CONFIG.COLUMNS || {};
+    var statusCol = c.SESSION_STATUS;
+    var expiryCol = c.EXPIRY_TIME;
+    var lastActivityCol = c.SESSION_LAST_ACTIVITY_TIMESTAMP;
+    var tokenCol = c.SESSION_TOKEN;
+
+    if (String(session[statusCol]) !== String(CONFIG.SESSION_STATUS.ACTIVE)) return false;
+
+    const currentTime = new Date();
+    const expiryTime = new Date(session[expiryCol]);
+
     if (currentTime > expiryTime) {
       this.expireSession(sessionToken);
       return false;
     }
-    
+
+    if (lastActivityCol && session[lastActivityCol] !== undefined) {
+      var updates = {};
+      updates[lastActivityCol] = currentTime;
+      DatabaseService.updateRow(CONFIG.SHEETS.SESSIONS, tokenCol, sessionToken, updates);
+    }
+
     return true;
-  },
+  } catch (error) {
+    Logger.log('SessionService.validateSession error: ' + (error && error.message ? error.message : error));
+    return false;
+  }
+},
 
-  /**
-   * Validates if a session token is active and not expired.
-   * @param {string} sessionToken 
-   * @returns {boolean} True if the session is valid.
-   */
-  validateSession: function(sessionToken) {
-    const session = this.getSession(sessionToken);
-    return this._validateSessionRecord(session, sessionToken);
-  },
 
-  /**
-   * Marks a session as expired.
-   * @param {string} sessionToken 
-   * @returns {boolean} True if successful.
-   */
-  expireSession: function(sessionToken) {
-    const updateData = { status: CONFIG.SESSION_STATUS.EXPIRED };
-    return DatabaseService.updateRow(CONFIG.SHEETS.SESSIONS, 'session_token', sessionToken, updateData);
-  },
+ expireSession: function(sessionToken) {
+  try {
+    var c = CONFIG.COLUMNS || {};
+    var statusCol = c.SESSION_STATUS;
+    var tokenCol = c.SESSION_TOKEN;
+    var logoutCol = c.SESSION_LOGOUT_TIMESTAMP;
+    var updatedAtCol = c.UPDATED_AT;
 
-  /**
-   * Destroys a session by setting its status to Logged Out.
-   * @param {string} sessionToken 
-   * @returns {boolean} True if successful.
-   */
-  destroySession: function(sessionToken) {
-    const session = this.getSession(sessionToken);
+    var updateData = {};
+    updateData[statusCol] = CONFIG.SESSION_STATUS.EXPIRED;
+    if (logoutCol) updateData[logoutCol] = new Date();
+    if (updatedAtCol) updateData[updatedAtCol] = new Date();
+
+    return DatabaseService.updateRow(CONFIG.SHEETS.SESSIONS, tokenCol, sessionToken, updateData);
+  } catch (error) {
+    Logger.log('SessionService.expireSession error: ' + (error && error.message ? error.message : error));
+    return false;
+  }
+}
+,
+
+destroySession: function(sessionToken) {
+  try {
+    var session = this.getSession(sessionToken);
     if (!session) return false;
-    
-    const updateData = { status: CONFIG.SESSION_STATUS.LOGGED_OUT };
-    return DatabaseService.updateRow(CONFIG.SHEETS.SESSIONS, 'session_token', sessionToken, updateData);
-  },
 
-  /**
-   * Gets the User ID of the currently logged-in user.
-   * Reads the session from the database only once.
-   * @param {string} sessionToken 
-   * @returns {string|null} User ID if valid, else null.
-   */
+    var c = CONFIG.COLUMNS || {};
+    var statusCol = c.SESSION_STATUS;
+    var lastActivityCol = c.SESSION_LAST_ACTIVITY_TIMESTAMP;
+    var logoutCol = c.SESSION_LOGOUT_TIMESTAMP;
+    var updatedAtCol = c.UPDATED_AT;
+    var tokenCol = c.SESSION_TOKEN;
+
+    var updateData = {};
+    updateData[statusCol] = CONFIG.SESSION_STATUS.LOGGED_OUT;
+    if (logoutCol) updateData[logoutCol] = new Date();
+    if (lastActivityCol) updateData[lastActivityCol] = new Date();
+    if (updatedAtCol) updateData[updatedAtCol] = new Date();
+
+    return DatabaseService.updateRow(CONFIG.SHEETS.SESSIONS, tokenCol, sessionToken, updateData);
+  } catch (error) {
+    Logger.log('SessionService.destroySession error: ' + (error && error.message ? error.message : error));
+    return false;
+  }
+}
+,
   getCurrentUser: function(sessionToken) {
-    const session = this.getSession(sessionToken);
-    if (this._validateSessionRecord(session, sessionToken)) {
-      return session.user_id;
-    }
-    return null;
-  },
-
-  /**
-   * Checks if the user is currently logged in with a valid session.
-   * @param {string} sessionToken 
-   * @returns {boolean} True if valid session exists.
-   */
-  isLoggedIn: function(sessionToken) {
-    return this.validateSession(sessionToken);
-  },
-
-  /**
-   * Checks if the logged-in user has a specific role.
-   * @param {string} sessionToken 
-   * @param {string} role 
-   * @returns {boolean} True if the user has the specified role.
-   */
-  hasRole: function(sessionToken, role) {
-    const userId = this.getCurrentUser(sessionToken);
-    if (!userId) return false;
-    
-    const userRecords = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, 'user_id', userId);
-    
-    if (userRecords.length === 0) return false;
-    
-    const user = userRecords[0];
-    return user.role === role;
-  },
-
-  /**
-   * Wraps an execution block with session validation.
-   * Ensures that only authenticated users can execute the callback.
-   * @param {string} sessionToken 
-   * @param {Function} callback - Function that takes userId as its argument.
-   * @returns {any} Result of the callback or an error object.
-   */
-  withSession: function(sessionToken, callback) {
-    if (!sessionToken || sessionToken.trim() === '') {
-      throw new Error('Authentication required. Missing session token.');
-    }
-    
-    const userId = this.getCurrentUser(sessionToken);
-    if (!userId) {
-      throw new Error('Invalid or expired session. Please log in again.');
-    }
-    
     try {
+      var session = this.getSession(sessionToken);
+      if (!session) return null;
+
+      // Validate using optional column mapping
+      var ok = this._validateSessionRecord(session, sessionToken);
+      if (!ok) return null;
+
+      var c = CONFIG.COLUMNS || {};
+      var userIdCol = c.USER_ID || (CONFIG.ID_COLUMNS && CONFIG.ID_COLUMNS.USERS) || 'User ID';
+      if (!c.USER_ID) {
+        // TODO: Move USER_ID header into CONFIG.COLUMNS.USER_ID.
+      }
+      return session[userIdCol];
+    } catch (error) {
+      Logger.log('SessionService.getCurrentUser error: ' + (error && error.message ? error.message : error));
+      return null;
+    }
+  },
+
+  isLoggedIn: function(sessionToken) {
+    try {
+      return this.validateSession(sessionToken);
+    } catch (error) {
+      Logger.log('SessionService.isLoggedIn error: ' + (error && error.message ? error.message : error));
+      return false;
+    }
+  },
+
+  isUserLoggedIn: function(userId) {
+    try {
+      var c = CONFIG.COLUMNS || {};
+      var userIdCol = c.USER_ID || 'User ID'; // TODO: Move USER_ID header into CONFIG.COLUMNS.USER_ID
+      var statusCol = c.STATUS || 'Status'; // TODO: Move STATUS header into CONFIG.COLUMNS for sessions
+      var expiryCol = c.EXPIRY_TIME || 'Expiry Time'; // TODO: Move EXPIRY_TIME header into CONFIG.COLUMNS
+
+      var sessions = DatabaseService.findByColumn(CONFIG.SHEETS.SESSIONS, userIdCol, userId);
+      var currentTime = Utils.getCurrentTimestamp();
+
+      for (var i = 0; i < sessions.length; i++) {
+        var session = sessions[i] || {};
+        var expiryTime = session[expiryCol];
+        if (String(session[statusCol]) === String(CONFIG.SESSION_STATUS.ACTIVE) && currentTime <= Number(expiryTime || 0)) {
+          if (!CONFIG.SECURITY.ALLOW_MULTIPLE_SESSIONS) return true;
+        }
+      }
+
+      return false;
+    } catch (error) {
+      Logger.log('SessionService.isUserLoggedIn error: ' + (error && error.message ? error.message : error));
+      return false;
+    }
+  },
+
+  cleanupExpiredSessions: function() {
+    try {
+      var sessions = DatabaseService.readAllRows(CONFIG.SHEETS.SESSIONS) || [];
+      var currentTime = Utils.getCurrentTimestamp();
+
+      var c = CONFIG.COLUMNS || {};
+      var statusCol = c.STATUS || 'Status'; // TODO: Move STATUS header into CONFIG.COLUMNS for sessions
+      var expiryCol = c.EXPIRY_TIME || 'Expiry Time'; // TODO: Move EXPIRY_TIME header into CONFIG.COLUMNS
+      var tokenCol = c.SESSION_TOKEN || 'Session Token'; // TODO: Move SESSION_TOKEN header into CONFIG.COLUMNS
+
+      for (var i = 0; i < sessions.length; i++) {
+        var session = sessions[i] || {};
+        var expiryTime = session[expiryCol];
+        if (String(session[statusCol]) === String(CONFIG.SESSION_STATUS.ACTIVE) && currentTime > Number(expiryTime || 0)) {
+          var updates = {};
+          updates[statusCol] = CONFIG.SESSION_STATUS.EXPIRED;
+          DatabaseService.updateRow(CONFIG.SHEETS.SESSIONS, tokenCol, session[tokenCol], updates);
+        }
+      }
+    } catch (error) {
+      Logger.log('SessionService.cleanupExpiredSessions error: ' + (error && error.message ? error.message : error));
+    }
+  },
+
+  logoutAllSessions: function(userId) {
+    try {
+      var c = CONFIG.COLUMNS || {};
+      var userIdCol = c.USER_ID || 'User ID'; // TODO: Move USER_ID header into CONFIG.COLUMNS.USER_ID
+      var statusCol = c.STATUS || 'Status'; // TODO: Move STATUS header into CONFIG.COLUMNS for sessions
+      var tokenCol = c.SESSION_TOKEN || 'Session Token'; // TODO: Move SESSION_TOKEN header into CONFIG.COLUMNS
+      var lastActivityCol = c.LAST_ACTIVITY || null;
+
+      var sessions = DatabaseService.findByColumn(CONFIG.SHEETS.SESSIONS, userIdCol, userId);
+
+      for (var i = 0; i < sessions.length; i++) {
+        var session = sessions[i] || {};
+        if (String(session[statusCol]) === String(CONFIG.SESSION_STATUS.ACTIVE)) {
+          var updateData = {};
+          updateData[statusCol] = CONFIG.SESSION_STATUS.LOGGED_OUT;
+          if (lastActivityCol) updateData[lastActivityCol] = Utils.getCurrentTimestamp();
+
+          DatabaseService.updateRow(CONFIG.SHEETS.SESSIONS, tokenCol, session[tokenCol], updateData);
+        }
+      }
+
+      return true;
+    } catch (error) {
+      Logger.log('SessionService.logoutAllSessions error: ' + (error && error.message ? error.message : error));
+      return false;
+    }
+  },
+
+  refreshSession: function(sessionToken) {
+  try {
+    var session = this.getSession(sessionToken);
+    if (!session) return false;
+
+    var c = CONFIG.COLUMNS || {};
+    var statusCol = c.SESSION_STATUS;
+    var expiryCol = c.EXPIRY_TIME;
+    var lastActivityCol = c.SESSION_LAST_ACTIVITY_TIMESTAMP;
+    var tokenCol = c.SESSION_TOKEN;
+
+    if (String(session[statusCol]) !== String(CONFIG.SESSION_STATUS.ACTIVE)) return false;
+
+    const currentTime = new Date();
+    const expiryTime = new Date(session[expiryCol]);
+    if (currentTime > expiryTime) return false;
+
+    const newExpiry = new Date(
+      currentTime.getTime() + CONFIG.SECURITY.SESSION_TIMEOUT_MINUTES * 60000
+    );
+
+    var updateData = {};
+    updateData[expiryCol] = newExpiry;
+    if (lastActivityCol) updateData[lastActivityCol] = currentTime;
+
+    return DatabaseService.updateRow(CONFIG.SHEETS.SESSIONS, tokenCol, sessionToken, updateData);
+  } catch (error) {
+    Logger.log('SessionService.refreshSession error: ' + (error && error.message ? error.message : error));
+    return false;
+  }
+}
+,
+
+  hasRole: function(sessionToken, role) {
+    try {
+      var userId = this.getCurrentUser(sessionToken);
+      if (!userId) return false;
+
+      var c = CONFIG.COLUMNS || {};
+      var userIdCol = c.USER_ID || (CONFIG.ID_COLUMNS && CONFIG.ID_COLUMNS.USERS) || 'User ID'; // TODO: Move USER_ID header into CONFIG.COLUMNS.USER_ID
+      var roleCol = c.ROLE || 'Role'; // TODO: Move ROLE header into CONFIG.COLUMNS
+
+      var userRecords = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, userIdCol, userId);
+      if (!userRecords || userRecords.length === 0) return false;
+
+      return userRecords[0][roleCol] === role;
+    } catch (error) {
+      Logger.log('SessionService.hasRole error: ' + (error && error.message ? error.message : error));
+      return false;
+    }
+  },
+
+  withSession: function(sessionToken, callback) {
+    try {
+      if (!sessionToken || (typeof sessionToken === 'string' && sessionToken.trim() === '')) {
+        var msg = (CONFIG.MESSAGES && CONFIG.MESSAGES.SESSION_REQUIRED) ? CONFIG.MESSAGES.SESSION_REQUIRED : 'Session token required';
+        throw new Error(msg);
+      }
+
+      var userId = this.getCurrentUser(sessionToken);
+      if (!userId) {
+        var msg2 = (CONFIG.MESSAGES && CONFIG.MESSAGES.SESSION_INVALID) ? CONFIG.MESSAGES.SESSION_INVALID : 'Invalid session';
+        throw new Error(msg2);
+      }
+
       return callback(userId);
     } catch (error) {
-      Logger.log("Error in withSession execution: " + error.message);
+      Logger.log('SessionService.withSession error: ' + (error && error.message ? error.message : error));
       throw error;
     }
   }
 };
+
+Object.freeze(SessionService);
+

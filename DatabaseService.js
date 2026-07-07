@@ -1,231 +1,366 @@
 /**
- * Data Access Layer (DAL) for the College Event Attendance Management System.
- * Handles pure data interactions with Google Sheets.
+ * Data Access Layer (DAL) - BVC Engineering College
+ * Production-ready, CONFIG-driven Google Sheets abstraction layer.
  */
-
 const DatabaseService = {
   _cache: {},
+  _spreadsheet: null,
 
   /**
-   * Gets the active spreadsheet using the ID from CONFIG, or active spreadsheet if ID is empty.
-   * @returns {GoogleAppsScript.Spreadsheet.Spreadsheet}
+   * PRIVATE: Resolves actual sheet name to logical CONFIG key.
+   */
+  _getLogicalSheetKey: function(sheetName) {
+    if (CONFIG.SHEETS && CONFIG.SHEETS[sheetName]) return sheetName;
+    for (var key in CONFIG.SHEETS) {
+      if (CONFIG.SHEETS[key] === sheetName) return key;
+    }
+    return sheetName;
+  },
+
+  /**
+   * Lazily loads and returns the active spreadsheet instance.
    */
   getSpreadsheet: function() {
-    if (CONFIG && CONFIG.SPREADSHEET && CONFIG.SPREADSHEET.ID) {
-      return SpreadsheetApp.openById(CONFIG.SPREADSHEET.ID);
+    try {
+      if (!this._spreadsheet) this._spreadsheet = SpreadsheetApp.openById(CONFIG.SPREADSHEET.ID);
+      return this._spreadsheet;
+    } catch (e) {
+      Logger.log('DatabaseService.getSpreadsheet error: ' + (e && e.message ? e.message : e));
+      return null;
     }
-    return SpreadsheetApp.getActiveSpreadsheet();
   },
 
   /**
-   * Helper function to get a sheet by name safely.
-   * Performs a case-insensitive and space-trimmed search if exact match fails.
-   * @param {string} sheetName
-   * @returns {GoogleAppsScript.Spreadsheet.Sheet}
+   * Gets a sheet instance by logical name or physical sheet name from configuration.
    */
   getSheet: function(sheetName) {
-    const ss = this.getSpreadsheet();
-    let sheet = ss.getSheetByName(sheetName);
-    
-    // Fallback: Case-insensitive and space-trimmed search
-    if (!sheet) {
-      const allSheets = ss.getSheets();
-      const targetName = String(sheetName).trim().toLowerCase();
-      for (let i = 0; i < allSheets.length; i++) {
-        const sName = String(allSheets[i].getName()).trim().toLowerCase();
-        if (sName === targetName) {
-          sheet = allSheets[i];
-          break;
-        }
+    try {
+      const logicalKey = this._getLogicalSheetKey(sheetName);
+      const actualSheetName = (CONFIG.SHEETS && CONFIG.SHEETS[logicalKey]) ? CONFIG.SHEETS[logicalKey] : sheetName;
+
+      const ss = this.getSpreadsheet();
+      if (!ss) return null;
+
+      const sheet = ss.getSheetByName(actualSheetName);
+      if (!sheet) {
+        Logger.log("DatabaseService.getSheet: sheet not found: " + actualSheetName);
+        return null;
       }
+      return sheet;
+    } catch (e) {
+      Logger.log("DatabaseService.getSheet error: ' + e.message");
+      return null;
     }
-    
-    if (!sheet) {
-      throw new Error('Sheet not found: ' + sheetName);
-    }
-    return sheet;
   },
 
   /**
-   * Gets the header row (first row) of a sheet.
-   * @param {string} sheetName
-   * @returns {string[]} Array of header names.
+   * Returns header row values for a sheet (cached).
    */
   getHeaderRow: function(sheetName) {
-    const sheet = this.getSheet(sheetName);
-    const lastColumn = sheet.getLastColumn();
-    if (lastColumn === 0) return [];
-    return sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+    try {
+      const logicalKey = this._getLogicalSheetKey(sheetName);
+      if (this._cache[logicalKey] && this._cache[logicalKey].headers) return this._cache[logicalKey].headers;
+
+      const sheet = this.getSheet(logicalKey);
+      if (!sheet) return [];
+
+      const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0] || [];
+      if (!this._cache[logicalKey]) this._cache[logicalKey] = {};
+      this._cache[logicalKey].headers = headers;
+      return headers;
+    } catch (e) {
+      Logger.log('DatabaseService.getHeaderRow error: ' + (e && e.message ? e.message : e));
+      return [];
+    }
   },
 
-  /**
-   * Gets the number of data rows in a sheet (excluding the header row).
-   * @param {string} sheetName
-   * @returns {number} The count of data rows.
-   */
-  getRowCount: function(sheetName) {
-    const sheet = this.getSheet(sheetName);
-    const lastRow = sheet.getLastRow();
-    return lastRow > 1 ? lastRow - 1 : 0;
+  mapRowToObject: function(headers, row) {
+    let obj = {};
+    headers.forEach(function(h, i) { obj[h] = row[i]; });
+    return obj;
   },
 
-  /**
-   * Reads all rows from a sheet as an array of objects mapping headers to values.
-   * @param {string} sheetName
-   * @returns {object[]} Array of record objects.
-   */
+  mapObjectToRow: function(headers, object) {
+    return headers.map(function(h) { return object[h] ?? ""; });
+  },
+
+  getHeaders: function(sheetName) {
+    return this.getHeaderRow(sheetName);
+  },
+
+  count: function(sheetName) {
+    try {
+      const sheet = this.getSheet(sheetName);
+      if (!sheet) return 0;
+      return Math.max(0, sheet.getLastRow() - 1);
+    } catch (e) {
+      Logger.log('DatabaseService.count error: ' + (e && e.message ? e.message : e));
+      return 0;
+    }
+  },
+
+  clearCache: function(sheetName) {
+    try {
+      if (sheetName) delete this._cache[this._getLogicalSheetKey(sheetName)];
+      else this._cache = {};
+    } catch (e) {
+      Logger.log('DatabaseService.clearCache error: ' + (e && e.message ? e.message : e));
+    }
+  },
+
   readAllRows: function(sheetName) {
-    if (!this._cache) this._cache = {};
-    if (this._cache[sheetName]) {
-      return this._cache[sheetName];
-    }
-    const sheet = this.getSheet(sheetName);
-    const lastRow = sheet.getLastRow();
-    const lastColumn = sheet.getLastColumn();
-    
-    if (lastRow <= 1) return [];
+    try {
+      const logicalKey = this._getLogicalSheetKey(sheetName);
+      const cached = this._cache[logicalKey];
+      if (cached && cached.records) return cached.records;
 
-    const dataRange = sheet.getRange(1, 1, lastRow, lastColumn).getValues();
-    const headers = dataRange.shift();
-    
-    const records = dataRange.map(row => {
-      let record = {};
-      headers.forEach((header, index) => {
-        record[header] = row[index];
-      });
-      return record;
+      const sheet = this.getSheet(logicalKey);
+      if (!sheet) return [];
+
+      const data = sheet.getDataRange().getValues();
+      if (!data || data.length <= 1) return [];
+
+      const headers = data.shift();
+      const records = data.map(function(row) { return DatabaseService.mapRowToObject(headers, row); });
+
+      this._cache[logicalKey] = { records: records, headers: headers };
+      return records;
+    } catch (e) {
+      Logger.log('DatabaseService.readAllRows error: ' + (e && e.message ? e.message : e));
+      return [];
+    }
+  },
+
+  getRows: function(sheetName, limit, offset) {
+    try {
+      const data = this.readAllRows(sheetName);
+      const l = Number(limit) || 0;
+      const o = Number(offset) || 0;
+      return data.slice(o, o + l);
+    } catch (e) {
+      Logger.log('DatabaseService.getRows error: ' + (e && e.message ? e.message : e));
+      return [];
+    }
+  },
+
+  exists: function(sheetName, key, val) {
+    try {
+      return Boolean(this.findOne(sheetName, key, val));
+    } catch (e) {
+      Logger.log('DatabaseService.exists error: ' + (e && e.message ? e.message : e));
+      return false;
+    }
+  },
+
+  findOne: function(sheetName, key, val, includeDeleted) {
+  try {
+    includeDeleted = includeDeleted === true; // default false
+    return this.readAllRows(sheetName).find(function(r) {
+      if (!includeDeleted && r[CONFIG.COLUMNS.DELETION_FLAG] === true) return false;
+      return String(r[key]) === String(val);
     });
-
-    if (sheetName === CONFIG.SHEETS.EVENTS) {
-      Logger.log("DatabaseService.readAllRows(" + sheetName + "): Read " + records.length + " rows");
-      if (records.length > 0) {
-        Logger.log("First event object from DB: " + JSON.stringify(records[0]));
-      }
-    }
-    
-    if (sheetName === CONFIG.SHEETS.USERS) {
-      Logger.log("STEP 5 - DatabaseService readAllRows for USERS: Length = " + records.length);
-    }
-
-    this._cache[sheetName] = records;
-    return records;
-  },
-
-  /**
-   * Inserts a new row into the specified sheet.
-   * @param {string} sheetName
-   * @param {object} recordData
-   * @returns {boolean} True if inserted successfully.
-   */
-  insertRow: function(sheetName, recordData) {
-    if (this._cache) delete this._cache[sheetName];
-    Logger.log("BACKEND STEP 5.1: DatabaseService.insertRow started for sheet: " + sheetName);
-    const sheet = this.getSheet(sheetName);
-    const headers = this.getHeaderRow(sheetName);
-    
-    if (headers.length === 0) {
-      Logger.log("BACKEND EXCEPTION: No headers found in sheet.");
-      throw new Error('Cannot insert into a sheet without headers.');
-    }
-    
-    const rowData = headers.map(header => {
-      return recordData.hasOwnProperty(header) ? recordData[header] : '';
-    });
-
-    Logger.log("BACKEND STEP 5.2: Appending row...");
-    sheet.appendRow(rowData);
-    Logger.log("BACKEND STEP 5.3: Append complete.");
-    return true;
-  },
-
-  /**
-   * Updates a row based on a unique identifying column and value.
-   * @param {string} sheetName
-   * @param {string} searchColumn
-   * @param {any} searchValue
-   * @param {object} updateData
-   * @returns {boolean} True if updated successfully.
-   */
-  updateRow: function(sheetName, searchColumn, searchValue, updateData) {
-    if (this._cache) delete this._cache[sheetName];
-    const sheet = this.getSheet(sheetName);
-    const records = this.readAllRows(sheetName);
-    const headers = this.getHeaderRow(sheetName);
-    
-    let rowIndex = -1;
-    for (let i = 0; i < records.length; i++) {
-      if (records[i][searchColumn] === searchValue) {
-        rowIndex = i + 2; 
-        break;
-      }
-    }
-
-    if (rowIndex === -1) {
-      throw new Error('Record not found for update.');
-    }
-
-    const currentRowValues = sheet.getRange(rowIndex, 1, 1, headers.length).getValues()[0];
-    const newRowValues = headers.map((header, index) => {
-      return updateData.hasOwnProperty(header) ? updateData[header] : currentRowValues[index];
-    });
-
-    sheet.getRange(rowIndex, 1, 1, headers.length).setValues([newRowValues]);
-    return true;
-  },
-
-  /**
-   * Deletes a row based on a unique identifying column and value.
-   * @param {string} sheetName
-   * @param {string} searchColumn
-   * @param {any} searchValue
-   * @returns {boolean} True if deleted successfully.
-   */
-  deleteRow: function(sheetName, searchColumn, searchValue) {
-    if (this._cache) delete this._cache[sheetName];
-    const sheet = this.getSheet(sheetName);
-    const records = this.readAllRows(sheetName);
-    
-    let rowIndex = -1;
-    for (let i = 0; i < records.length; i++) {
-      if (records[i][searchColumn] === searchValue) {
-        rowIndex = i + 2; 
-        break;
-      }
-    }
-
-    if (rowIndex === -1) {
-      throw new Error('Record not found for deletion.');
-    }
-
-    sheet.deleteRow(rowIndex);
-    return true;
-  },
-
-  /**
-   * Finds records that match a specific column and value.
-   * @param {string} sheetName
-   * @param {string} searchColumn
-   * @param {any} searchValue
-   * @returns {object[]} Array of matched records.
-   */
-  findByColumn: function(sheetName, searchColumn, searchValue) {
-  const records = this.readAllRows(sheetName);
-
-  return records.filter(function(record) {
-    return String(record[searchColumn]).trim() ===
-           String(searchValue).trim();
-  });
+  } catch (e) {
+    Logger.log('DatabaseService.findOne error: ' + (e && e.message ? e.message : e));
+    return undefined;
+  }
 },
 
-  /**
-   * Checks if a record exists based on a specific column and value.
-   * @param {string} sheetName
-   * @param {string} searchColumn
-   * @param {any} searchValue
-   * @returns {boolean} True if exists, false otherwise.
-   */
-  exists: function(sheetName, searchColumn, searchValue) {
-    const records = this.findByColumn(sheetName, searchColumn, searchValue);
-    return records.length > 0;
+  findByColumn: function(sheetName, col, val, options) {
+    try {
+      options = options || { caseSensitive: false, strict: false };
+      return this.readAllRows(sheetName).filter(function(r) {
+        let target = String(r[col] || "").trim();
+        let search = String(val).trim();
+        if (!options.caseSensitive) { target = target.toLowerCase(); search = search.toLowerCase(); }
+        return options.strict ? target === search : target.indexOf(search) !== -1;
+      });
+    } catch (e) {
+      Logger.log('DatabaseService.findByColumn error: ' + (e && e.message ? e.message : e));
+      return [];
+    }
+  },
+
+  filter: function(sheetName, predicate) {
+    try {
+      const data = this.readAllRows(sheetName);
+      return typeof predicate === 'function' ? data.filter(predicate) : [];
+    } catch (e) {
+      Logger.log('DatabaseService.filter error: ' + (e && e.message ? e.message : e));
+      return [];
+    }
+  },
+
+  sortByColumn: function(sheetName, col, ascending) {
+    try {
+      ascending = ascending !== false;
+      const data = [].concat(this.readAllRows(sheetName));
+      return data.sort(function(a, b) {
+        const valA = a[col] ?? "", valB = b[col] ?? "";
+        return ascending ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
+      });
+    } catch (e) {
+      Logger.log('DatabaseService.sortByColumn error: ' + (e && e.message ? e.message : e));
+      return [];
+    }
+  },
+
+  sort: function(sheetName, col, ascending) {
+    return this.sortByColumn(sheetName, col, ascending);
+  },
+
+  paginate: function(sheetName, limit, offset) {
+    return this.getRows(sheetName, limit, offset);
+  },
+
+  insertRow: function(sheetName, recordData) {
+    return this.insertRows(sheetName, [recordData])[0];
+  },
+
+insertRows: function(sheetName, records) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const logicalKey = this._getLogicalSheetKey(sheetName);
+    const sheet = this.getSheet(logicalKey);
+    if (!sheet) throw new Error('Sheet not available for ' + logicalKey);
+
+    const headers = this.getHeaderRow(logicalKey);
+    if (!headers || headers.length === 0) throw new Error('Missing headers for ' + logicalKey);
+
+    const now = new Date().toISOString();
+    const rows = records.map(function(record) {
+      // Fix 1: Generate ID before validation
+      record[CONFIG.ID_COLUMNS[logicalKey]] = DatabaseService.generateNextId(logicalKey);
+      DatabaseService.validateRecord(logicalKey, record);
+      
+      if (CONFIG.COLUMNS.CREATED_AT) record[CONFIG.COLUMNS.CREATED_AT] = now;
+      if (CONFIG.COLUMNS.UPDATED_AT) record[CONFIG.COLUMNS.UPDATED_AT] = new Date().toISOString();
+      if (CONFIG.COLUMNS.CREATED_BY && record[CONFIG.COLUMNS.CREATED_BY] === undefined) record[CONFIG.COLUMNS.CREATED_BY] = "";
+      if (CONFIG.COLUMNS.UPDATED_BY && record[CONFIG.COLUMNS.UPDATED_BY] === undefined) record[CONFIG.COLUMNS.UPDATED_BY] = "";
+Logger.log("===== RECORD BEFORE MAP =====");
+Logger.log(JSON.stringify(record, null, 2));
+
+Logger.log("===== HEADERS =====");
+Logger.log(JSON.stringify(headers, null, 2));
+      return DatabaseService.mapObjectToRow(headers, record);
+    });
+
+    sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, headers.length).setValues(rows);
+    this.clearCache(logicalKey);
+    records.forEach(function(r) { DatabaseService.onInsert(logicalKey, r); });
+    return records;
+  } catch (e) {
+    Logger.log('DatabaseService.insertRows error: ' + (e && e.message ? e.message : e));
+    return [];
+  } finally {
+    lock.releaseLock();
   }
+},
+
+
+  updateRow: function(sheetName, key, val, updates) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(10000);
+    try {
+      const logicalKey = this._getLogicalSheetKey(sheetName);
+      const sheet = this.getSheet(logicalKey);
+      const headers = this.getHeaderRow(logicalKey);
+      const keyIndex = headers.indexOf(key);
+      const data = sheet.getDataRange().getValues();
+      const rowIdx = data.slice(1).findIndex(function(row) { return String(row[keyIndex]) === String(val); });
+      
+      if (rowIdx === -1) throw new Error('Record not found.');
+      const record = this.mapRowToObject(headers, data[rowIdx + 1]);
+      for (let prop in updates) { record[prop] = updates[prop]; }
+      if (CONFIG.COLUMNS.UPDATED_AT) record[CONFIG.COLUMNS.UPDATED_AT] = new Date().toISOString();
+
+      sheet.getRange(rowIdx + 2, 1, 1, headers.length).setValues([this.mapObjectToRow(headers, record)]);
+      this.clearCache(logicalKey);
+      this.onUpdate(logicalKey, val, record);
+      return record;
+    } catch (e) {
+      Logger.log('DatabaseService.updateRow error: ' + (e && e.message ? e.message : e));
+      return null;
+    } finally {
+      lock.releaseLock();
+    }
+  },
+
+  batchUpdate: function(sheetName, key, vals, updates) {
+    try {
+      const logicalKey = this._getLogicalSheetKey(sheetName);
+      return (Array.isArray(vals) ? vals : []).map(function(v) { return DatabaseService.updateRow(logicalKey, key, v, updates || {}); });
+    } catch (e) { return []; }
+  },
+
+  hardDelete: function(sheetName, key, val) {
+    try {
+      const logicalKey = this._getLogicalSheetKey(sheetName);
+      const sheet = this.getSheet(logicalKey);
+      const headers = this.getHeaderRow(logicalKey);
+      const keyIndex = headers.indexOf(key);
+      const data = sheet.getDataRange().getValues();
+      const rowIdx = data.slice(1).findIndex(function(row) { return String(row[keyIndex]) === String(val); });
+      if (rowIdx !== -1) {
+        sheet.deleteRow(rowIdx + 2);
+        this.clearCache(logicalKey);
+        this.onDelete(logicalKey, val);
+      }
+    } catch (e) { Logger.log('DatabaseService.hardDelete error: ' + (e && e.message ? e.message : e)); }
+  },
+
+  softDelete: function(sheetName, key, val, deletedValue) {
+    try {
+      const logicalKey = this._getLogicalSheetKey(sheetName);
+      const updateData = {};
+      updateData[CONFIG.COLUMNS.DELETION_FLAG] = (deletedValue !== undefined) ? deletedValue : true;
+      if (CONFIG.COLUMNS.UPDATED_AT) updateData[CONFIG.COLUMNS.UPDATED_AT] = new Date().toISOString();
+      return Boolean(this.updateRow(logicalKey, key, val, updateData));
+    } catch (e) { return false; }
+  },
+
+  deleteRow: function(sheetName, key, val) {
+    try {
+      const logicalKey = this._getLogicalSheetKey(sheetName);
+      if (CONFIG && CONFIG.COLUMNS && CONFIG.COLUMNS.DELETION_FLAG) {
+        if (this.softDelete(logicalKey, key, val)) return true;
+      }
+      this.hardDelete(logicalKey, key, val);
+      return true;
+    } catch (e) { return false; }
+  },
+
+ validateRecord: function(sheetName, data) {
+    const logicalKey = this._getLogicalSheetKey(sheetName);
+    const required = CONFIG.REQUIRED_FIELDS[logicalKey] || [];
+    required.forEach(function(f) { if (!data[f]) throw new Error('Missing field: ' + f); });
+
+    const idCol = CONFIG.ID_COLUMNS[logicalKey];
+    if (idCol && data[idCol] !== undefined) {
+      // Fix 2: Explicitly use DatabaseService to maintain correct context
+      if (DatabaseService.findOne(logicalKey, idCol, data[idCol])) throw new Error('Duplicate record.');
+    }
+  },
+
+  generateNextId: function(sheetName) {
+    const logicalKey = this._getLogicalSheetKey(sheetName);
+    const cfg = CONFIG.ID_FORMATS[logicalKey];
+    const idCol = CONFIG.ID_COLUMNS[logicalKey];
+    if (!cfg || !idCol) throw new Error('Missing ID format/column config for ' + logicalKey);
+
+    const records = this.readAllRows(logicalKey);
+    const ids = records.map(function(r) {
+        const raw = r[idCol];
+        return (raw === undefined || raw === null || raw === '') ? NaN : parseInt(String(raw).replace(cfg.prefix, ''), 10);
+      }).filter(function(n) { return !isNaN(n); });
+
+    return cfg.prefix + (Math.max.apply(null, [0].concat(ids)) + 1).toString().padStart(cfg.digits, '0');
+  },
+
+  onInsert: function(s, d) { Logger.log('Audit: Insert ' + s); },
+  onUpdate: function(s, k, d) { Logger.log('Audit: Update ' + s); },
+  onDelete: function(s, k) { Logger.log('Audit: Delete ' + s); },
+  beginTransaction: function() { Logger.log('Transaction Started'); },
+  commit: function() { Logger.log('Transaction Committed'); },
+  rollback: function() { Logger.log('Transaction Rollback'); }
 };

@@ -114,6 +114,13 @@ App.Modules.users = {
     document.getElementById('userUsernameGroup').classList.add('d-none');
     document.getElementById('userCreatedAtGroup').classList.add('d-none');
     
+    // Show the User ID input field for new users
+    const customIdField = document.getElementById('userCustomId');
+    if (customIdField) {
+      customIdField.value = '';
+      customIdField.disabled = false;
+    }
+    
     const pwdGroup = document.getElementById('userPasswordGroup');
     const confirmPwdGroup = document.getElementById('userConfirmPasswordGroup');
     pwdGroup.classList.remove('d-none');
@@ -221,6 +228,14 @@ App.Modules.users = {
     document.getElementById('userModalLabel').textContent = 'Edit User';
     
     document.getElementById('userOriginalId').value = user.user_id;
+    
+    // User ID field - read-only for edit
+    const customIdField = document.getElementById('userCustomId');
+    if (customIdField) {
+      customIdField.value = user.user_id || '';
+      customIdField.readOnly = true;
+      customIdField.disabled = true;
+    }
     
     // Read-only fields
     const idDisplay = document.getElementById('userIdDisplay');
@@ -337,12 +352,14 @@ App.Modules.users = {
     this.setModalLoading(true);
     
     const emailVal = document.getElementById('userEmail').value.trim();
+    const userCustomId = document.getElementById('userCustomId').value.trim();
     const userData = {
       full_name: document.getElementById('userName').value.trim(),
       email: emailVal,
       department: document.getElementById('userDepartment').value,
       role: document.getElementById('userRole').value,
-      status: document.getElementById('userStatus').value
+      status: document.getElementById('userStatus').value,
+      user_id: userCustomId
     };
     
     if (!isEdit) {

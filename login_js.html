@@ -71,6 +71,12 @@ App.Modules.login = {
         if (res && res.success === true && res.session) {
           this.failedAttempts = 0; // Reset
           
+          // Block Coordinator login - only Admin access allowed
+          if (res.user && res.user.role === 'Coordinator') {
+            this.handleFailedAttempt('Coordinator dashboard is not available yet. Only Admin login is allowed.');
+            return;
+          }
+          
           if (remember) {
             localStorage.setItem('bvc_remember_username', userIn);
           } else {

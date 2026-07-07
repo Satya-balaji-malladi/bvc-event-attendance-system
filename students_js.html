@@ -79,19 +79,7 @@ App.Modules.students = {
         const roll = btn.getAttribute('data-id');
         
         if (action === 'view-student') this.openViewStudentModal(roll);
-        else if (action === 'edit-student') this.openEditStudentModal(roll);
-        else if (action === 'delete-student') this.openDeleteStudentModal(roll);
       });
-    }
-
-    const addStudentBtn = document.querySelector('button[data-action="add-student"]');
-    if (addStudentBtn) {
-      addStudentBtn.addEventListener('click', () => this.openAddStudentModal());
-    }
-
-    const studentForm = document.getElementById('studentForm');
-    if (studentForm) {
-      studentForm.addEventListener('submit', (e) => this.handleStudentSubmit(e));
     }
 
     const confirmDeleteBtn = document.getElementById('studentConfirmDeleteBtn');
@@ -224,9 +212,7 @@ App.Modules.students = {
           <td>${App.Utils.escapeHtml(student.mobile)}</td>
           <td>${statusBadge}</td>
           <td class="text-end">
-            <button class="btn btn-sm btn-light text-primary me-1" data-action="view-student" data-id="${App.Utils.escapeHtml(student.roll_number)}" title="View"><i class="bi bi-eye"></i></button>
-            <button class="btn btn-sm btn-light text-warning me-1" data-action="edit-student" data-id="${App.Utils.escapeHtml(student.roll_number)}" title="Edit"><i class="bi bi-pencil"></i></button>
-            <button class="btn btn-sm btn-light text-danger" data-action="delete-student" data-id="${App.Utils.escapeHtml(student.roll_number)}" title="Delete"><i class="bi bi-trash"></i></button>
+            <button class="btn btn-sm btn-light text-primary" data-action="view-student" data-id="${App.Utils.escapeHtml(student.roll_number)}" title="View"><i class="bi bi-eye"></i></button>
           </td>
         </tr>
       `;

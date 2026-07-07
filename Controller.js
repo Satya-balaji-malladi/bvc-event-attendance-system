@@ -83,7 +83,7 @@ const Controller = {
      * @returns {object} Response object.
      */
     createUser: function(sessionToken, userData) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       Logger.log("BACKEND STEP 2: Controller.User.createUser started");
       const result = UserService.createUser(userData);
       Logger.log("BACKEND STEP 7: Controller.User.createUser finished.");
@@ -97,7 +97,7 @@ const Controller = {
      * @returns {object|null}
      */
     getUserById: function(sessionToken, userId) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return UserService.getUserById(userId);
       });
     },
@@ -108,7 +108,7 @@ const Controller = {
      * @returns {object|null}
      */
     getUserByUsername: function(sessionToken, username) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return UserService.getUserByUsername(username);
       });
     },
@@ -117,7 +117,7 @@ const Controller = {
      * @returns {object[]} Array of all users.
      */
     getAllUsers: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       const users = UserService.getAllUsers();
       Logger.log("STEP 3 - Controller.User.getAllUsers received from UserService: " + typeof users + " / Array? " + Array.isArray(users) + " / Length: " + (users ? users.length : 0));
       return users || [];
@@ -131,7 +131,7 @@ const Controller = {
      * @returns {object} Response object.
      */
     updateUser: function(sessionToken, userId, userData) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return UserService.updateUser(userId, userData);
       });
     },
@@ -142,7 +142,7 @@ const Controller = {
      * @returns {object} Response object.
      */
     deleteUser: function(sessionToken, userId) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return UserService.deleteUser(userId);
       });
     },
@@ -153,7 +153,7 @@ const Controller = {
      * @returns {object} Response object.
      */
     deactivateUser: function(sessionToken, userId) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return UserService.deactivateUser(userId);
       });
     },
@@ -164,7 +164,7 @@ const Controller = {
      * @returns {object} Response object.
      */
     resetPassword: function(sessionToken, userId) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return UserService.resetPassword(userId);
       });
     },
@@ -175,7 +175,7 @@ const Controller = {
      * @returns {object} Response object.
      */
     activateUser: function(sessionToken, userId) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return UserService.activateUser(userId);
       });
     },
@@ -186,7 +186,7 @@ const Controller = {
      * @returns {object[]}
      */
     searchUsers: function(sessionToken, keyword) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return UserService.searchUsers(keyword);
       });
     },
@@ -199,7 +199,7 @@ const Controller = {
      * @returns {object} Response object.
      */
     changePassword: function(sessionToken, userId, oldPassword, newPassword) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return UserService.changePassword(userId, oldPassword, newPassword);
       });
     },
@@ -215,7 +215,7 @@ const Controller = {
      * @returns {object} Response object.
      */
     createStudent: function(sessionToken, studentData) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return StudentService.createStudent(studentData);
       });
     },
@@ -227,7 +227,7 @@ const Controller = {
      * @returns {object} Response object.
      */
     updateStudent: function(sessionToken, rollNumber, studentData) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return StudentService.updateStudent(rollNumber, studentData);
       });
     },
@@ -238,7 +238,7 @@ const Controller = {
      * @returns {object} Response object.
      */
     deleteStudent: function(sessionToken, rollNumber) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return StudentService.deleteStudent(rollNumber);
       });
     },
@@ -249,7 +249,7 @@ const Controller = {
      * @returns {object|null}
      */
     getStudentByRollNumber: function(sessionToken, rollNumber) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return StudentService.getStudentByRollNumber(rollNumber);
       });
     },
@@ -259,7 +259,7 @@ const Controller = {
      * @returns {object[]}
      */
     getAllStudents: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return StudentService.getAllStudents();
       });
     },
@@ -270,7 +270,7 @@ const Controller = {
      * @returns {object[]}
      */
     searchStudents: function(sessionToken, keyword) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return StudentService.searchStudents(keyword);
       });
     },
@@ -281,7 +281,7 @@ const Controller = {
      * @returns {object[]}
      */
     getStudentsByDepartment: function(sessionToken, department) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return StudentService.getStudentsByDepartment(department);
       });
     },
@@ -292,7 +292,7 @@ const Controller = {
      * @returns {object[]}
      */
     getStudentsByYear: function(sessionToken, year) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return StudentService.getStudentsByYear(year);
       });
     },
@@ -303,7 +303,7 @@ const Controller = {
      * @returns {object[]}
      */
     getStudentsBySection: function(sessionToken, section) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return StudentService.getStudentsBySection(section);
       });
     },
@@ -331,7 +331,7 @@ const Controller = {
      * @returns {object} Response object.
      */
     updateEvent: function(sessionToken, eventId, eventData) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       Logger.log("BACKEND: Controller.Event.updateEvent started for " + eventId);
       const result = EventService.updateEvent(eventId, eventData);
       Logger.log("BACKEND: Controller.Event.updateEvent finished.");
@@ -345,7 +345,7 @@ const Controller = {
      * @returns {object} Response object.
      */
     deleteEvent: function(sessionToken, eventId) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return EventService.deleteEvent(eventId);
       });
     },
@@ -356,7 +356,7 @@ const Controller = {
      * @returns {object|null}
      */
     getEventById: function(sessionToken, eventId) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       Logger.log("BACKEND: Controller.Event.getEventById started for " + eventId);
       const result = EventService.getEventById(eventId);
       Logger.log("BACKEND: Controller.Event.getEventById finished.");
@@ -369,7 +369,7 @@ const Controller = {
      * @returns {object} Response object.
      */
     getAllEvents: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       const events = EventService.getAllEvents();
       Logger.log("Controller.Event.getAllEvents() events length: " + (events ? events.length : "null"));
       return events || [];
@@ -382,7 +382,7 @@ const Controller = {
      * @returns {object[]}
      */
     searchEvents: function(sessionToken, keyword) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return EventService.searchEvents(keyword);
       });
     },
@@ -393,7 +393,7 @@ const Controller = {
      * @returns {object[]}
      */
     getEventsByCoordinator: function(sessionToken, coordinatorId) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return EventService.getEventsByCoordinator(coordinatorId);
       });
     },
@@ -404,7 +404,7 @@ const Controller = {
      * @returns {object[]}
      */
     getEventsByStatus: function(sessionToken, status) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return EventService.getEventsByStatus(status);
       });
     },
@@ -415,7 +415,7 @@ const Controller = {
      * @returns {object[]}
      */
     getEventsByDate: function(sessionToken, date) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return EventService.getEventsByDate(date);
       });
     },
@@ -432,10 +432,21 @@ const Controller = {
      * @returns {object} Response object.
      */
     markAttendance: function(sessionToken, attendanceData) {
-      return SessionService.withSession(sessionToken, function(userId) {
-      return AttendanceService.markAttendance(attendanceData, null);
+      return SessionService.withSession(sessionToken, function(sessionUserId) {
+        try {
+          // Validate request payload (minimal null safety)
+          if (!attendanceData || typeof attendanceData !== 'object') {
+            return Utils.buildResponse(false, 'Invalid attendance request');
+          }
+          const res = AttendanceService.markAttendance(attendanceData, sessionUserId);
+          return res && (typeof res === 'object') && (res.success !== undefined) ? res : Utils.buildResponse(true, 'Attendance processed', { result: res });
+        } catch (e) {
+          Logger.log('Controller.Attendance.markAttendance error: ' + (e && e.message ? e.message : e));
+          return Utils.buildResponse(false, e && e.message ? e.message : 'Attendance marking failed');
+        }
       });
     },
+
 
     /**
      * Deletes an attendance record.
@@ -443,10 +454,17 @@ const Controller = {
      * @returns {object} Response object.
      */
     deleteAttendance: function(sessionToken, attendanceId) {
-      return SessionService.withSession(sessionToken, function(userId) {
-      return AttendanceService.deleteAttendance(attendanceId, null);
+      return SessionService.withSession(sessionToken, function(sessionUserId) {
+        try {
+          if (!attendanceId) return Utils.buildResponse(false, 'Invalid attendance request');
+          return AttendanceService.deleteAttendance(attendanceId, sessionUserId);
+        } catch (e) {
+          Logger.log('Controller.Attendance.deleteAttendance error: ' + (e && e.message ? e.message : e));
+          return Utils.buildResponse(false, e && e.message ? e.message : 'Attendance deletion failed');
+        }
       });
     },
+
 
     /**
      * Retrieves an attendance record by ID.
@@ -454,7 +472,7 @@ const Controller = {
      * @returns {object|null}
      */
     getAttendanceById: function(sessionToken, attendanceId) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return AttendanceService.getAttendanceById(attendanceId);
       });
     },
@@ -465,7 +483,7 @@ const Controller = {
      * @returns {object[]}
      */
     getAttendanceByEvent: function(sessionToken, eventId) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return AttendanceService.getAttendanceByEvent(eventId);
       });
     },
@@ -476,7 +494,7 @@ const Controller = {
      * @returns {object[]}
      */
     getAttendanceByStudent: function(sessionToken, rollNumber) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return AttendanceService.getAttendanceByStudent(rollNumber);
       });
     },
@@ -487,7 +505,7 @@ const Controller = {
      * @returns {object[]}
      */
     getAttendanceByDate: function(sessionToken, date) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return AttendanceService.getAttendanceByDate(date);
       });
     },
@@ -498,7 +516,7 @@ const Controller = {
      * @returns {object[]}
      */
     getAttendanceByStatus: function(sessionToken, status) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return AttendanceService.getAttendanceByStatus(status);
       });
     },
@@ -510,7 +528,7 @@ const Controller = {
      * @returns {boolean}
      */
     checkAttendanceExists: function(sessionToken, eventId, rollNumber) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return AttendanceService.checkAttendanceExists(eventId, rollNumber);
       });
     },
@@ -521,7 +539,7 @@ const Controller = {
      * @returns {object}
      */
     getEventAttendanceCount: function(sessionToken, eventId) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return AttendanceService.getEventAttendanceCount(eventId);
       });
     },
@@ -532,7 +550,7 @@ const Controller = {
      * @returns {number}
      */
     getStudentAttendanceCount: function(sessionToken, rollNumber) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return AttendanceService.getStudentAttendanceCount(rollNumber);
       });
     },
@@ -543,7 +561,7 @@ const Controller = {
      * @returns {object}
      */
     getStudentAttendanceSummary: function(sessionToken, rollNumber) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return AttendanceService.getStudentAttendanceSummary(rollNumber);
       });
     },
@@ -553,7 +571,7 @@ const Controller = {
      * @returns {object}
      */
     getOverallAttendanceStatistics: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return AttendanceService.getOverallAttendanceStatistics();
       });
     },
@@ -564,7 +582,7 @@ const Controller = {
      * @returns {object|null}
      */
     getAttendanceSummaryByEvent: function(sessionToken, eventId) {
-      return SessionService.withSession(sessionToken, function(userId) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
       return AttendanceService.getAttendanceSummaryByEvent(eventId);
       });
     },
@@ -608,6 +626,56 @@ const Controller = {
       return SessionService.withSession(sessionToken, function(userId) {
         return ReportService.getDateRangeReport(userId, fromDate, toDate);
       });
+    },
+    getAttendanceDefaulters: function(sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getAttendanceDefaulters(userId, filters);
+      });
+    },
+    getTopParticipants: function(sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getTopParticipants(userId, filters);
+      });
+    },
+    getAbsentStudents: function(sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getAbsentStudents(userId, filters);
+      });
+    },
+    getYearWiseReport: function(sessionToken, year) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getYearWiseReport(userId, year);
+      });
+    },
+    getDepartmentComparison: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getDepartmentComparison(userId);
+      });
+    },
+    getMonthlyReport: function(sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getMonthlyReport(userId, filters);
+      });
+    },
+    getEventTrendReport: function(sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getEventTrendReport(userId, filters);
+      });
+    },
+    getCancelledEvents: function(sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getCancelledEvents(userId, filters);
+      });
+    },
+    getCoordinatorPerformance: function(sessionToken, coordinatorId) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getCoordinatorPerformance(userId, coordinatorId);
+      });
+    },
+    getStudentEventHistory: function(sessionToken, rollNumber) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getStudentEventHistory(userId, rollNumber);
+      });
     }
   },
 
@@ -616,30 +684,65 @@ const Controller = {
   // ==========================================
   Participant: {
     getEventParticipants: function(sessionToken, eventId) {
-      return SessionService.withSession(sessionToken, function(userId) {
-      return ParticipantService.getEventParticipants(eventId, null);
+      return SessionService.withSession(sessionToken, function(sessionUserId) {
+        try {
+          if (!eventId) return Utils.buildResponse(false, 'Invalid participant request');
+          return ParticipantService.getEventParticipants(eventId, sessionUserId);
+        } catch (e) {
+          Logger.log('Controller.Participant.getEventParticipants error: ' + (e && e.message ? e.message : e));
+          return Utils.buildResponse(false, e && e.message ? e.message : 'Failed to get participants');
+        }
       });
     },
+
     addParticipant: function(sessionToken, eventId, rollNumber) {
-      return SessionService.withSession(sessionToken, function(userId) {
-      return ParticipantService.addParticipant(eventId, rollNumber, null);
+      return SessionService.withSession(sessionToken, function(sessionUserId) {
+        try {
+          if (!eventId || !rollNumber) return Utils.buildResponse(false, 'Invalid participant request');
+          return ParticipantService.addParticipant(eventId, rollNumber, sessionUserId);
+        } catch (e) {
+          Logger.log('Controller.Participant.addParticipant error: ' + (e && e.message ? e.message : e));
+          return Utils.buildResponse(false, e && e.message ? e.message : 'Failed to add participant');
+        }
       });
     },
+
     removeParticipant: function(sessionToken, eventId, rollNumber) {
-      return SessionService.withSession(sessionToken, function(userId) {
-      return ParticipantService.removeParticipant(eventId, rollNumber, null);
+      return SessionService.withSession(sessionToken, function(sessionUserId) {
+        try {
+          if (!eventId || !rollNumber) return Utils.buildResponse(false, 'Invalid participant request');
+          return ParticipantService.removeParticipant(eventId, rollNumber, sessionUserId);
+        } catch (e) {
+          Logger.log('Controller.Participant.removeParticipant error: ' + (e && e.message ? e.message : e));
+          return Utils.buildResponse(false, e && e.message ? e.message : 'Failed to remove participant');
+        }
       });
     },
+
     restoreParticipant: function(sessionToken, eventId, rollNumber) {
-      return SessionService.withSession(sessionToken, function(userId) {
-      return ParticipantService.restoreParticipant(eventId, rollNumber, null);
+      return SessionService.withSession(sessionToken, function(sessionUserId) {
+        try {
+          if (!eventId || !rollNumber) return Utils.buildResponse(false, 'Invalid participant request');
+          return ParticipantService.restoreParticipant(eventId, rollNumber, sessionUserId);
+        } catch (e) {
+          Logger.log('Controller.Participant.restoreParticipant error: ' + (e && e.message ? e.message : e));
+          return Utils.buildResponse(false, e && e.message ? e.message : 'Failed to restore participant');
+        }
       });
     },
+
     checkEligibility: function(sessionToken, eventId, rollNumber) {
-      return SessionService.withSession(sessionToken, function(userId) {
-      return ParticipantService.checkEligibility(eventId, rollNumber, null);
+      return SessionService.withSession(sessionToken, function(sessionUserId) {
+        try {
+          if (!eventId || !rollNumber) return Utils.buildResponse(false, 'Invalid participant request');
+          return ParticipantService.checkEligibility(eventId, rollNumber, sessionUserId);
+        } catch (e) {
+          Logger.log('Controller.Participant.checkEligibility error: ' + (e && e.message ? e.message : e));
+          return Utils.buildResponse(false, e && e.message ? e.message : 'Failed to check eligibility');
+        }
       });
     },
+
   },
 
   // ==========================================

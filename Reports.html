@@ -69,9 +69,19 @@
             <select class="form-select form-select-sm" id="reportTypeSelect">
               <option value="event" selected>Event Report</option>
               <option value="student">Student Report</option>
+              <option value="student_history">Student Event History</option>
               <option value="department">Department Report</option>
+              <option value="dept_comparison">Department Comparison</option>
               <option value="coordinator">Coordinator Report</option>
+              <option value="coord_performance">Coordinator Performance</option>
               <option value="daterange">Date Range Report</option>
+              <option value="monthly">Monthly Report</option>
+              <option value="event_trend">Event Trend Report</option>
+              <option value="yearwise">Year Wise Report</option>
+              <option value="defaulters">Attendance Defaulters</option>
+              <option value="top_participants">Top Participants</option>
+              <option value="absent">Absent Students</option>
+              <option value="cancelled">Cancelled Events</option>
             </select>
           </div>
           <div class="col-md-2 d-none" id="filterEventIdWrapper">
@@ -106,6 +116,46 @@
                <option value="Completed">Completed</option>
                <option value="Upcoming">Upcoming</option>
             </select>
+          </div>
+          <div class="col-md-2 d-none" id="filterCalendarYearWrapper">
+            <label class="form-label text-muted small mb-1">Calendar Year</label>
+            <input type="number" class="form-control form-control-sm" id="filterCalendarYear" placeholder="2026" min="2020" max="2099">
+          </div>
+          <div class="col-md-2 d-none" id="filterYearWrapper">
+            <label class="form-label text-muted small mb-1">Year</label>
+            <select class="form-select form-select-sm" id="filterYear">
+               <option value="">All Years</option>
+               <option value="1">1st Year</option>
+               <option value="2">2nd Year</option>
+               <option value="3">3rd Year</option>
+               <option value="4">4th Year</option>
+            </select>
+          </div>
+          <div class="col-md-2 d-none" id="filterMonthWrapper">
+            <label class="form-label text-muted small mb-1">Month</label>
+            <select class="form-select form-select-sm" id="filterMonth">
+               <option value="">Select Month</option>
+               <option value="1">January</option>
+               <option value="2">February</option>
+               <option value="3">March</option>
+               <option value="4">April</option>
+               <option value="5">May</option>
+               <option value="6">June</option>
+               <option value="7">July</option>
+               <option value="8">August</option>
+               <option value="9">September</option>
+               <option value="10">October</option>
+               <option value="11">November</option>
+               <option value="12">December</option>
+            </select>
+          </div>
+          <div class="col-md-2 d-none" id="filterThresholdWrapper">
+            <label class="form-label text-muted small mb-1">Threshold (%)</label>
+            <input type="number" class="form-control form-control-sm" id="filterThreshold" placeholder="75" value="75" min="0" max="100">
+          </div>
+          <div class="col-md-2 d-none" id="filterLimitWrapper">
+            <label class="form-label text-muted small mb-1">Top N</label>
+            <input type="number" class="form-control form-control-sm" id="filterLimit" placeholder="20" value="20" min="1" max="500">
           </div>
           <div class="col-md-2 d-none" id="filterFromDateWrapper">
             <label class="form-label text-muted small mb-1">From Date</label>

@@ -1,135 +1,448 @@
 /**
- * Global Configuration for College Event Attendance Management System
- * This file contains only configuration constants.
- * No business logic, database queries, or UI code should be placed here.
+ * Global Configuration for BVC Engineering College Attendance Management System
+ * This file serves as the Single Source of Truth for all modules.
+ * @namespace CONFIG
  */
-
 const CONFIG = {
-  // 1. Project Information
-  PROJECT: {
-    APP_NAME: 'College Event Attendance Management System',
-    COLLEGE_NAME: 'BVC Engineering College', // Placeholder for actual college name
-    VERSION: '1.0.0'
+  APP: {
+    NAME: 'BVC Engineering College Attendance System',
+    ENVIRONMENT: 'Production',
+    VERSION: '2.0.1',
+    RELEASE_DATE: '2026-07-04'
   },
 
-  // 2. Spreadsheet Configuration
+  SYSTEM: {
+    MAINTENANCE_MODE: false
+  },
+
   SPREADSHEET: {
-    ID: '1lxOHCKXPr3cY3-N6rXDLWR2wzhgfEHWYwWdFunYybbw' // Replace with actual Google Sheet ID
+    ID: '1lxOHCKXPr3cY3-N6rXDLWR2wzhgfEHWYwWdFunYybbw'
   },
 
-  // 3. Sheet Names
   SHEETS: {
-    USERS: 'Users',
-    STUDENTS: 'Students',
-    EVENTS: 'Events',
-    EVENT_PARTICIPANTS: 'EventParticipants',
-    ATTENDANCE: 'Attendance',
-    SESSIONS: 'Sessions',
-    SETTINGS: 'Settings'
+    ATTENDANCE: "Attendance",
+    AUDITLOGS: "AuditLogs",
+    DEPARTMENTS: "Departments",
+    EVENT_COORDINATORS: "EventCoordinators",
+    EVENT_PARTICIPANTS: "EventParticipants",
+    EVENTS: "Events",
+    GENERATED_REPORTS: "GeneratedReports",
+    NOTIFICATIONS: "Notifications",
+    SESSIONS: "Sessions",
+    SETTINGS: "Settings",
+    STUDENTS: "Students",
+    USERS: "Users"
   },
 
-  // 4. User Roles
+  /**
+   * Centralized header-name map (exact match to Google Sheets header texts).
+   */
+  COLUMNS: {
+    // Users
+    USER_ID: 'User ID',
+    USER_FIRST_NAME: 'First Name',
+    USER_LAST_NAME: 'Last Name',
+    USER_EMAIL_ADDRESS: 'Email Address',
+    USER_USERNAME: 'Username',
+    USER_PASSWORD_HASH: 'Password Hash',
+    USER_ROLE: 'Role',
+    USER_STATUS: 'Status',
+    USER_EMPLOYEE_ID: "Employee ID",
+
+    // Backward compatibility aliases
+    USER_FULL_NAME: 'First Name', // alias for compatibility
+    USER_EMAIL: 'Email Address',  // alias for compatibility
+
+    // Students Core Constants
+    STUDENT_ID: "Student ID",
+    STUDENT_ROLL_NUMBER: "Roll Number",
+    STUDENT_NAME: "Student Name",
+    STUDENT_DEPARTMENT_ID: "Department ID",
+    STUDENT_YEAR: "Year",
+    STUDENT_SECTION: "Section",
+    STUDENT_STATUS: "Status",
+
+    // Student Optional Columns
+    STUDENT_EMAIL: "Email Address",
+    STUDENT_PHONE: "Phone Number",
+    STUDENT_GENDER: "Gender",
+    STUDENT_PARENT_NAME: "Parent Name",
+    STUDENT_PARENT_PHONE: "Parent Phone",
+    STUDENT_ADDRESS: "Address",
+    STUDENT_DOB: "Date of Birth",
+    STUDENT_ADMISSION_YEAR: "Admission Year",
+    STUDENT_BLOOD_GROUP: "Blood Group",
+
+    // Departments
+    DEPARTMENT_ID: 'Department ID',
+    DEPARTMENT_NAME: 'Department Name',
+    DEPARTMENT_CODE: "Department Code",
+
+    // Events
+    EVENT_ID: 'Event ID',
+    EVENT_NAME: 'Event Name',
+    EVENT_BARCODE_ATTENDANCE: 'Barcode Attendance',
+    EVENT_MANUAL_ATTENDANCE: 'Manual Attendance',
+    EVENT_STATUS: 'Status',
+
+    // Attendance
+    ATTENDANCE_ID: 'Attendance ID',
+    ATTENDANCE_EVENT_ID: 'Event ID',
+    ATTENDANCE_ROLL_NUMBER: 'Roll Number',
+    ATTENDANCE_STATUS: 'Attendance Status',
+    ATTENDANCE_TIME: 'Attendance Time',
+    ATTENDANCE_METHOD: 'Attendance Method',
+
+    // USER PROFILE COLUMNS
+    USER_PHONE: "Phone Number",
+    USER_PROFILE_PICTURE: "Profile Picture URL",
+    USER_BIO: "Bio/Notes",
+    USER_THEME: "Theme Preference",
+    USER_LANGUAGE: "Language",
+    USER_TIMEZONE: "Timezone",
+    USER_POPUP_NOTIFICATIONS: "Popup Notifications",
+    USER_NOTIFICATION_SOUND: "Notification Sound",
+
+    // Sessions
+    SESSION_ID: 'Session ID',
+    SESSION_USER_ID: 'User ID',
+    SESSION_USERNAME: 'Username',
+    SESSION_LOGIN_TIMESTAMP: 'Login Timestamp',
+    SESSION_LAST_ACTIVITY_TIMESTAMP: 'Last Activity Timestamp',
+    SESSION_LOGOUT_TIMESTAMP: 'Logout Timestamp',
+    EXPIRY_TIME: 'Expiry Time',
+    SESSION_STATUS: 'Session Status',
+    SESSION_IP_ADDRESS: 'IP Address',
+    SESSION_USER_AGENT: 'User Agent',
+    SESSION_DEVICE_TYPE: 'Device Type',
+    SESSION_OS: 'OS',
+    SESSION_BROWSER: 'Browser',
+    SESSION_LOCATION: 'Location',
+    SESSION_LOGIN_METHOD: 'Login Method',
+    SESSION_TOKEN: 'Session Token',
+
+    CREATED_BY: 'Created By',
+    CREATED_AT: 'Created At',
+    UPDATED_BY: 'Updated By',
+    UPDATED_AT: 'Updated At',
+    DELETION_FLAG: 'Deletion Flag',
+    REMARKS: 'Remarks',
+    
+    USER_OTP: "OTP",
+    USER_OTP_EXPIRY: "OTP Expiry",
+    USER_OTP_ATTEMPTS: "OTP Attempts",
+    
+    // Audit Logs
+    LOG_ID: 'Log ID',
+    LOG_USER_ID: 'User ID',
+    LOG_MODULE: 'Module',
+    LOG_ACTION: 'Action',
+
+    // Event Coordinators / Assignments
+    ASSIGNMENT_ID: 'Assignment ID',
+    ASSIGNMENT_EVENT_ID: 'Event ID',
+    ASSIGNMENT_USER_ID: 'User ID',
+
+    // Auditing / generic fallbacks
+    STATUS: 'Status',
+    ROLE: 'Role'
+  },
+
+  /**
+   * ID column mapping by logical sheet name.
+   * NOTE: Values must match the exact header texts in each sheet.
+   */
+  ID_COLUMNS: {
+    ATTENDANCE: 'Attendance ID',
+    AUDITLOGS: 'Log ID',
+    DEPARTMENTS: 'Department ID',
+    EVENT_COORDINATORS: 'Assignment ID',
+    EVENTS: 'Event ID',
+    GENERATED_REPORTS: 'Report ID',
+    NOTIFICATIONS: 'Notification ID',
+    SESSIONS: 'Session ID',
+    STUDENTS: "Student ID",
+    USERS: 'User ID'
+  },
+
+  /** @type {Object.<string, {prefix: string, digits: number}>} */
+  ID_FORMATS: {
+    ATTENDANCE: { prefix: 'ATT', digits: 6 },
+    AUDITLOGS: { prefix: 'LOG', digits: 6 },
+    DEPARTMENTS: { prefix: 'DEP', digits: 3 },
+    EVENT_COORDINATORS: { prefix: 'ASN', digits: 5 },
+    EVENTS: { prefix: 'EVT', digits: 4 },
+    GENERATED_REPORTS: { prefix: 'RPT', digits: 6 },
+    NOTIFICATIONS: { prefix: 'NOT', digits: 6 },
+    SESSIONS: { prefix: 'SES', digits: 6 },
+    USERS: { prefix: 'USR', digits: 4 },
+    STUDENTS: { prefix: 'STU', digits: 5 }
+  },
+
+  REQUIRED_FIELDS: {
+    ATTENDANCE: ['Attendance ID', 'Event ID', 'Roll Number', 'Attendance Status'],
+    AUDITLOGS: ['Log ID', 'User ID', 'Module', 'Action'],
+    DEPARTMENTS: ['Department ID', 'Department Name', 'Status'],
+    EVENT_COORDINATORS: ['Assignment ID', 'Event ID', 'User ID'],
+    EVENTS: ['Event ID', 'Event Name', 'Barcode Attendance', 'Manual Attendance', 'Status'],
+    GENERATED_REPORTS: ['Report ID', 'Event ID', 'Generated Date', 'Status'],
+    NOTIFICATIONS: ['Notification ID', 'User ID', 'Message', 'Status'],
+    SESSIONS: ['Session ID', 'User ID', 'Session Token'],
+    STUDENTS: ['Roll Number', 'Student Name', 'Department ID', 'Year', 'Status'],
+    USERS: ["User ID", "Employee ID", "First Name", "Last Name", "Email Address", "Username", "Password Hash", "Role", "Status"]
+  },
+
+  /**
+   * Shared user-facing and system messages.
+   */
+  MESSAGES: {
+    SUCCESS_DEFAULT: 'Success',
+    ERROR_DEFAULT: 'Error occurred',
+    VALIDATION_FAILED: 'Validation failed',
+    UNAUTHORIZED: 'Unauthorized access.',
+    SESSION_EXPIRED: 'Session expired. Please login again.',
+    DUPLICATE_RECORD: 'Duplicate record.',
+    NOT_FOUND: 'Record not found.',
+    ACCOUNT_UNLOCKED: "Account unlocked successfully.",
+    ACCOUNT_UNLOCK_FAILED: "Failed to unlock account.",
+
+    // Department Messages
+    DEPARTMENT_CREATED: "Department created successfully.",
+    DEPARTMENT_CREATE_FAILED: "Department creation failed.",
+    DEPARTMENT_NAME_EXISTS: "Department name already exists.",
+    DEPARTMENT_CODE_EXISTS: "Department code already exists.",
+    DEPARTMENT_UPDATED: "Department updated successfully.",
+    DEPARTMENT_UPDATE_FAILED: "Department update failed.",
+    DEPARTMENT_DELETED: "Department deleted successfully.",
+    DEPARTMENT_DELETE_FAILED: "Department deletion failed.",
+    DEPARTMENT_ACTIVATED: "Department activated successfully.",
+    DEPARTMENT_ACTIVATE_FAILED: "Department activation failed.",
+    DEPARTMENT_DEACTIVATED: "Department deactivated successfully.",
+    DEPARTMENT_DEACTIVATE_FAILED: "Department deactivation failed.",
+    DEPARTMENT_NOT_FOUND: "Department not found."
+  },
+
   ROLES: {
     ADMIN: 'Admin',
     COORDINATOR: 'Coordinator'
   },
 
-  // 5. User Status
-  USER_STATUS: {
+  USER_STATUS: { ACTIVE: 'Active', INACTIVE: 'Inactive' },
+  EVENT_STATUS: { DRAFT: 'Draft', UPCOMING: 'Upcoming', ACTIVE: 'Active', STOPPED: 'Stopped', COMPLETED: 'Completed', CANCELLED: 'Cancelled' },
+  ATTENDANCE_STATUS: { PRESENT: 'Present', ABSENT: 'Absent' },
+  SESSION_STATUS: { ACTIVE: 'Active', EXPIRED: 'Expired', LOGGED_OUT: 'Logged Out' },
+  REPORT_STATUS: { PENDING: 'Pending', GENERATED: 'Generated', FAILED: 'Failed' },
+  NOTIFICATION_STATUS: { UNREAD: 'Unread', READ: 'Read' },
+  DEPARTMENT_STATUS: { ACTIVE: 'Active', INACTIVE: 'Inactive' },
+
+  PARTICIPANT_STATUS: {
+    ACTIVE: 'Active',
+    INACTIVE: 'Inactive'
+  },
+  STUDENT_STATUS: {
     ACTIVE: 'Active',
     INACTIVE: 'Inactive'
   },
 
-  EVENT_STATUS: {
-    DRAFT: 'Draft',
-    UPCOMING: 'Upcoming',
-    ACTIVE: 'Active',
-    STOPPED: 'Stopped',
-    COMPLETED: 'Completed',
-    CANCELLED: 'Cancelled'
+  ATTENDANCE: {
+    METHODS: { BARCODE: 'Barcode', MANUAL: 'Manual' },
+    DEFAULT_METHOD: 'Barcode',
+    ALLOW_UNDO: true,
+    UNDO_MINUTES: 2,
+    ALLOW_CORRECTION_REQUEST: true
   },
 
-  // 6a. Event Types
-  EVENT_TYPE: {
-    FIXED: 'Fixed',
-    OPEN: 'Open'
+  ATTENDANCE_METHODS: null,
+
+  BARCODE: {
+    DEFAULT_CAMERA: 'Back',
+    AUTO_RESTART: true,
+    SUCCESS_POPUP_DELAY_MS: 2000,
+    ERROR_POPUP_DELAY_MS: 2000,
+    SUPPORTED_TYPES: ['Barcode', 'QR Code']
   },
 
-  // 6b. Participant Status
-  PARTICIPANT_STATUS: {
-    ACTIVE: 'Active',
-    REMOVED: 'Removed'
+  SECURITY: {
+    SESSION_TIMEOUT_MINUTES: 480,
+    PASSWORD_HASH_ALGO: 'SHA-256',
+    MAX_LOGIN_ATTEMPTS: 15,
+    MAX_OTP_ATTEMPTS: 10,
+    PASSWORD_MIN_LENGTH: 8,
+    ALLOW_MULTIPLE_SESSIONS: false,
+    OTP_EXPIRY_MINUTES: 10
   },
 
-  // 7. Attendance Status
-  ATTENDANCE_STATUS: {
-    PRESENT: 'Present',
-    ABSENT: 'Absent'
+VALIDATION: {
+    EMAIL: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+    ROLL_NUMBER: /^[0-9]{2}A9[15][A-Za-z][0-9A-Za-z]{4}$/,
+    PHONE: /^[0-9]{10}$/,
+    YEAR: /^[1-4]$/,
+    SECTION: /^[A-C]$/
   },
-  // 8. Student Status
-STUDENT_STATUS: {
-  ACTIVE: 'Active',
-  INACTIVE: 'Inactive'
-},
-  // 8. Session Status
-SESSION_STATUS: {
-  ACTIVE: 'Active',
-  EXPIRED: 'Expired',
-  LOGGED_OUT: 'Logged Out'
-},
 
+  SENSITIVE_FIELDS: ['Password', 'Password Hash'],
+  EXPORT_FORMATS: ['PDF', 'Excel', 'CSV', 'Print'],
 
-  // 9. Application Messages
-  MESSAGES: {
-    LOGIN_SUCCESS: 'Login successful',
-    INVALID_CREDENTIALS: 'Invalid username or email',
-    ACCOUNT_INACTIVE: 'User account is not active',
-    INVALID_PASSWORD: 'Invalid password',
-    SESSION_CREATE_FAILED: 'Failed to create session',
-    LOGOUT_SUCCESS: 'Logout successful',
-    LOGOUT_FAILED: 'Failed to destroy session or session invalid',
-    AUTH_SUCCESS: 'Authentication successful',
-    SESSION_INVALID: 'Session is invalid or expired',
-    USER_NOT_FOUND_SESSION: 'User not found in active session',
-    USER_RECORD_MISSING: 'User record does not exist',
-    USER_NOT_FOUND: 'User not found',
-    INCORRECT_OLD_PASSWORD: 'Incorrect old password',
-    PASSWORD_CHANGED: 'Password changed successfully',
-    PASSWORD_CHANGE_FAILED: 'Failed to update password in database',
-    NEW_PASSWORD_EMPTY: 'New password cannot be empty',
-    VALIDATION_FAILED: 'Validation failed',
-    USER_CREATED: 'User created successfully',
-    USER_UPDATED: 'User updated successfully',
-    USER_DELETED: 'User deleted successfully',
-    STUDENT_CREATED: 'Student created successfully',
-    STUDENT_UPDATED: 'Student updated successfully',
-    STUDENT_DELETED: 'Student deleted successfully',
-    ROLL_NUMBER_EXISTS: 'Roll number already exists',
-    USERNAME_EXISTS: 'Username already exists',
-    EMAIL_EXISTS: 'Email already exists',
-    STUDENT_NOT_FOUND: 'Student not found',
-    EVENT_CREATED: 'Event created successfully',
-    EVENT_UPDATED: 'Event updated successfully',
-    EVENT_DELETED: 'Event deleted successfully',
-    EVENT_NOT_FOUND: 'Event not found',
-    EVENT_ALREADY_EXISTS: 'An event with this name and date already exists',
-    EVENT_CREATE_FAILED: 'Failed to create event in database',
-    EVENT_UPDATE_FAILED: 'Failed to update event in database',
-    EVENT_DELETE_FAILED: 'Failed to delete event in database',
-    INVALID_COORDINATOR: 'Invalid coordinator ID',
-    EVENT_ALREADY_UPCOMING: 'Event is already upcoming',
-    EVENT_ALREADY_COMPLETED: 'Event is already completed',
-    ATTENDANCE_MARKED: 'Attendance marked successfully',
-    ATTENDANCE_DELETED: 'Attendance deleted successfully',
-    ATTENDANCE_NOT_FOUND: 'Attendance record not found',
-    ATTENDANCE_ALREADY_EXISTS: 'Student attendance for this event already exists',
-    INVALID_ATTENDANCE_STATUS: 'Invalid attendance status',
-    ATTENDANCE_MARK_FAILED: 'Failed to mark attendance in database',
-    ATTENDANCE_DELETE_FAILED: 'Failed to delete attendance in database',
-    REPORT_GENERATED: 'Report generated successfully',
-    REPORT_NOT_FOUND: 'Report not found',
-    INVALID_DEPARTMENT: 'Invalid department',
-    INVALID_YEAR: 'Invalid year',
-    INVALID_SECTION: 'Invalid section'
+  REPORTS: {
+    AUTO_GENERATE: true,
+    KEEP_HISTORY: true
+  },
+
+  EXPORT: {
+    FORMATS: ['PDF', 'Excel', 'CSV', 'Print']
+  },
+
+  NOTIFICATIONS: {
+    POPUP_ENABLED: true,
+    SOUND_ENABLED: true,
+    AUTO_DISMISS_SECONDS: 3
+  },
+
+  ACADEMICS: {
+    DEPARTMENTS: ['CSE', 'CSE-AIML', 'CSE-DS', 'ECE', 'EEE', 'Civil', 'Mechanical', 'MBA'],
+    YEARS: [1, 2, 3, 4],
+    SECTIONS: ['A', 'B', 'C']
+  },
+
+  DATE_TIME: {
+    TIMEZONE: 'Asia/Kolkata',
+    DATE_FORMAT: 'yyyy-MM-dd',
+    TIME_FORMAT: 'HH:mm:ss',
+    TIMESTAMP_FORMAT: 'yyyy-MM-dd HH:mm:ss',
+    LOCALE: 'en-IN',
+    DATE_ONLY: 'yyyy-MM-dd',
+    TIME_ONLY: 'HH:mm:ss',
+    FORMAT: 'yyyy-MM-dd HH:mm:ss'
+  },
+
+  LOGGING: {
+    ENABLED: true,
+    AUDIT_ENABLED: true,
+    ERROR_LOGGING_ENABLED: true,
+    LEVEL: 'INFO'
+  },
+
+  DEFAULT_SETTINGS: {
+    COLLEGE_NAME: 'BVC Engineering College',
+    THEME: 'Default',
+    ATTENDANCE_WINDOW_MINUTES: 15
   }
 };
+
+// Backward compatible derived aliases
+CONFIG.ATTENDANCE_METHODS = Object.values(CONFIG.ATTENDANCE.METHODS);
+CONFIG.SECURITY.MIN_PASSWORD_LENGTH = CONFIG.SECURITY.PASSWORD_MIN_LENGTH;
+CONFIG.SECURITY.MAX_PASSWORD_LENGTH = 32;
+CONFIG.SECURITY.OTP_LENGTH = 6;
+
+// ==========================================================
+// EXTENDED PRODUCTION CONFIG
+// ==========================================================
+
+CONFIG.SETTING_STATUS = CONFIG.SETTING_STATUS || { ACTIVE: 'Active', INACTIVE: 'Inactive' };
+
+CONFIG.VALIDATION = CONFIG.VALIDATION || {};
+CONFIG.VALIDATION.USERNAME = CONFIG.VALIDATION.USERNAME || /^[a-zA-Z0-9_\-]{3,32}$/;
+CONFIG.VALIDATION.DEPARTMENT_CODE = CONFIG.VALIDATION.DEPARTMENT_CODE || /^[A-Z]{2,4}[0-9]{0,3}[A-Za-z\-]*$/;
+
+CONFIG.ATTENDANCE = CONFIG.ATTENDANCE || {};
+CONFIG.ATTENDANCE.DEFAULT_WINDOW_MINUTES = CONFIG.ATTENDANCE.DEFAULT_WINDOW_MINUTES || (CONFIG.DEFAULT_SETTINGS ? CONFIG.DEFAULT_SETTINGS.ATTENDANCE_WINDOW_MINUTES : 15);
+
+CONFIG.EXPORT = CONFIG.EXPORT || { FORMATS: ['PDF', 'Excel', 'CSV', 'Print'] };
+CONFIG.EXPORT_FORMATS = CONFIG.EXPORT_FORMATS || CONFIG.EXPORT.FORMATS || ['PDF', 'Excel', 'CSV', 'Print'];
+
+CONFIG.SECURITY = CONFIG.SECURITY || {};
+CONFIG.SECURITY.TOKEN_LENGTH = CONFIG.SECURITY.TOKEN_LENGTH || 32;
+CONFIG.SECURITY.HASH_ALGORITHM = CONFIG.SECURITY.HASH_ALGORITHM || CONFIG.SECURITY.PASSWORD_HASH_ALGO;
+CONFIG.SECURITY.ALLOWED_FILE_TYPES = CONFIG.SECURITY.ALLOWED_FILE_TYPES || ['application/pdf', 'application/vnd.ms-excel', 'text/csv', 'image/png', 'image/jpeg'];
+CONFIG.SECURITY.ALLOWED_EXPORT_FORMATS = CONFIG.SECURITY.ALLOWED_EXPORT_FORMATS || (CONFIG.EXPORT && CONFIG.EXPORT.FORMATS ? CONFIG.EXPORT.FORMATS : ['PDF', 'Excel', 'CSV', 'Print']);
+
+// Shared Messaging Engine Additions
+CONFIG.MESSAGES = CONFIG.MESSAGES || {};
+CONFIG.MESSAGES.INVALID_CREDENTIALS = CONFIG.MESSAGES.INVALID_CREDENTIALS || 'Invalid credentials.';
+CONFIG.MESSAGES.ACCOUNT_INACTIVE = CONFIG.MESSAGES.ACCOUNT_INACTIVE || 'Account is inactive.';
+CONFIG.MESSAGES.ACCOUNT_LOCKED = CONFIG.MESSAGES.ACCOUNT_LOCKED || 'Account is locked.';
+CONFIG.MESSAGES.INVALID_PASSWORD = CONFIG.MESSAGES.INVALID_PASSWORD || 'Invalid password.';
+CONFIG.MESSAGES.MULTIPLE_SESSIONS_NOT_ALLOWED = CONFIG.MESSAGES.MULTIPLE_SESSIONS_NOT_ALLOWED || 'Multiple sessions are not allowed.';
+CONFIG.MESSAGES.LOGIN_SUCCESS = CONFIG.MESSAGES.LOGIN_SUCCESS || 'Login successful.';
+CONFIG.MESSAGES.LOGOUT_SUCCESS = CONFIG.MESSAGES.LOGOUT_SUCCESS || 'Logout successful.';
+CONFIG.MESSAGES.LOGOUT_FAILED = CONFIG.MESSAGES.LOGOUT_FAILED || 'Logout failed.';
+CONFIG.MESSAGES.AUTH_SUCCESS = CONFIG.MESSAGES.AUTH_SUCCESS || 'Authentication successful.';
+CONFIG.MESSAGES.SESSION_INVALID = CONFIG.MESSAGES.SESSION_INVALID || 'Session is invalid.';
+CONFIG.MESSAGES.USER_NOT_FOUND_SESSION = CONFIG.MESSAGES.USER_NOT_FOUND_SESSION || 'User not found for session.';
+
+CONFIG.MESSAGES.USER_NOT_FOUND = CONFIG.MESSAGES.USER_NOT_FOUND || 'User not found.';
+CONFIG.MESSAGES.USER_RECORD_MISSING = CONFIG.MESSAGES.USER_RECORD_MISSING || 'User record missing.';
+CONFIG.MESSAGES.PASSWORD_CHANGED = CONFIG.MESSAGES.PASSWORD_CHANGED || 'Password changed successfully.';
+CONFIG.MESSAGES.PASSWORD_CHANGE_FAILED = CONFIG.MESSAGES.PASSWORD_CHANGE_FAILED || 'Password change failed.';
+CONFIG.MESSAGES.INCORRECT_OLD_PASSWORD = CONFIG.MESSAGES.INCORRECT_OLD_PASSWORD || 'Old password is incorrect.';
+CONFIG.MESSAGES.PASSWORD_RESET_SUCCESS = CONFIG.MESSAGES.PASSWORD_RESET_SUCCESS || 'Password reset successfully.';
+CONFIG.MESSAGES.PASSWORD_RESET_FAILED = CONFIG.MESSAGES.PASSWORD_RESET_FAILED || 'Password reset failed.';
+
+CONFIG.MESSAGES.OTP_GENERATION_FAILED = CONFIG.MESSAGES.OTP_GENERATION_FAILED || 'OTP generation failed.';
+CONFIG.MESSAGES.OTP_GENERATED = CONFIG.MESSAGES.OTP_GENERATED || 'OTP generated.';
+CONFIG.MESSAGES.OTP_GENERATED_SUCCESS = CONFIG.MESSAGES.OTP_GENERATED_SUCCESS || 'OTP generated.';
+CONFIG.MESSAGES.OTP_VERIFIED = CONFIG.MESSAGES.OTP_VERIFIED || 'OTP verified.';
+CONFIG.MESSAGES.OTP_VERIFICATION_FAILED = CONFIG.MESSAGES.OTP_VERIFICATION_FAILED || 'OTP verification failed.';
+CONFIG.MESSAGES.OTP_MAX_ATTEMPTS_EXCEEDED = CONFIG.MESSAGES.OTP_MAX_ATTEMPTS_EXCEEDED || 'OTP max attempts exceeded.';
+CONFIG.MESSAGES.OTP_EXPIRED = CONFIG.MESSAGES.OTP_EXPIRED || 'OTP expired.';
+CONFIG.MESSAGES.OTP_INVALID = CONFIG.MESSAGES.OTP_INVALID || 'OTP invalid.';
+CONFIG.MESSAGES.OTP_VERIFIED_SUCCESS = CONFIG.MESSAGES.OTP_VERIFIED_SUCCESS || 'OTP verified successfully.';
+CONFIG.MESSAGES.OTP_VERIFICATION_SUCCESS = CONFIG.MESSAGES.OTP_VERIFICATION_SUCCESS || 'OTP verified successfully.';
+CONFIG.MESSAGES.OTP_INVALID_OR_EXPIRED = CONFIG.MESSAGES.OTP_INVALID_OR_EXPIRED || 'OTP invalid or expired.';
+CONFIG.MESSAGES.OTP_VERIFIED_OK = CONFIG.MESSAGES.OTP_VERIFIED_OK || 'OTP verified.';
+CONFIG.MESSAGES.OTP_VERIFICATION_OK = CONFIG.MESSAGES.OTP_VERIFICATION_OK || 'OTP verified.';
+CONFIG.MESSAGES.OTP_VERIFIED_MESSAGE = CONFIG.MESSAGES.OTP_VERIFIED_MESSAGE || 'OTP verified.';
+CONFIG.MESSAGES.OTP_VERIFICATION_MESSAGE = CONFIG.MESSAGES.OTP_VERIFICATION_MESSAGE || 'OTP verified.';
+CONFIG.MESSAGES.OTP_VERIFIED_STATUS = CONFIG.MESSAGES.OTP_VERIFICATION_STATUS || 'OTP verified.';
+CONFIG.MESSAGES.FIRST_LOGIN = CONFIG.MESSAGES.FIRST_LOGIN || 'First login detected. Please change your password.';
+
+// Student Service Specific Production Messages
+CONFIG.MESSAGES.STUDENT_CREATED = CONFIG.MESSAGES.STUDENT_CREATED || "Student created successfully.";
+CONFIG.MESSAGES.STUDENT_CREATE_FAILED = CONFIG.MESSAGES.STUDENT_CREATE_FAILED || "Student creation failed.";
+CONFIG.MESSAGES.STUDENT_UPDATED = CONFIG.MESSAGES.STUDENT_UPDATED || "Student updated successfully.";
+CONFIG.MESSAGES.STUDENT_UPDATE_FAILED = CONFIG.MESSAGES.STUDENT_UPDATE_FAILED || "Student update failed.";
+CONFIG.MESSAGES.STUDENT_DELETED = CONFIG.MESSAGES.STUDENT_DELETED || "Student deleted successfully.";
+CONFIG.MESSAGES.STUDENT_DELETE_FAILED = CONFIG.MESSAGES.STUDENT_DELETE_FAILED || "Student deletion failed.";
+CONFIG.MESSAGES.STUDENT_ACTIVATED = CONFIG.MESSAGES.STUDENT_ACTIVATED || "Student activated successfully.";
+CONFIG.MESSAGES.STUDENT_ACTIVATE_FAILED = CONFIG.MESSAGES.STUDENT_ACTIVATE_FAILED || "Student activation failed.";
+CONFIG.MESSAGES.STUDENT_DEACTIVATED = CONFIG.MESSAGES.STUDENT_DEACTIVATED || "Student deactivated successfully.";
+CONFIG.MESSAGES.STUDENT_DEACTIVATE_FAILED = CONFIG.MESSAGES.STUDENT_DEACTIVATE_FAILED || "Student deactivation failed.";
+CONFIG.MESSAGES.STUDENT_ALREADY_ACTIVE = CONFIG.MESSAGES.STUDENT_ALREADY_ACTIVE || "Student is already active.";
+CONFIG.MESSAGES.STUDENT_ALREADY_INACTIVE = CONFIG.MESSAGES.STUDENT_ALREADY_INACTIVE || "Student is already inactive.";
+CONFIG.MESSAGES.STUDENT_NOT_FOUND = CONFIG.MESSAGES.STUDENT_NOT_FOUND || "Student not found.";
+CONFIG.MESSAGES.ROLL_NUMBER_EXISTS = CONFIG.MESSAGES.ROLL_NUMBER_EXISTS || "Roll number already exists.";
+CONFIG.MESSAGES.INVALID_DEPARTMENT = CONFIG.MESSAGES.INVALID_DEPARTMENT || "Invalid or inactive department specified.";
+
+// Dynamic Column Fallback Protection
+CONFIG.COLUMNS = CONFIG.COLUMNS || {};
+CONFIG.COLUMNS.USER_FAILED_ATTEMPTS = CONFIG.COLUMNS.USER_FAILED_ATTEMPTS || 'Failed Login Attempts';
+CONFIG.COLUMNS.USER_ACCOUNT_LOCKED = CONFIG.COLUMNS.USER_ACCOUNT_LOCKED || 'Account Locked';
+CONFIG.COLUMNS.USER_FIRST_LOGIN = CONFIG.COLUMNS.USER_FIRST_LOGIN || 'First Login';
+CONFIG.COLUMNS.USER_LAST_LOGOUT = CONFIG.COLUMNS.USER_LAST_LOGOUT || 'Last Logout';
+CONFIG.COLUMNS.USER_PASSWORD_LAST_CHANGED = CONFIG.COLUMNS.USER_PASSWORD_LAST_CHANGED || 'Password Last Changed';
+CONFIG.COLUMNS.USER_PASSWORD_RESET_REQUIRED = CONFIG.COLUMNS.USER_PASSWORD_RESET_REQUIRED || 'Password Reset Required';
+CONFIG.COLUMNS.USER_SALT = CONFIG.COLUMNS.USER_SALT || 'Password Salt';
+
+CONFIG.COLUMNS.USER_OTP = CONFIG.COLUMNS.USER_OTP || 'OTP';
+CONFIG.COLUMNS.USER_OTP_EXPIRY = CONFIG.COLUMNS.USER_OTP_EXPIRY || 'OTP Expiry';
+CONFIG.COLUMNS.USER_OTP_ATTEMPTS = CONFIG.COLUMNS.USER_OTP_ATTEMPTS || 'OTP Attempts';
+
+CONFIG.COLUMNS.SESSION_ID = 'Session ID';
+CONFIG.COLUMNS.SESSION_USER_ID = 'User ID';
+CONFIG.COLUMNS.SESSION_USERNAME = 'Username';
+CONFIG.COLUMNS.SESSION_TOKEN = 'Session Token';
+CONFIG.COLUMNS.SESSION_LOGIN_TIMESTAMP = 'Login Timestamp';
+CONFIG.COLUMNS.SESSION_LAST_ACTIVITY_TIMESTAMP = 'Last Activity Timestamp';
+CONFIG.COLUMNS.SESSION_LOGOUT_TIMESTAMP = 'Logout Timestamp';
+CONFIG.COLUMNS.SESSION_STATUS = 'Session Status';
+CONFIG.COLUMNS.EXPIRY_TIME = 'Expiry Time';
+
+CONFIG.COLUMNS.STATUS = CONFIG.COLUMNS.STATUS || 'Status';
+CONFIG.COLUMNS.ROLE = CONFIG.COLUMNS.ROLE || 'Role';
+CONFIG.COLUMNS.NOTIFICATION_STATUS = CONFIG.COLUMNS.NOTIFICATION_STATUS || 'Status';
+CONFIG.COLUMNS.REPORT_STATUS = CONFIG.COLUMNS.REPORT_STATUS || 'Status';
+CONFIG.COLUMNS.SETTING_STATUS = CONFIG.COLUMNS.SETTING_STATUS || 'Status';
+
+CONFIG.EXPORT_FORMATS = CONFIG.EXPORT_FORMATS || (CONFIG.EXPORT && CONFIG.EXPORT.FORMATS ? CONFIG.EXPORT.FORMATS : ['PDF', 'Excel', 'CSV', 'Print']);
+CONFIG.SETTING_STATUS = CONFIG.SETTING_STATUS || { ACTIVE: 'Active', INACTIVE: 'Inactive' };

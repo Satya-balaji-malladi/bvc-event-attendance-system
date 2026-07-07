@@ -105,6 +105,12 @@
             <div class="row g-3">
               <input type="hidden" id="userOriginalId">
               
+              <div class="col-md-6">
+                <label for="userCustomId" class="form-label">User ID <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="userCustomId" required placeholder="e.g., BVC-COORD-001">
+                <div class="invalid-feedback">User ID is required.</div>
+              </div>
+              
               <div class="col-md-6 d-none" id="userIdGroup">
                 <label for="userIdDisplay" class="form-label">User ID</label>
                 <input type="text" class="form-control" id="userIdDisplay" readonly disabled>
@@ -134,7 +140,7 @@
                   <option value="MECH">MECH</option>
                   <option value="CIVIL">CIVIL</option>
                   <option value="IT">IT</option>
-                  <option value="Admin">Admin</option>
+                  <option value="None">None</option>
                 </select>
                 <div class="invalid-feedback">Please select a department.</div>
               </div>
@@ -143,7 +149,6 @@
                 <label for="userRole" class="form-label">Role <span class="text-danger">*</span></label>
                 <select class="form-select" id="userRole" required>
                   <option value="">Select Role</option>
-                  <option value="Admin">Admin</option>
                   <option value="Coordinator">Coordinator</option>
                 </select>
                 <div class="invalid-feedback">Please select a role.</div>

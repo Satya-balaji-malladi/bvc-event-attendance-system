@@ -211,6 +211,16 @@ window.App = {
     getDepartmentReport: function(department) { return this._call('getDepartmentReport', department); },
     getCoordinatorReport: function(coordinatorId) { return this._call('getCoordinatorReport', coordinatorId); },
     getDateRangeReport: function(fromDate, toDate) { return this._call('getDateRangeReport', fromDate, toDate); },
+    getAttendanceDefaulters: function(filters) { return this._call('getAttendanceDefaulters', filters); },
+    getTopParticipants: function(filters) { return this._call('getTopParticipants', filters); },
+    getAbsentStudents: function(filters) { return this._call('getAbsentStudents', filters); },
+    getYearWiseReport: function(year) { return this._call('getYearWiseReport', year); },
+    getDepartmentComparison: function() { return this._call('getDepartmentComparison'); },
+    getMonthlyReport: function(filters) { return this._call('getMonthlyReport', filters); },
+    getEventTrendReport: function(filters) { return this._call('getEventTrendReport', filters); },
+    getCancelledEvents: function(filters) { return this._call('getCancelledEvents', filters); },
+    getCoordinatorPerformance: function(coordinatorId) { return this._call('getCoordinatorPerformance', coordinatorId); },
+    getStudentEventHistory: function(rollNumber) { return this._call('getStudentEventHistory', rollNumber); },
     getDashboardData: function() { return this._call('getDashboardData'); },
     getAllEvents: function() { return this._call('getAllEvents'); },
     createEvent: function(eventData) { return this._call('createEvent', eventData); },
@@ -228,11 +238,10 @@ window.App = {
     updateStudent: function(rollNumber, studentData) { return this._call('updateStudent', rollNumber, studentData); },
     deleteStudent: function(rollNumber) { return this._call('deleteStudent', rollNumber); },
     getStudentById: function(rollNumber) { return this._call('getStudentByRollNumber', rollNumber); },
-    getDepartmentReport: function(department) { return this._call('getDepartmentReport', department); },
     getSettings: function() { return this._call('getSettings'); },
     saveSettings: function(payload) { return this._call('saveSettings', payload); },
     login: function(credentials) { return this._call('login', credentials); },
-    logout: function(sessionToken) { return this._call('logout', sessionToken); },
+    logout: function() { return this._call('logout'); },
     authenticate: function(sessionToken) { return this._call('authenticate', sessionToken); },
     getAttendanceByEvent: function(eventId) { return this._call('getAttendanceByEvent', eventId); },
     _getMock: function(m) {
@@ -241,6 +250,11 @@ window.App = {
       if (m === 'getAllUsers') return [{ user_id: 'USR-01', full_name: 'John Doe', role: App.Constants.ROLES.COORDINATOR }];
       if (m === 'getAllStudents') return [{ roll_number: 'CSE001', student_name: 'Alice', department: 'CSE' }];
       if (m === 'getAttendanceByEvent') return [{ roll_number: 'CSE001', event_id: 'EVT-01', status: App.Constants.ATTENDANCE_STATUS.PRESENT, timestamp: '2026-07-15 10:00' }];
+      if (m === 'getReportsDashboardSummary') return { success: true, report: { totalEvents: 45, totalStudents: 1250, totalAttendance: 15420, attendancePercentage: 92.08, activeEvents: 3, completedEvents: 38, highestEvent: 'Tech Symposium', lowestEvent: 'Workshop A' } };
+      if (m === 'getEventReport') return [{ event_name: 'Tech Symposium', coordinator: 'John Doe', venue: 'Main Hall', start_date: '2026-07-15', end_date: '2026-07-15', participants: 120, present: 110, absent: 10, attendance_percentage: 91.67, status: 'Completed' }];
+      if (m === 'getDepartmentReport' || m === 'getDepartmentComparison') return [{ department: 'CSE', total_students: 320, events_conducted: 12, attendance_percentage: 88.5, rank: 1 }];
+      if (m === 'getAttendanceDefaulters') return [{ roll_number: 'CSE001', student_name: 'Alice', department: 'CSE', year: '3', events_enrolled: 5, present: 2, absent: 3, attendance_percentage: 40, status: 'Critical' }];
+      if (m === 'getTopParticipants') return [{ roll_number: 'CSE002', student_name: 'Bob', department: 'CSE', year: '2', events_attended: 15, unique_events: 12 }];
       return {};
     }
   },
@@ -309,8 +323,8 @@ window.App = {
       }
       
       App.API.authenticate(token).then(res => {
-        if (res.success && res.data && res.data.user) {
-          App.State.currentUser = res.data.user;
+        if (res.success && res.user) {
+          App.State.currentUser = res.user;
           this.transitionToApp(false);
         } else {
           this.logout(true); // invalid token
@@ -371,22 +385,31 @@ window.App = {
     },
 
     logout: function(isExpired = false) {
+      console.log('=== LOGOUT STARTED ===');
+      
+      // Immediately clear local state and show login (no waiting for backend)
       const token = localStorage.getItem('bvc_session');
-      if (token && !isExpired) {
-        App.LoadingManager.show();
-        App.API.logout(token).finally(() => {
-          this._clearLocalState(isExpired);
+      localStorage.removeItem('bvc_session');
+      App.State.currentUser = null;
+      App.LoadingManager.hide(true);
+      
+      console.log('Local state cleared, showing login screen');
+      this.showLogin(isExpired);
+      
+      // Call backend API to destroy session (async, non-blocking)
+      if (token) {
+        console.log('Calling backend logout API...');
+        App.API.logout().then((res) => {
+          console.log('Backend logout response:', res);
+        }).catch(err => {
+          console.error('Backend logout failed (non-critical):', err);
         });
-      } else {
-        this._clearLocalState(isExpired);
       }
     },
 
     _clearLocalState: function(isExpired) {
-      localStorage.removeItem('bvc_session');
-      App.State.currentUser = null;
-      App.LoadingManager.hide(true);
-      this.showLogin(isExpired);
+      // This is now handled in logout() directly
+      console.log('Clearing local state...');
     }
   }
 };
@@ -422,9 +445,15 @@ document.addEventListener('DOMContentLoaded', () => {
     link.addEventListener('click', function(e) {
       e.preventDefault();
       const pageName = this.getAttribute('data-page');
+      console.log('Navigation clicked:', pageName);
+      
       if (pageName === 'logout') {
+        console.log('Logout button clicked');
         if (confirm('Are you sure you want to logout?')) {
-           App.Auth.logout();
+          console.log('Logout confirmed by user');
+          App.Auth.logout();
+        } else {
+          console.log('Logout cancelled by user');
         }
         return;
       }
