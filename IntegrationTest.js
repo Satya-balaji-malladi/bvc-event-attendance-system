@@ -117,12 +117,13 @@ const IntegrationTest = {
     departmentData[CONFIG.COLUMNS.STATUS || 'Status'] = 'Active';
     const depRes = DepartmentService.createDepartment(departmentData, 'USR001');
     IntegrationAssertions.assertSuccess(depRes, 'Department creation failed');
+    const actualDepId = depRes.data && depRes.data.department ? depRes.data.department[CONFIG.COLUMNS.DEPARTMENT_ID] : depId;
 
     // Create Student
     const studentData = {};
     studentData[CONFIG.COLUMNS.STUDENT_ROLL_NUMBER] = rollNo;
     studentData[CONFIG.COLUMNS.STUDENT_NAME] = 'Integration Student';
-    studentData[CONFIG.COLUMNS.STUDENT_DEPARTMENT_ID] = depId;
+    studentData[CONFIG.COLUMNS.STUDENT_DEPARTMENT_ID] = actualDepId;
     studentData[CONFIG.COLUMNS.STUDENT_YEAR] = '3';
     studentData[CONFIG.COLUMNS.STUDENT_SECTION] = 'A';
     studentData[CONFIG.COLUMNS.STUDENT_STATUS] = 'Active';
@@ -147,6 +148,7 @@ const IntegrationTest = {
     IntegrationAssertions.assertSuccess(deleteRes, 'Student deletion failed');
 
     // Cleanup
+    DatabaseService.hardDelete(CONFIG.SHEETS.DEPARTMENTS, 'Department ID', actualDepId);
     DatabaseService.hardDelete(CONFIG.SHEETS.DEPARTMENTS, 'Department Code', depId);
     DatabaseService.hardDelete(CONFIG.SHEETS.DEPARTMENTS, 'Department Name', 'Test Integration Department');
     DatabaseService.hardDelete(CONFIG.SHEETS.STUDENTS, 'Roll Number', rollNo);
