@@ -52,13 +52,14 @@ const IntegrationTest = {
     const activeUser = users.find(u => (u['Status'] || u.status) === 'Active' && (u['Username'] || u.username));
     if (!activeUser) throw new Error('Flow 1 requires at least one active user in Users sheet.');
 
-    const username = activeUser['Username'] || activeUser.username;
     const userId = activeUser['User ID'] || activeUser.user_id;
 
-    // Simulate login via AuthService. Since we do not have plaintext password, we mock/fetch token directly or create session
-    const sessionRes = SessionService.createSession(userId, 'IP-127.0.0.1', 'IntegrationTestBrowser');
-    IntegrationAssertions.assertSuccess(sessionRes, 'Session creation failed');
-    const token = sessionRes.data ? (sessionRes.data.sessionToken || sessionRes.data.token) : null;
+    // Simulate login by directly calling createSession with the full user object
+    const sessionRes = SessionService.createSession(activeUser);
+    IntegrationAssertions.assertNotNull(sessionRes, 'Session creation failed');
+    
+    const tokenCol = CONFIG.COLUMNS.SESSION_TOKEN || 'Session Token';
+    const token = sessionRes[tokenCol];
     IntegrationAssertions.assertNotNull(token, 'Session token is empty');
 
     // Verify session in DB
@@ -66,14 +67,29 @@ const IntegrationTest = {
 
     // Validate Session
     const validateRes = SessionService.validateSession(token);
-    IntegrationAssertions.assertSuccess(validateRes, 'Session validation failed');
+    if (validateRes !== true) {
+      throw new Error('Session validation failed');
+    }
 
     // Destroy session
     const destroyRes = SessionService.destroySession(token);
-    IntegrationAssertions.assertSuccess(destroyRes, 'Session destruction failed');
+    if (destroyRes !== true) {
+      throw new Error('Session destruction failed');
+    }
 
-    // Verify session is gone
-    IntegrationAssertions.assertSessionDestroyed(token, 'Session still exists in Database after logout');
+    // Verify session is inactive/logged out in DB
+    const sessionRecord = DatabaseService.findByColumn(CONFIG.SHEETS.SESSIONS, tokenCol, token)[0];
+    if (sessionRecord && sessionRecord[CONFIG.COLUMNS.SESSION_STATUS] === CONFIG.SESSION_STATUS.ACTIVE) {
+      throw new Error('Session is still active after destruction');
+    }
+
+    // Clean up mock session row from SESSIONS sheet to prevent clutter
+    const sessionIdCol = CONFIG.COLUMNS.SESSION_ID || 'Session ID';
+    const sessionId = sessionRes[sessionIdCol];
+    if (sessionId) {
+      DatabaseService.hardDelete(CONFIG.SHEETS.SESSIONS, sessionIdCol, sessionId);
+    }
+
     Logger.log('✅ PASS: Session Lifecycle verified.');
     Logger.log('');
   },
