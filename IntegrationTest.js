@@ -106,7 +106,8 @@ const IntegrationTest = {
     const rollNo = '23A91A0599';
 
     // Cleanup first
-    try { DatabaseService.hardDelete(CONFIG.SHEETS.DEPARTMENTS, 'Department ID', depId); } catch(e) {}
+    try { DatabaseService.hardDelete(CONFIG.SHEETS.DEPARTMENTS, 'Department Code', depId); } catch(e) {}
+    try { DatabaseService.hardDelete(CONFIG.SHEETS.DEPARTMENTS, 'Department Name', 'Test Integration Department'); } catch(e) {}
     try { DatabaseService.hardDelete(CONFIG.SHEETS.STUDENTS, 'Roll Number', rollNo); } catch(e) {}
 
     // Create Department
@@ -146,7 +147,8 @@ const IntegrationTest = {
     IntegrationAssertions.assertSuccess(deleteRes, 'Student deletion failed');
 
     // Cleanup
-    DatabaseService.hardDelete(CONFIG.SHEETS.DEPARTMENTS, 'Department ID', depId);
+    DatabaseService.hardDelete(CONFIG.SHEETS.DEPARTMENTS, 'Department Code', depId);
+    DatabaseService.hardDelete(CONFIG.SHEETS.DEPARTMENTS, 'Department Name', 'Test Integration Department');
     DatabaseService.hardDelete(CONFIG.SHEETS.STUDENTS, 'Roll Number', rollNo);
     Logger.log('✅ PASS: Student Lifecycle verified.');
     Logger.log('');
