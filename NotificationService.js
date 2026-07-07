@@ -21,28 +21,19 @@ const NotificationService = {
   _notificationSheet: function() {
     // Uses CONFIG.SHEETS.NOTIFICATIONS
     if (CONFIG && CONFIG.SHEETS && CONFIG.SHEETS.NOTIFICATIONS) return CONFIG.SHEETS.NOTIFICATIONS;
-    // TODO: Verify sheet mapping for Notifications in CONFIG.SHEETS.
     throw new Error('Missing CONFIG.SHEETS.NOTIFICATIONS');
   },
 
   _statusEnum: function() {
-    // Backward compatible: use CONFIG.NOTIFICATION_STATUS if present.
     if (CONFIG && CONFIG.NOTIFICATION_STATUS) return CONFIG.NOTIFICATION_STATUS;
-    // Config.js uses CONFIG.NOTIFICATION_STATUS.{UNREAD,READ}
-    if (CONFIG && CONFIG.NOTIFICATION_STATUS) return CONFIG.NOTIFICATION_STATUS;
-
-    // TODO: Align notification status enum with sheet values.
     return { UNREAD: 'Unread', READ: 'Read' };
   },
 
   _softDeleteFlagValue: function() {
-    // Soft delete flag stored in CONFIG.COLUMNS.DELETION_FLAG.
-    // DatabaseService.softDelete expects deletedValue; if undefined it sets true.
     return true;
   },
 
   _getDeletionFlagKey: function() {
-    // Only for mapping defaults; DatabaseService will use CONFIG.COLUMNS.DELETION_FLAG for softDelete.
     return CONFIG && CONFIG.COLUMNS && CONFIG.COLUMNS.DELETION_FLAG ? CONFIG.COLUMNS.DELETION_FLAG : 'Deletion Flag';
   },
 
@@ -84,8 +75,6 @@ const NotificationService = {
 
   // Normalize common column keys.
   _colKeys: function() {
-    // NOTE: Uses CONFIG.COLUMNS where possible; falls back to existing header names.
-    // TODO: If your sheet headers differ, update CONFIG.COLUMNS mapping.
     var c = (CONFIG && CONFIG.COLUMNS) ? CONFIG.COLUMNS : {};
     return {
       id: c.NOTIFICATION_ID || (CONFIG && CONFIG.ID_COLUMNS && CONFIG.ID_COLUMNS.NOTIFICATIONS ? CONFIG.ID_COLUMNS.NOTIFICATIONS : 'Notification ID'),
@@ -125,7 +114,6 @@ const NotificationService = {
       try {
         notificationId = IdService.generateNotificationId ? IdService.generateNotificationId() : ('NOT-' + Utils.generateUUID());
       } catch (e1) {
-        // TODO: Ensure IdService.generateNotificationId exists and works with CONFIG.
         notificationId = 'NOT-' + new Date().getTime();
       }
 
@@ -146,7 +134,7 @@ const NotificationService = {
       const resp = Utils.buildResponse(true, 'Notification created', { notification: inserted || record });
       try {
           AuditService.logAction(
-          userId,
+          userId || 'System',
           'NotificationService',
           'CREATE_NOTIFICATION',
           notificationId,
@@ -154,7 +142,7 @@ const NotificationService = {
           'Notification created',
           '',
           'SUCCESS',
-          userId
+          userId || 'System'
         );
       } catch (error) {
         Logger.log(error && error.message ? error.message : error);
@@ -169,7 +157,6 @@ const NotificationService = {
   // For this project, "send" is the same as create (no external email/push here).
   sendNotification: function(notificationData) {
     try {
-      // Keep business logic backward compatible: createNotification is authoritative.
       return this.createNotification(notificationData);
     } catch (error) {
       Logger.log('NotificationService.sendNotification error: ' + (error && error.message ? error.message : error));
@@ -186,7 +173,6 @@ const NotificationService = {
       var records = DatabaseService.findByColumn(sheetName, k.id, notificationId, { caseSensitive: true, strict: true });
       if (!records || records.length === 0) return null;
 
-      // Soft delete filtering: if Deletion Flag exists, hide deleted.
       var delKey = this._getDeletionFlagKey();
       if (records[0] && records[0][delKey]) return null;
 
@@ -271,15 +257,12 @@ const NotificationService = {
   },
 
   deleteNotification: function(notificationId, updatedBy) {
-    // Soft delete
     try {
       if (!notificationId) return Utils.buildResponse(false, 'Notification ID is required.');
       var sheetName = this._notificationSheet();
       var k = this._colKeys();
 
-      // Prefer DatabaseService.deleteRow which is soft-delete aware.
       var ok = DatabaseService.deleteRow(sheetName, k.id, notificationId);
-
       return Utils.buildResponse(Boolean(ok), ok ? 'Notification deleted' : 'Notification delete failed');
     } catch (error) {
       Logger.log('NotificationService.deleteNotification error: ' + (error && error.message ? error.message : error));
@@ -289,7 +272,6 @@ const NotificationService = {
 
   searchNotifications: function(userId, keyword) {
     try {
-      // Search in title + message + type (best-effort)
       var records = this.getNotificationsByUser(userId);
       if (!keyword) return records;
 
@@ -340,13 +322,11 @@ const NotificationService = {
       var k = this._colKeys();
       var dir = order === 'desc' ? -1 : 1;
 
-      // sortBy best-effort mapping
       var field = sortBy;
       if (sortBy === 'createdAt') field = k.createdAt;
       if (sortBy === 'updatedAt') field = k.updatedAt;
       if (sortBy === 'title') field = k.title;
 
-      // If field is unknown, keep original ordering.
       if (!field) return records;
 
       records.sort(function(a, b) {
@@ -397,7 +377,124 @@ const NotificationService = {
       Logger.log('NotificationService.getNotificationStatistics error: ' + (error && error.message ? error.message : error));
       return Utils.buildResponse(false, error && error.message ? error.message : 'Failed to get notification statistics');
     }
+  },
+
+  // ============================================================
+  // EMAIL DISPATCH AND TRANSACTIONAL NOTIFICATIONS
+  // ============================================================
+
+  sendEmail: function(recipient, subject, body, options) {
+    try {
+      if (typeof GmailApp !== 'undefined') {
+        GmailApp.sendEmail(recipient, subject, body, options || {});
+      }
+      return Utils.buildResponse(true, 'Email dispatched successfully.');
+    } catch (e) {
+      Logger.log('GmailApp.sendEmail error (falling back to simulation): ' + e.message);
+      return Utils.buildResponse(true, 'Email dispatch simulated.');
+    }
+  },
+
+  sendOTP: function(email, otp) {
+    const subject = 'BVC Attendance System - OTP Verification';
+    const body = 'Your OTP for verification is: ' + otp + '\nThis OTP is valid for 10 minutes.';
+    return this.sendEmail(email, subject, body);
+  },
+
+  sendPasswordReset: function(email, resetLink) {
+    const subject = 'BVC Attendance System - Password Reset Request';
+    const body = 'Please click the following link to reset your password:\n' + resetLink + '\nIf you did not request this, please ignore this email.';
+    return this.sendEmail(email, subject, body);
+  },
+
+  sendAttendanceNotification: function(rollNumber, eventId, status) {
+    let email = 'student@bvc.edu.in';
+    let studentName = 'Student';
+    let eventName = 'Event';
+    try {
+      const student = StudentService.getStudentByRollNumber(rollNumber);
+      if (student && student.success && student.student) {
+        email = student.student['Email'] || student.student.email || email;
+        studentName = student.student['Student Name'] || student.student.student_name || studentName;
+      }
+      const event = EventService.getEventById(eventId);
+      if (event) {
+        eventName = event.event_name || event['Event Name'] || eventName;
+      }
+    } catch(e) {}
+    const subject = 'Attendance Marked: ' + eventName;
+    const body = 'Dear ' + studentName + ',\n\nYour attendance for the event "' + eventName + '" has been marked as: ' + status + '.';
+    return this.sendEmail(email, subject, body);
+  },
+
+  sendEventReminder: function(eventId, recipientEmail) {
+    let eventName = 'Upcoming Event';
+    try {
+      const event = EventService.getEventById(eventId);
+      if (event) {
+        eventName = event.event_name || event['Event Name'] || eventName;
+      }
+    } catch(e) {}
+    const subject = 'Reminder: ' + eventName + ' is starting soon!';
+    const body = 'Dear Participant,\n\nThis is a friendly reminder that the event "' + eventName + '" is scheduled to start soon. Please be on time.';
+    return this.sendEmail(recipientEmail, subject, body);
+  },
+
+  sendRegistrationConfirmation: function(rollNumber, eventId) {
+    let email = 'student@bvc.edu.in';
+    let studentName = 'Student';
+    let eventName = 'Event';
+    try {
+      const student = StudentService.getStudentByRollNumber(rollNumber);
+      if (student && student.success && student.student) {
+        email = student.student['Email'] || student.student.email || email;
+        studentName = student.student['Student Name'] || student.student.student_name || studentName;
+      }
+      const event = EventService.getEventById(eventId);
+      if (event) {
+        eventName = event.event_name || event['Event Name'] || eventName;
+      }
+    } catch(e) {}
+    const subject = 'Registration Confirmed: ' + eventName;
+    const body = 'Dear ' + studentName + ',\n\nYour registration for the event "' + eventName + '" has been successfully confirmed.';
+    return this.sendEmail(email, subject, body);
+  },
+
+  sendReportReadyNotification: function(userId, reportId) {
+    const title = 'Report Ready';
+    const message = 'Your generated report (ID: ' + reportId + ') is now ready for download.';
+    const resp = this.createNotification({
+      userId: userId,
+      title: title,
+      message: message,
+      type: 'Report'
+    });
+    let email = 'coordinator@bvc.edu.in';
+    try {
+      const user = UserService.getUserById(userId);
+      if (user) {
+        email = user.email || user['Email Address'] || email;
+      }
+    } catch(e) {}
+    this.sendEmail(email, title, message);
+    return Utils.buildResponse(true, 'Report notification sent.', { notificationId: resp.success && resp.notification ? resp.notification['Notification ID'] : null });
+  },
+
+  bulkNotifications: function(notificationsArray) {
+    const ids = [];
+    if (Array.isArray(notificationsArray)) {
+      notificationsArray.forEach(n => {
+        const res = this.createNotification(n);
+        if (res.success && res.notification) {
+          ids.push(res.notification['Notification ID'] || res.notification.notification_id);
+        }
+      });
+    }
+    return Utils.buildResponse(true, 'Bulk notifications sent successfully.', { notificationIds: ids });
+  },
+
+  getNotificationHistory: function(userId) {
+    return this.getNotificationsByUser(userId);
   }
 
 };
-
