@@ -173,6 +173,7 @@ const IntegrationTest = {
     // Cleanup any leftovers first
     try { DatabaseService.hardDelete(CONFIG.SHEETS.EVENTS, 'Event ID', eventId); } catch(e) {}
     try { DatabaseService.hardDelete(CONFIG.SHEETS.USERS, 'Username', 'integ_coord_test'); } catch(e) {}
+    try { DatabaseService.hardDelete(CONFIG.SHEETS.USERS, 'Employee ID', 'EMP-INTEG-001'); } catch(e) {}
 
     // Create a real Coordinator user
     const coordUserData = {};
@@ -183,6 +184,7 @@ const IntegrationTest = {
     coordUserData[CONFIG.COLUMNS.USER_ROLE] = CONFIG.ROLES.COORDINATOR;
     coordUserData[CONFIG.COLUMNS.USER_STATUS] = CONFIG.USER_STATUS.ACTIVE;
     coordUserData['Status'] = CONFIG.USER_STATUS.ACTIVE;
+    coordUserData[CONFIG.COLUMNS.USER_EMPLOYEE_ID] = 'EMP-INTEG-001';
     coordUserData['Password'] = 'Test@1234';
     const coordRes = UserService.createUser(coordUserData, 'USR001');
     IntegrationAssertions.assertSuccess(coordRes, 'Coordinator user creation failed');
