@@ -209,28 +209,33 @@ const IntegrationTest = {
     eventPayload[CONFIG.COLUMNS.CREATED_BY] = 'USR001';
     const eventRes = EventService.createEvent(eventPayload);
     IntegrationAssertions.assertSuccess(eventRes, 'Event creation failed');
+    const actualEventId = (eventRes.event && eventRes.event[CONFIG.COLUMNS.EVENT_ID])
+      || (eventRes.data && eventRes.data.event && eventRes.data.event[CONFIG.COLUMNS.EVENT_ID])
+      || eventId;
+    Logger.log('Resolved actualEventId: ' + actualEventId);
 
     // Update Event
     const updatePayload = {};
     updatePayload[CONFIG.COLUMNS.VENUE] = 'Location B';
-    const updateRes = EventService.updateEvent(eventId, updatePayload);
+    const updateRes = EventService.updateEvent(actualEventId, updatePayload);
     IntegrationAssertions.assertSuccess(updateRes, 'Event update failed');
 
     // Assign Coordinator
-    const assignRes = CoordinatorService.assignCoordinator(eventId, actualCoordId, 'Coordinator', 'USR001', 'Remarks');
+    const assignRes = CoordinatorService.assignCoordinator(actualEventId, actualCoordId, 'Coordinator', 'USR001', 'Remarks');
     IntegrationAssertions.assertSuccess(assignRes, 'Coordinator assignment failed');
     const assignmentId = (assignRes.assignment && assignRes.assignment['Assignment ID'])
       || (assignRes.data && assignRes.data.assignment && assignRes.data.assignment['Assignment ID']);
     IntegrationAssertions.assertNotNull(assignmentId, 'Assignment ID is empty');
 
     // Verify Coordinator Assignment
-    IntegrationAssertions.assertCoordinatorAssigned(actualCoordId, eventId, 'Coordinator not assigned in DB');
+    IntegrationAssertions.assertCoordinatorAssigned(actualCoordId, actualEventId, 'Coordinator not assigned in DB');
 
     // Remove Coordinator
     const removeRes = CoordinatorService.removeCoordinator(assignmentId, 'USR001');
     IntegrationAssertions.assertSuccess(removeRes, 'Coordinator removal failed');
 
     // Cleanup
+    DatabaseService.hardDelete(CONFIG.SHEETS.EVENTS, 'Event ID', actualEventId);
     DatabaseService.hardDelete(CONFIG.SHEETS.EVENTS, 'Event ID', eventId);
     if (assignmentId) DatabaseService.hardDelete(CONFIG.SHEETS.EVENT_COORDINATORS, 'Assignment ID', assignmentId);
     DatabaseService.hardDelete(CONFIG.SHEETS.USERS, 'Username', 'integ_coord_test');
