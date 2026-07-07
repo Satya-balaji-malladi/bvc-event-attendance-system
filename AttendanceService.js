@@ -40,8 +40,10 @@ const AttendanceService = {
     const timeKey = this._getAttendanceColumn('ATTENDANCE_TIME', 'attendance_time');
 
     return list.slice().sort((a, b) => {
-      const ta = a && a[timeKey] ? new Date(a[timeKey]).getTime() : 0;
-      const tb = b && b[timeKey] ? new Date(b[timeKey]).getTime() : 0;
+      const valA = a && (a.Timestamp || a.Date || a[timeKey]);
+      const valB = b && (b.Timestamp || b.Date || b[timeKey]);
+      const ta = valA ? new Date(valA).getTime() : 0;
+      const tb = valB ? new Date(valB).getTime() : 0;
       return tb - ta;
     });
   },
@@ -133,17 +135,18 @@ const AttendanceService = {
     // Everyone else → deny.
     if (!event || !user) return false;
 
-    if (user.role === CONFIG.ROLES.ADMIN) return true;
+    const role = user[CONFIG.COLUMNS.ROLE || 'Role'] || user.role || user.Role;
+    if (role === CONFIG.ROLES.ADMIN) return true;
 
-    if (user.role !== CONFIG.ROLES.COORDINATOR) return false;
+    if (role !== CONFIG.ROLES.COORDINATOR) return false;
 
-    const assignedCoordinatorId = event.coordinator_id;
+    const assignedCoordinatorId = event.coordinator_id || event.coordinatorId || event[CONFIG.COLUMNS.COORDINATOR_ID || 'Organizer'];
     const actionUserId = this._getUserIdFromUser(user);
 
     // If we can't establish IDs, deny.
     if (!assignedCoordinatorId || !actionUserId) return false;
 
-    return assignedCoordinatorId === actionUserId;
+    return String(assignedCoordinatorId).trim() === String(actionUserId).trim();
   },
 
   _validateAttendanceWindow: function(eventId) {
@@ -289,14 +292,12 @@ const AttendanceService = {
         }
 
         // Sprint 1 Rules: Check Fixed/Open eligibility
-        const attendanceType = event.attendance_type || 'Fixed';
+        const attendanceType = event.attendance_type || event.attendanceType || 'Fixed';
         if (attendanceType === 'Fixed') {
-          // Avoid hardcoding attendance column names: this query is about participants sheet,
-          // but current repo uses literal 'event_id' and 'roll_number'.
-          // TODO: If CONFIG columns for participants exist, switch them to CONFIG.COLUMNS.*.
-          const parts = DatabaseService.findByColumn(CONFIG.SHEETS.EVENT_PARTICIPANTS, 'event_id', eventId) || [];
+          const parts = DatabaseService.findByColumn(CONFIG.SHEETS.EVENT_PARTICIPANTS, 'Event ID', eventId) || [];
           const isPart = parts.find(p =>
-            String(p.roll_number).trim().toUpperCase() === rollNumber && p.status === 'Active'
+            String(p['Roll Number'] || p.roll_number || p.rollNumber).trim().toUpperCase() === rollNumber &&
+            (p['Registration Status'] === 'Confirmed' || p.status === 'Active')
           );
           if (!isPart) {
             if (CONFIG.MESSAGES && CONFIG.MESSAGES.STUDENT_NOT_ACTIVE_PARTICIPANT) {
@@ -328,14 +329,20 @@ const AttendanceService = {
         }
 
         const attendanceId = IdService.generateAttendanceId();
-        const attendanceTime = Utils.getCurrentDate();
+        const now = new Date();
 
         const newAttendance = {
-          [this._getAttendanceColumn('ATTENDANCE_ID', 'attendance_id')]: attendanceId,
-          [this._getAttendanceColumn('EVENT_ID', 'event_id')]: eventId,
-          [this._getAttendanceColumn('ROLL_NUMBER', 'roll_number')]: rollNumber,
-          [this._getAttendanceColumn('ATTENDANCE_TIME', 'attendance_time')]: attendanceTime,
-          [this._getAttendanceColumn('STATUS', 'status')]: status
+          [this._getAttendanceColumn('ATTENDANCE_ID', 'Attendance ID')]: attendanceId,
+          [this._getAttendanceColumn('EVENT_ID', 'Event ID')]: eventId,
+          [this._getAttendanceColumn('ROLL_NUMBER', 'Roll Number')]: rollNumber,
+          [this._getAttendanceColumn('USER_ID', 'User ID')]: userId,
+          [this._getAttendanceColumn('ATTENDANCE_STATUS', 'Attendance Status')]: status,
+          [this._getAttendanceColumn('ATTENDANCE_METHOD', 'Attendance Method')]: normalized.attendanceMethod || 'Barcode',
+          'Date': Utils.formatDate(now),
+          'Time': Utilities.formatDate(now, CONFIG.DATE_TIME.TIMEZONE || 'Asia/Kolkata', 'HH:mm:ss'),
+          'Timestamp': now.toISOString(),
+          'Is Undo': false,
+          'Correction Requested': false
         };
 
         const success = DatabaseService.insertRow(CONFIG.SHEETS.ATTENDANCE, newAttendance);
@@ -519,8 +526,12 @@ const AttendanceService = {
       const allAttendance = DatabaseService.readAllRows(CONFIG.SHEETS.ATTENDANCE) || [];
       const active = this._filterDeletedAttendance(allAttendance);
 
+      const dateKey = 'Date';
       const timeKey = this._getAttendanceColumn('ATTENDANCE_TIME', 'attendance_time');
-      const filtered = active.filter(record => Utils.formatDate(record[timeKey]) === targetDate);
+      const filtered = active.filter(record => {
+        const val = record[dateKey] || record['Timestamp'] || record[timeKey];
+        return Utils.formatDate(val) === targetDate;
+      });
 
       return this._sortByAttendanceTimeDesc(filtered);
     });
@@ -534,7 +545,7 @@ const AttendanceService = {
   getAttendanceByStatus: function(status) {
     return this._tryWrap('getAttendanceByStatus', () => {
       if (!status) return [];
-      const statusKey = this._getAttendanceColumn('STATUS', 'status');
+      const statusKey = this._getAttendanceColumn('ATTENDANCE_STATUS', 'Attendance Status');
       const list = DatabaseService.findByColumn(CONFIG.SHEETS.ATTENDANCE, statusKey, status) || [];
       return this._sortByAttendanceTimeDesc(this._filterDeletedAttendance(list));
     });
@@ -551,7 +562,7 @@ const AttendanceService = {
       let present = 0;
       let absent = 0;
 
-      const statusKey = this._getAttendanceColumn('STATUS', 'status');
+      const statusKey = this._getAttendanceColumn('ATTENDANCE_STATUS', 'Attendance Status');
 
       records.forEach(record => {
         if (record[statusKey] === CONFIG.ATTENDANCE_STATUS.PRESENT) present++;
@@ -585,7 +596,7 @@ const AttendanceService = {
       let present = 0;
       let absent = 0;
 
-      const statusKey = this._getAttendanceColumn('STATUS', 'status');
+      const statusKey = this._getAttendanceColumn('ATTENDANCE_STATUS', 'Attendance Status');
 
       records.forEach(record => {
         if (record[statusKey] === CONFIG.ATTENDANCE_STATUS.PRESENT) present++;
@@ -608,7 +619,7 @@ const AttendanceService = {
       let present = 0;
       let absent = 0;
 
-      const statusKey = this._getAttendanceColumn('STATUS', 'status');
+      const statusKey = this._getAttendanceColumn('ATTENDANCE_STATUS', 'Attendance Status');
 
       active.forEach(record => {
         if (record[statusKey] === CONFIG.ATTENDANCE_STATUS.PRESENT) present++;
