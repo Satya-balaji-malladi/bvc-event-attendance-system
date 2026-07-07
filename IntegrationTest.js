@@ -263,17 +263,22 @@ const IntegrationTest = {
       DatabaseService.hardDelete(CONFIG.SHEETS.EVENT_PARTICIPANTS, 'Participant ID', dup['Participant ID']);
     }
 
-    // Register Participant (addParticipant)
-    const registerRes = ParticipantService.addParticipant(eventId, rollNo, 'Pre-Registered', 'USR001');
+    // Register Participant (addParticipant signature: eventId, rollNumber, userId)
+    const registerRes = ParticipantService.addParticipant(eventId, rollNo, 'USR001');
     IntegrationAssertions.assertSuccess(registerRes, 'Participant registration failed');
-    const participantId = registerRes.data && registerRes.data.participant ? registerRes.data.participant['Participant ID'] : null;
-    IntegrationAssertions.assertNotNull(participantId, 'Participant ID is empty');
+
+    // Look up Participant ID directly from DB after insert (response doesn't include it)
+    const allAfter = DatabaseService.readAllRows(CONFIG.SHEETS.EVENT_PARTICIPANTS) || [];
+    const pRecord = allAfter.find(p => String(p['Roll Number']) === rollNo && String(p['Event ID']) === eventId);
+    const participantId = pRecord ? pRecord['Participant ID'] : null;
+    Logger.log('Resolved participantId: ' + participantId);
 
     // Verify record exists
     IntegrationAssertions.assertParticipantCreated(rollNo, eventId, 'Participant record not found in Database');
 
     // Cleanup
     if (participantId) DatabaseService.hardDelete(CONFIG.SHEETS.EVENT_PARTICIPANTS, 'Participant ID', participantId);
+    else DatabaseService.hardDelete(CONFIG.SHEETS.EVENT_PARTICIPANTS, 'Roll Number', rollNo);
     Logger.log('✅ PASS: Participant Registration Lifecycle verified.');
     Logger.log('');
   },
@@ -294,8 +299,10 @@ const IntegrationTest = {
     let pRecord = allP.find(p => String(p['Roll Number'] || p.roll_number) === rollNo && String(p['Event ID'] || p.event_id) === eventId);
     let pId = null;
     if (!pRecord) {
-      const pRes = ParticipantService.addParticipant(eventId, rollNo, 'Pre-Registered', 'USR001');
-      pId = pRes.data && pRes.data.participant ? pRes.data.participant['Participant ID'] : null;
+      const pRes = ParticipantService.addParticipant(eventId, rollNo, 'USR001');
+      const allPAfter = DatabaseService.readAllRows(CONFIG.SHEETS.EVENT_PARTICIPANTS) || [];
+      const pRec = allPAfter.find(p => String(p['Roll Number']) === rollNo && String(p['Event ID']) === eventId);
+      pId = pRec ? pRec['Participant ID'] : null;
     }
 
     // Pre-cleanup attendance
