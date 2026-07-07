@@ -117,7 +117,10 @@ const IntegrationTest = {
     departmentData[CONFIG.COLUMNS.STATUS || 'Status'] = 'Active';
     const depRes = DepartmentService.createDepartment(departmentData, 'USR001');
     IntegrationAssertions.assertSuccess(depRes, 'Department creation failed');
-    const actualDepId = depRes.data && depRes.data.department ? depRes.data.department[CONFIG.COLUMNS.DEPARTMENT_ID] : depId;
+    const actualDepId = (depRes.department && depRes.department[CONFIG.COLUMNS.DEPARTMENT_ID])
+      || (depRes.data && depRes.data.department && depRes.data.department[CONFIG.COLUMNS.DEPARTMENT_ID])
+      || depId;
+    Logger.log('Resolved actualDepId: ' + actualDepId);
 
     // Create Student
     const studentData = {};
