@@ -43,7 +43,7 @@ function testSendEmail() {
   Logger.log('TEST: testSendEmail');
   Logger.log('====================================');
 
-  const result = NotificationService.sendEmail('test@bvc.edu.in', 'Unit Test Subject', 'Hello from Unit Tests!');
+  const result = NotificationService.sendEmail('satyabalajim@gmail.com', 'Unit Test Subject', 'Hello from Unit Tests!');
 
   if (result.success) {
     Logger.log('✅ PASS: sendEmail executed successfully.');
@@ -59,7 +59,7 @@ function testSendOTP() {
   Logger.log('TEST: testSendOTP');
   Logger.log('====================================');
 
-  const result = NotificationService.sendOTP('test@bvc.edu.in', '123456');
+  const result = NotificationService.sendOTP('satyabalajim@gmail.com', '123456');
 
   if (result.success) {
     Logger.log('✅ PASS: sendOTP executed successfully.');
@@ -75,7 +75,7 @@ function testSendPasswordReset() {
   Logger.log('TEST: testSendPasswordReset');
   Logger.log('====================================');
 
-  const result = NotificationService.sendPasswordReset('test@bvc.edu.in', 'https://bvc.edu.in/reset?token=xyz');
+  const result = NotificationService.sendPasswordReset('satyabalajim@gmail.com', 'https://bvc.edu.in/reset?token=xyz');
 
   if (result.success) {
     Logger.log('✅ PASS: sendPasswordReset executed successfully.');
