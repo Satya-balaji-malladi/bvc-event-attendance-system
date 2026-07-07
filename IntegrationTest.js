@@ -130,6 +130,7 @@ const IntegrationTest = {
     studentData[CONFIG.COLUMNS.STUDENT_YEAR] = '3';
     studentData[CONFIG.COLUMNS.STUDENT_SECTION] = 'A';
     studentData[CONFIG.COLUMNS.STUDENT_STATUS] = 'Active';
+    studentData['Status'] = 'Active';
     studentData[CONFIG.COLUMNS.STUDENT_EMAIL] = 'test@bvc.edu.in';
     const studentRes = StudentService.createStudent(studentData, 'USR001');
     IntegrationAssertions.assertSuccess(studentRes, 'Student creation failed');
