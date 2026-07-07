@@ -172,6 +172,7 @@ const IntegrationTest = {
 
     // Cleanup any leftovers first
     try { DatabaseService.hardDelete(CONFIG.SHEETS.EVENTS, 'Event ID', eventId); } catch(e) {}
+    try { DatabaseService.hardDelete(CONFIG.SHEETS.EVENTS, 'Event Name', 'Integration Event'); } catch(e) {}
     try { DatabaseService.hardDelete(CONFIG.SHEETS.USERS, 'Username', 'integ_coord_test'); } catch(e) {}
     try { DatabaseService.hardDelete(CONFIG.SHEETS.USERS, 'Employee ID', 'EMP-INTEG-001'); } catch(e) {}
 
@@ -237,6 +238,7 @@ const IntegrationTest = {
     // Cleanup
     DatabaseService.hardDelete(CONFIG.SHEETS.EVENTS, 'Event ID', actualEventId);
     DatabaseService.hardDelete(CONFIG.SHEETS.EVENTS, 'Event ID', eventId);
+    DatabaseService.hardDelete(CONFIG.SHEETS.EVENTS, 'Event Name', 'Integration Event');
     if (assignmentId) DatabaseService.hardDelete(CONFIG.SHEETS.EVENT_COORDINATORS, 'Assignment ID', assignmentId);
     DatabaseService.hardDelete(CONFIG.SHEETS.USERS, 'Username', 'integ_coord_test');
     Logger.log('✅ PASS: Event & Coordinator Lifecycle verified.');
