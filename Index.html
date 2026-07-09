@@ -3,153 +3,191 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#1E293B">
-  <title>Admin Dashboard - BVC Engineering College</title>
+  <title>BVC Event Attendance Management System</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.min.css">
   
-  <!-- Google Fonts: Poppins -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  
-  <!-- Bootstrap 5 CSS -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <!-- Bootstrap Icons -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
-  
-  <!-- Custom CSS Injection -->
-  <?!= include('CSS'); ?>
+  <?!= include('Index_CSS'); ?>
 </head>
 <body>
 
-  <!-- Full Page Loader (Generic) -->
-  <div id="page-loader" class="loader-overlay d-none">
-    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+  <div id="appLoader" class="app-loader d-none" aria-hidden="true">
+    <div class="spinner-border text-light" role="status">
       <span class="visually-hidden">Loading...</span>
     </div>
   </div>
 
-  <!-- Splash Screen -->
-  <div id="splash-screen" class="splash-overlay d-flex flex-column justify-content-center align-items-center">
-    <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQQlFZ_2u0RaNZlfgwlsn7JNBCW34KxzENz6uT3fX7IuA&s=10" alt="BVC Logo" class="splash-logo mb-4 shadow-sm rounded-circle">
-    <div class="spinner-border text-primary mb-3 splash-spinner" role="status"></div>
-    <h5 id="splash-text" class="text-dark fw-medium">Checking Session...</h5>
-  </div>
-
-  <!-- Auth Background -->
-  <div id="auth-bg" class="auth-bg d-none">
-    <div class="auth-overlay"></div>
-  </div>
-
-  <!-- Login Module Container -->
-  <div id="login-container" class="d-none">
-    <?!= include('Login'); ?>
-  </div>
-
-  <!-- Error Module Container -->
-  <div id="error-container" class="d-none">
-    <!-- Rendered dynamically -->
-  </div>
-
-  <!-- Main Application Wrapper -->
-  <div class="wrapper d-none" id="app-wrapper">
-    <!-- Sidebar Component -->
-    <?!= include('Sidebar'); ?>
-
-    <!-- Main Content Wrapper -->
-    <div class="main-content">
-      
-      <!-- Header Component -->
-      <?!= include('Header'); ?>
-
-      <!-- Page Content Area -->
-      <main class="content-area p-3 p-md-4">
-        
-        <!-- Page Title -->
-        <div class="d-flex justify-content-between align-items-center mb-4">
-          <h2 class="h4 mb-0 fw-semibold text-dark" id="page-heading">Dashboard</h2>
-          <div id="page-actions"></div>
+  <div class="app-container d-flex">
+    
+    <aside id="sidebar" class="sidebar d-flex flex-column justify-content-between flex-shrink-0" role="navigation" aria-label="Main Navigation">
+      <div>
+        <div class="sidebar-header d-flex align-items-center gap-3 px-3 py-4">
+          <svg class="sidebar-logo rounded-circle flex-shrink-0" width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" alt="BVC Emblem Logo">
+            <circle cx="20" cy="20" r="20" fill="#1e3d59"/>
+            <path d="M12 11H28V15L20 22L12 15V11Z" fill="#ffffff"/>
+            <path d="M12 25H28V29H12V25Z" fill="#17a2b8"/>
+          </svg>
+          <div class="sidebar-brand-text">
+            <h1 class="brand-title mb-0">BVC College</h1>
+            <p class="brand-system mb-0 text-white-50">Event Attendance</p>
+          </div>
         </div>
-
-        <!-- Dynamic Content Container -->
-        <div id="app-container">
+        
+        <hr class="sidebar-divider my-2 mx-3">
+        
+        <nav class="nav flex-column sidebar-nav px-2 py-3" role="menubar">
+          <a href="javascript:void(0)" class="nav-link d-flex align-items-center gap-3 active" data-page="Dashboard" role="menuitem" aria-current="page">
+            <i class="bi bi-speedometer2"></i> <span>Dashboard</span>
+          </a>
+          <a href="javascript:void(0)" class="nav-link d-flex align-items-center gap-3" data-page="Users" role="menuitem">
+            <i class="bi bi-people"></i> <span>Users</span>
+          </a>
+          <a href="javascript:void(0)" class="nav-link d-flex align-items-center gap-3" data-page="Events" role="menuitem">
+            <i class="bi bi-calendar-event"></i> <span>Events</span>
+          </a>
+          <a href="javascript:void(0)" class="nav-link d-flex align-items-center gap-3" data-page="Participants" role="menuitem">
+            <i class="bi bi-person-check"></i> <span>Participants</span>
+          </a>
+          <a href="javascript:void(0)" class="nav-link d-flex align-items-center gap-3" data-page="Attendance" role="menuitem">
+            <i class="bi bi-clipboard-check"></i> <span>Attendance</span>
+          </a>
+          <a href="javascript:void(0)" class="nav-link d-flex align-items-center gap-3" data-page="Reports" role="menuitem">
+            <i class="bi bi-file-earmark-bar-graph"></i> <span>Reports</span>
+          </a>
+          <a href="javascript:void(0)" class="nav-link d-flex align-items-center gap-3" data-page="Analytics" role="menuitem">
+            <i class="bi bi-graph-up-arrow"></i> <span>Analytics</span>
+          </a>
+          <a href="javascript:void(0)" class="nav-link d-flex align-items-center gap-3" data-page="Settings" role="menuitem">
+            <i class="bi bi-gear"></i> <span>Settings</span>
+          </a>
+          <a href="javascript:void(0)" class="nav-link d-flex align-items-center gap-3" data-page="Profile" role="menuitem">
+            <i class="bi bi-person-bounding-box"></i> <span>Profile</span>
+          </a>
           
-          <!-- Default Empty State (before routing) -->
-          <div id="module-empty" class="d-none">
-            <div class="card border-0 shadow-sm">
-              <div class="card-body p-5 text-center">
-                <i class="bi bi-building fs-1 d-block mb-3 text-primary"></i>
-                <h4 class="text-dark">Welcome to BVC Engineering College Event Attendance Management System.</h4>
-                <p class="text-muted mb-0">Select a module from the sidebar to begin.</p>
-              </div>
+          <hr class="sidebar-divider my-3 mx-2">
+          
+          <a href="javascript:void(0)" id="sidebarLogoutBtn" class="nav-link d-flex align-items-center gap-3 logout-link" role="menuitem">
+            <i class="bi bi-box-arrow-left"></i> <span>Logout</span>
+          </a>
+        </nav>
+      </div>
+      
+      <div class="sidebar-footer p-3 border-top border-secondary text-center text-white-50 small">
+        <span class="version-label">v1.0.0</span>
+      </div>
+    </aside>
+
+    <div id="sidebarOverlay" class="sidebar-overlay d-none" aria-hidden="true"></div>
+
+    <div class="main-layout flex-grow-1 d-flex flex-column">
+      
+      <header class="navbar navbar-expand bg-white border-bottom px-3 py-2 d-flex justify-content-between align-items-center sticky-top" role="banner">
+        <div class="d-flex align-items-center gap-3 flex-grow-1 me-3">
+          <button class="btn btn-light rounded-circle sidebar-toggle-btn d-flex align-items-center justify-content-center" id="sidebarToggle" aria-label="Toggle Navigation Side Menu" aria-expanded="true">
+            <i class="bi bi-list fs-5"></i>
+          </button>
+          <h2 id="currentPageTitle" class="navbar-page-title mb-0 fs-5 fw-semibold text-dark">Dashboard</h2>
+          
+          <div class="navbar-search-wrapper d-none d-md-block ms-3">
+            <div class="input-group input-group-sm">
+              <span class="input-group-text bg-light border-end-0 text-muted"><i class="bi bi-search"></i></span>
+              <input type="text" class="form-control bg-light border-start-0" placeholder="Search (Coming Soon)" aria-label="System Search" disabled>
             </div>
           </div>
+        </div>
 
-          <!-- Modules (Rendered hidden by default, toggled via JS router) -->
-          <div id="module-dashboard" class="app-module d-none">
-            <?!= include('Dashboard'); ?>
-          </div>
+        <div class="d-flex align-items-center gap-3 flex-shrink-0">
+          <button class="btn btn-light position-relative rounded-circle d-flex align-items-center justify-content-center px-2 py-2" id="notificationMenuButton" aria-label="View notifications">
+            <i class="bi bi-bell text-secondary fs-5"></i>
+            <span id="notificationBadge" class="position-absolute top-2 start-2 translate-middle p-1 bg-danger border border-light rounded-circle d-none">
+              <span class="visually-hidden">New alerts pending</span>
+            </span>
+          </button>
           
-          <div id="module-users" class="app-module d-none">
-            <?!= include('Users'); ?>
+          <div class="dropdown" id="profileDropdown">
+            <button class="btn btn-link text-decoration-none dropdown-toggle d-flex align-items-center gap-2 px-2 text-dark border-0" type="button" data-bs-toggle="dropdown" aria-expanded="false" id="profileMenuButton">
+              <svg class="user-avatar rounded-circle bg-light border" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" alt="User Profile Avatar Icon">
+                <path d="M16 14C18.2091 14 20 12.2091 20 10C20 7.79086 18.2091 6 16 6C13.7909 6 12 7.79086 12 10C12 12.2091 13.7909 14 16 14Z" fill="#6c757d"/>
+                <path d="M6 24C6 20 10 18 16 18C22 18 26 20 26 24V26H6V24Z" fill="#6c757d"/>
+              </svg>
+              <div class="text-start d-none d-md-block user-profile-meta">
+                <p class="user-fullname mb-0 lh-1 fw-semibold small">Current User</p>
+                <small class="user-role text-muted font-monospace text-uppercase">Administrator</small>
+              </div>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end border-0 shadow-sm mt-2" aria-labelledby="profileMenuButton">
+              <li><a class="dropdown-item d-flex align-items-center gap-2 small" href="javascript:void(0)" id="profileMenuLink"><i class="bi bi-person text-muted"></i> Profile</a></li>
+              <li><a class="dropdown-item d-flex align-items-center gap-2 small" href="javascript:void(0)" id="settingsMenuLink"><i class="bi bi-gear text-muted"></i> Settings</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item d-flex align-items-center gap-2 small text-danger" href="javascript:void(0)" id="navbarLogoutBtn"><i class="bi bi-box-arrow-left"></i> Logout</a></li>
+            </ul>
           </div>
+        </div>
+      </header>
 
-          <div id="module-students" class="app-module d-none">
-            <?!= include('Students'); ?>
+      <main id="mainContent" class="main-content flex-grow-1 p-4 p-md-5 bg-light" role="region" aria-labelledby="currentPageTitle">
+        <div id="pageContainer">
+          <div class="welcome-container text-center py-5">
+            <i class="bi bi-building text-secondary fs-1 mb-3 d-block opacity-50"></i>
+            <h3 class="text-dark fw-semibold">Welcome to BVC Event Attendance Management System</h3>
+            <p class="text-muted small">Select a dashboard module path from the navigation sidebar panel to load operational workspace contexts.</p>
           </div>
-
-          <div id="module-events" class="app-module d-none">
-            <?!= include('Events'); ?>
+        </div>
+        
+        <div id="emptyStateTemplate" class="empty-state-container d-none text-center py-5">
+          <div class="empty-state-card mx-auto p-4 max-w-md">
+            <i id="emptyStateIcon" class="bi bi-folder2-open text-muted fs-1 mb-3 d-block opacity-50"></i>
+            <h4 id="emptyStateTitle" class="h5 text-dark fw-semibold">No Records Found</h4>
+            <p id="emptyStateDescription" class="text-muted small mb-4">There are currently no assets or metadata profiles matches cataloged here in this domain context scope section viewport.</p>
+            <button id="emptyStateAction" class="btn btn-primary btn-sm px-4 text-uppercase fw-semibold d-none">Add Item</button>
           </div>
-
-          <div id="module-attendance" class="app-module d-none">
-            <?!= include('Attendance'); ?>
-          </div>
-
-          <div id="module-reports" class="app-module d-none">
-            <?!= include('Reports'); ?>
-          </div>
-
-          <div id="module-settings" class="app-module d-none">
-            <?!= include('Settings'); ?>
-          </div>
-
         </div>
       </main>
 
-      <!-- Footer Component -->
-      <?!= include('Footer'); ?>
-      
+      <footer class="app-footer bg-white border-top px-4 py-3 d-flex flex-column flex-sm-row justify-content-between align-items-center gap-2 text-muted small" role="contentinfo">
+        <div class="d-flex align-items-center gap-2 flex-wrap justify-content-center">
+          <p class="mb-0">&copy; 2026 BVC Engineering College. All rights reserved.</p>
+          <span class="text-muted d-none d-sm-inline">|</span>
+          <p class="mb-0 text-muted-50 small">Powered by Google Apps Script</p>
+        </div>
+        <p class="mb-0 text-secondary font-monospace fw-semibold">Version 1.0.0</p>
+      </footer>
+
     </div>
   </div>
 
-  <!-- Global Toast Container -->
-  <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1060;" id="toast-container">
-    <!-- Toasts injected here -->
-  </div>
-
-  <!-- Global Confirmation Modal -->
-  <div class="modal fade" id="confirmationModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content border-0 shadow">
-        <div class="modal-header border-bottom-0 pb-0">
-          <h5 class="modal-title fw-semibold" id="confirmModalTitle">Confirm Action</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+  <div class="modal fade" id="confirmModal" stroke-width="0" tabindex="-1" role="dialog" aria-labelledby="confirmModalTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header bg-light border-bottom">
+          <h5 class="modal-title fw-semibold text-dark fs-6" id="confirmModalTitle">Confirm Action</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close dialog modal view"></button>
         </div>
-        <div class="modal-body py-4">
-          <p class="mb-0 fs-6" id="confirmModalMessage">Are you sure you want to proceed with this action?</p>
+        <div class="modal-body py-3">
+          <p id="confirmModalText" class="text-secondary small mb-0">Are you sure you want to perform this operation? This lifecycle data modification action cannot be undone.</p>
         </div>
-        <div class="modal-footer border-top-0 pt-0">
-          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-          <button type="button" class="btn btn-primary px-4" id="confirmModalBtn">Confirm</button>
+        <div class="modal-footer bg-light border-top py-2">
+          <button type="button" class="btn btn-light btn-sm fw-semibold border px-3" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" id="confirmModalSubmitBtn" class="btn btn-danger btn-sm fw-semibold px-3">Confirm</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Bootstrap 5 JS Bundle -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1080;">
+    <div id="appToast" class="toast border-0 shadow" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="4000">
+      <div class="d-flex align-items-center">
+        <div class="toast-body p-3 small d-flex align-items-center gap-2">
+          <i id="toastIcon" class="bi bi-info-circle flex-shrink-0 text-primary"></i>
+          <span id="toastText" class="text-secondary">Notification event processing update complete.</span>
+        </div>
+        <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Dismiss toast update alert panel notification layer explicitly"></button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsinM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
   
-  <!-- Custom JS Injection -->
-  <?!= include('JS'); ?>
+  <?!= include('Index_JS'); ?>
 </body>
 </html>

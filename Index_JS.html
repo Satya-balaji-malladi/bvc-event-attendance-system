@@ -1,0 +1,217 @@
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    'use strict';
+
+    // Global Component DOM Element Object Cache Map Variables
+    const sidebar = document.getElementById('sidebar');
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+    const currentPageTitle = document.getElementById('currentPageTitle');
+    const navLinks = document.querySelectorAll('.sidebar-nav .nav-link');
+    const notificationBadge = document.getElementById('notificationBadge');
+
+    // Action Control Button Intercept Triggers
+    const sidebarLogoutBtn = document.getElementById('sidebarLogoutBtn');
+    const navbarLogoutBtn = document.getElementById('navbarLogoutBtn');
+    const profileMenuLink = document.getElementById('profileMenuLink');
+    const settingsMenuLink = document.getElementById('settingsMenuLink');
+
+    // Bootstrap Visual Helper Modals and Toast Class References
+    const confirmModalEl = document.getElementById('confirmModal');
+    const confirmModalSubmitBtn = document.getElementById('confirmModalSubmitBtn');
+    const appToastEl = document.getElementById('appToast');
+    
+    let bsConfirmModal = null;
+    let bsAppToast = null;
+
+    if (confirmModalEl) bsConfirmModal = new bootstrap.Modal(confirmModalEl);
+    if (appToastEl) bsAppToast = new bootstrap.Toast(appToastEl);
+
+    /**
+     * Toggles layout frame expansion boundary widths safely between modes
+     */
+    function toggleSidebar() {
+      const isMobile = window.innerWidth <= 991.98;
+
+      if (isMobile) {
+        const isOpen = sidebar.classList.toggle('mobile-open');
+        sidebarOverlay.classList.toggle('d-none', !isOpen);
+        sidebarToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      } else {
+        const isCollapsed = sidebar.classList.toggle('collapsed');
+        sidebarToggle.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+      }
+    }
+
+    // Assign event triggers for side canvas expansion buttons
+    sidebarToggle.addEventListener('click', toggleSidebar);
+    sidebarOverlay.addEventListener('click', toggleSidebar);
+
+    /**
+     * Updates text node strings for top horizontal toolbar contexts
+     */
+    function setPageTitle(title) {
+      if (currentPageTitle) {
+        currentPageTitle.textContent = title;
+      }
+    }
+
+    /**
+     * Controls structural focus ring highlights on menu path configurations
+     */
+    function setActiveMenu(pageName) {
+      navLinks.forEach(link => {
+        const itemPage = link.getAttribute('data-page');
+        if (itemPage === pageName) {
+          link.classList.add('active');
+          link.setAttribute('aria-current', 'page');
+        } else {
+          link.classList.remove('active');
+          link.removeAttribute('aria-current');
+        }
+      });
+    }
+
+    /**
+     * Standard page content loader placeholder method router
+     */
+    function loadPage(pageName) {
+      console.log(`Page layout swap requested for destination component: ${pageName}.html`);
+      
+      showLoader();
+      
+      // Simulate component layout stream injection loop asynchronously
+      setTimeout(() => {
+        hideLoader();
+        setPageTitle(pageName);
+        setActiveMenu(pageName);
+        
+        // Example execution response feedback notification delivery
+        showToast(`Loaded module frame view: ${pageName}`);
+      }, 400);
+    }
+
+    /**
+     * Controls full screen view validation blocker overlay layer matrices
+     */
+    function showLoader() {
+      document.getElementById('appLoader').classList.remove('d-none');
+    }
+
+    function hideLoader() {
+      document.getElementById('appLoader').classList.add('d-none');
+    }
+
+    /**
+     * Fires transient operational feedback alerts context panels
+     */
+    function showToast(message, isInfo = true) {
+      const toastText = document.getElementById('toastText');
+      const toastIcon = document.getElementById('toastIcon');
+      
+      if (!toastText || !bsAppToast) return;
+      
+      toastText.textContent = message;
+      toastIcon.className = isInfo ? 'bi bi-info-circle flex-shrink-0 text-primary' : 'bi bi-check-circle flex-shrink-0 text-success';
+      
+      bsAppToast.show();
+    }
+
+    /**
+     * Programmatic control utility methods mapping validation alert visibility rules
+     */
+    function setNotificationBadgeCount(count) {
+      if (!notificationBadge) return;
+      if (count > 0) {
+        notificationBadge.classList.remove('d-none');
+      } else {
+        notificationBadge.classList.add('d-none');
+      }
+    }
+
+    /**
+     * Interactive confirmation alert interface routing template helper
+     */
+    function requestActionConfirmation(message, onConfirmCallback) {
+      const confirmModalText = document.getElementById('confirmModalText');
+      if (confirmModalText) {
+        confirmModalText.textContent = message;
+      }
+      
+      if (!bsConfirmModal) return;
+      
+      // Flush previous event capture patterns by clone substitution assignment
+      const newSubmitBtn = confirmModalSubmitBtn.cloneNode(true);
+      confirmModalSubmitBtn.parentNode.replaceChild(newSubmitBtn, confirmModalSubmitBtn);
+      
+      newSubmitBtn.addEventListener('click', () => {
+        bsConfirmModal.hide();
+        if (typeof onConfirmCallback === 'function') {
+          onConfirmCallback();
+        }
+      });
+      
+      bsConfirmModal.show();
+    }
+
+    /**
+     * Clear context variables and routes window states back to authorization vectors
+     */
+    function logout() {
+      console.log('Logout protocol initiated. Dispatched clearing execution handles...');
+      showLoader();
+      
+      // =======================================================================
+      // TODO: Implement backend exit termination callbacks here later if required
+      // google.script.run.withSuccessHandler(...).logout();
+      // =======================================================================
+      
+      setTimeout(() => {
+        hideLoader();
+        alert('Logout routing signal delivered successfully. Session ended.');
+      }, 1000);
+    }
+
+    // Intercept navigation loops inside side panel elements
+    navLinks.forEach(link => {
+      link.addEventListener('click', function (event) {
+        event.preventDefault();
+        const pageName = this.getAttribute('data-page');
+        
+        if (pageName) {
+          loadPage(pageName);
+          
+          if (window.innerWidth <= 991.98 && sidebar.classList.contains('mobile-open')) {
+            toggleSidebar();
+          }
+        }
+      });
+    });
+
+    // Wire exit execution handles to dialog modal intercept layers
+    const handleLogoutAction = (event) => {
+      event.preventDefault();
+      requestActionConfirmation('Are you sure you want to log out from the BVC Event Attendance Management platform?', logout);
+    };
+
+    if (sidebarLogoutBtn) sidebarLogoutBtn.addEventListener('click', handleLogoutAction);
+    if (navbarLogoutBtn) navbarLogoutBtn.addEventListener('click', handleLogoutAction);
+
+    // Wire standard profile and configuration dropdown shortcuts directly into the loader pipeline
+    if (profileMenuLink) profileMenuLink.addEventListener('click', () => loadPage('Profile'));
+    if (settingsMenuLink) settingsMenuLink.addEventListener('click', () => loadPage('Settings'));
+
+    /**
+     * Screen scale transformation adapter watch bounds listeners
+     */
+    window.addEventListener('resize', function () {
+      if (window.innerWidth > 991.98) {
+        sidebar.classList.remove('mobile-open');
+        sidebarOverlay.classList.add('d-none');
+      }
+    });
+
+    // Structural platform execution context init parameters setup on launch
+    setNotificationBadgeCount(0); // Pass values > 0 to expose the indicator anchor badge element dynamically
+  });
+</script>

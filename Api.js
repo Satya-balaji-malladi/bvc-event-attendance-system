@@ -8,16 +8,94 @@
  */
 
 // ==========================================
-// Authentication API
+// Authentication API Entry Points
 // ==========================================
-function login(credentials) { 
+
+function login(credentials) {
   try { return JSON.parse(JSON.stringify(Controller.Auth.login(credentials) || {})); } catch(e) { return {success:false, message:e.message}; }
 }
-function logout(sessionToken) { 
+
+function logout(sessionToken) {
   try { return JSON.parse(JSON.stringify(Controller.Auth.logout(sessionToken) || {})); } catch(e) { return {success:false, message:e.message}; }
 }
-function authenticate(sessionToken) { 
+
+function authenticate(sessionToken) {
   try { return JSON.parse(JSON.stringify(Controller.Auth.authenticate(sessionToken) || {})); } catch(e) { return {success:false, message:e.message}; }
+}
+
+// ==========================================
+// Forgot Password & OTP Recovery API Endpoints (Fixed)
+// ==========================================
+
+function forgotPassword(employeeId) {
+  try {
+    if (!employeeId || typeof employeeId !== 'string') {
+      return { success: false, message: "Invalid Employee ID format provided." };
+    }
+    
+    var cleanEmpId = employeeId.trim();
+    
+    // 1. Fetch user by Employee ID
+    var user = DatabaseService.findOne(CONFIG.SHEETS.USERS, CONFIG.COLUMNS.USER_EMPLOYEE_ID, cleanEmpId);
+    if (!user) {
+      return { success: false, message: "No registered staff found with Employee ID: " + cleanEmpId };
+    }
+    
+    // 2. Extract true Primary User ID string key (e.g., USR-0001)
+    var userId = String(user[CONFIG.COLUMNS.USER_ID]).trim();
+    
+    // 3. CRITICAL ALIAS PATH PROTECTION PATCH:
+    // If your Google Sheet uses "Email Address" but AuthService looks up "Email",
+    // dynamically safeguard the reference structure right here before processing.
+    var trueEmailAttr = CONFIG.COLUMNS.USER_EMAIL || "Email Address";
+    if (user[trueEmailAttr] && (!user["Email"] || user["Email"] === "")) {
+      var emailSyncPatch = {};
+      emailSyncPatch["Email"] = String(user[trueEmailAttr]).trim();
+      DatabaseService.updateRow(CONFIG.SHEETS.USERS, CONFIG.ID_COLUMNS.USERS, userId, emailSyncPatch);
+    }
+    
+    // 4. Pass User ID to AuthService safely
+    return JSON.parse(JSON.stringify(AuthService.generateOTP(userId) || {}));
+  } catch(e) {
+    return { success: false, message: "API Routing Error: " + e.message };
+  }
+}
+
+function verifyOTP(employeeId, otp) {
+  try {
+    var cleanEmpId = String(employeeId || "").trim();
+    var user = DatabaseService.findOne(CONFIG.SHEETS.USERS, CONFIG.COLUMNS.USER_EMPLOYEE_ID, cleanEmpId);
+    if (!user) {
+      return { success: false, message: "User not found." };
+    }
+    
+    var userId = String(user[CONFIG.COLUMNS.USER_ID]).trim();
+    return JSON.parse(JSON.stringify(AuthService.verifyOTP(userId, otp) || {}));
+  } catch(e) {
+    return { success: false, message: e.message };
+  }
+}
+
+function recoverPassword(employeeId, otp, newPassword) {
+  try {
+    var cleanEmpId = String(employeeId || "").trim();
+    var user = DatabaseService.findOne(CONFIG.SHEETS.USERS, CONFIG.COLUMNS.USER_EMPLOYEE_ID, cleanEmpId);
+    if (!user) {
+      return { success: false, message: "User not found." };
+    }
+    
+    var userId = String(user[CONFIG.COLUMNS.USER_ID]).trim();
+    return JSON.parse(JSON.stringify(AuthService.resetPassword(userId, otp, newPassword) || {}));
+  } catch(e) {
+    return { success: false, message: e.message };
+  }
+}
+function getScriptUrl() {
+  try {
+    return ScriptApp.getService().getUrl();
+  } catch(e) {
+    return "";
+  }
 }
 
 // ==========================================

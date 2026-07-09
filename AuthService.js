@@ -399,10 +399,32 @@ updates[CONFIG.COLUMNS.USER_OTP_EXPIRY] = expiryDate;
     
 
     var updatedUser = this._getUserById(userId);
+//front end----------
+    // ==========================================
+    // ADD THIS EMAIL TRIGGER RIGHT BEFORE THE RETURN STATEMENT:
+    // ==========================================
+    var emailCol = CONFIG.COLUMNS.USER_EMAIL || "Email Address";
+    var userEmail = updatedUser[emailCol] || updatedUser["Email"] || updatedUser["Email Address"];
 
     
+    if (userEmail) {
+      var subject = "BVC Event Management - Reset OTP Token Request";
+      var body = "Hello,\n\nYour 6-digit password recovery verification token code is: " + otp + "\nThis code will expire in 5 minutes.\n\nIf you did not request this code, please ignore this email securely.";
+      
+      try {
+        MailApp.sendEmail(userEmail, subject, body);
+        Logger.log("OTP Email dispatched successfully to: " + userEmail);
+      } catch (emailError) {
+        Logger.log("Error sending OTP email: " + emailError.message);
+        return Utils.buildResponse(false, "Email Error: " + emailError.message);
+      }
+    } else {
+      Logger.log("Error: User found but email column value was missing/empty.");
+      return Utils.buildResponse(false, "Database Error: No email address found for this user.");
+    }
+    // ==========================================
     // =================
-
+//front end----------
     return Utils.buildResponse(true, CONFIG.MESSAGES.OTP_GENERATED);
 
   } catch (e) {
@@ -462,10 +484,14 @@ updates[CONFIG.COLUMNS.USER_OTP_EXPIRY] = expiryDate;
       }
     }
 
-    // Verify OTP
+    // Verify OTP (Check both string match and integer match to handle Google Sheets leading-zero removal)
+    var storedOtp = String(user[otpCol]).trim();
+    var inputOtp = String(otp).trim();
+
     if (
       otpCol &&
-      String(user[otpCol]).trim() !== String(otp).trim()
+      storedOtp !== inputOtp &&
+      parseInt(storedOtp, 10) !== parseInt(inputOtp, 10)
     ) {
       var updates = {};
 
@@ -483,19 +509,9 @@ updates[CONFIG.COLUMNS.USER_OTP_EXPIRY] = expiryDate;
       return Utils.buildResponse(false, CONFIG.MESSAGES.OTP_INVALID);
     }
 
-    // Reset OTP after successful verification
-    var successUpdates = {};
-
-    if (otpCol) successUpdates[otpCol] = "";
-    if (expiryCol) successUpdates[expiryCol] = "";
-    if (attemptsCol) successUpdates[attemptsCol] = 0;
-
-    DatabaseService.updateRow(
-      CONFIG.SHEETS.USERS,
-      CONFIG.ID_COLUMNS.USERS,
-      userId,
-      successUpdates
-    );
+    // Do NOT clear OTP here. It must remain in the database so it can be verified 
+    // again in Step 3 when the user actually submits the new password. 
+    // It will be cleared inside resetPassword() after success.
 
     return Utils.buildResponse(true, CONFIG.MESSAGES.OTP_VERIFIED);
 
