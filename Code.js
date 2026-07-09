@@ -155,28 +155,21 @@ function getAllStudents() {
 
 function getDashboardData(sessionToken) {
   try {
-    // 1. సెషన్ వాలిడేషన్ చెక్
+    // 1. ముందే ఇక్కడే సెషన్ చెక్ చేద్దాం
     var isValid = SessionService.validateSession(sessionToken);
     if (!isValid) {
       return { success: false, message: 'Session is invalid.' };
     }
     
-    // 2. SAFE BYPASS: getCurrentUser లోపల షీట్ రైటింగ్ ఫెయిల్ అయినా క్రాష్ అవ్వకుండా 
-    // నేరుగా సెషన్ ఆబ్జెక్ట్ నుండి లేదా డేటాబేస్ నుండి యూజర్ ఐడీని తీసుకుంటున్నాం
-    var session = SessionService.getSession(sessionToken);
-    var c = CONFIG.COLUMNS || {};
-    var userIdCol = c.SESSION_USER_ID || 'User ID';
-    var userId = session ? session[userIdCol] : null;
-    
+    var userId = SessionService.getCurrentUser(sessionToken);
     if (!userId) {
       return { success: false, message: 'User not found for session.' };
     }
 
-    // 3. డాష్‌బోర్డ్ సమ్మరీ డేటా
+    // ఇప్పుడు మిగతా డేటాను తెచ్చుకుందాం
     const summaryResp = Controller.Report.getDashboardSummary(sessionToken);
     const summary = (summaryResp && summaryResp.report) ? summaryResp.report : {};
     
-    // యూజర్స్ లిస్ట్
     const users = (DatabaseService.readAllRows(CONFIG.SHEETS.USERS) || [])
       .filter(u => u[CONFIG.COLUMNS.DELETION_FLAG] !== true && u[CONFIG.COLUMNS.DELETION_FLAG] !== "true");
       
@@ -186,7 +179,6 @@ function getDashboardData(sessionToken) {
       if (role === 'COORDINATOR' || role === 'Coordinator') totalCoordinators++;
     });
 
-    // స్టూడెంట్స్ లిస్ట్
     const studentsResp = Controller.Student.getAllStudents(sessionToken);
     const students = (studentsResp && studentsResp.students) ? studentsResp.students : [];
     const depts = new Set();
@@ -195,30 +187,37 @@ function getDashboardData(sessionToken) {
       if (d) depts.add(d);
     });
 
-    // యాక్టివ్ ఈవెంట్స్
     let activeEvents = [];
     let completedEventsCount = 0;
     try {
-      const allEventsResp = Controller.Event.getAllEvents(sessionToken);
-      const allEvents = Array.isArray(allEventsResp) ? allEventsResp : [];
-      activeEvents = allEvents.filter(e => {
-        const status = e['Event Status'] || e['Status'] || e.status;
-        return status === 'Active' || status === 'Upcoming';
-      });
-      completedEventsCount = allEvents.filter(e => {
-        const status = e['Event Status'] || e['Status'] || e.status;
-        return status === 'Completed';
-      }).length;
-    } catch(e) {}
+  const allEventsResp = Controller.Event.getAllEvents(sessionToken);
+  const allEvents = Array.isArray(allEventsResp) ? allEventsResp : [];
 
-    // రీసెంట్ యాక్టివిటీస్
+  Logger.log("===== DASHBOARD EVENTS =====");
+  Logger.log("Total Events Returned = " + allEvents.length);
+
+  activeEvents = allEvents.filter(function(e) {
+    const status = e["Event Status"] || e["Status"] || e.status;
+    return status === "Active";
+  });
+
+  Logger.log("Active Events Count = " + activeEvents.length);
+
+  completedEventsCount = allEvents.filter(function(e) {
+    const status = e["Event Status"] || e["Status"] || e.status;
+    return status === "Completed";
+  }).length;
+
+} catch (e) {
+  Logger.log("Error while loading events: " + e.message);
+}
+
     let activities = [];
     try {
       const logs = AuditService.getAuditLogs() || [];
       activities = AuditService.sortAuditLogs(logs, 'timestamp', 'desc').slice(0, 10);
     } catch(e) {}
 
-    // ఫైనల్ రెస్పాన్స్ పేలోడ్
     const responsePayload = {
       success: true,
       data: {
