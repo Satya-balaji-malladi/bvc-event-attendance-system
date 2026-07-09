@@ -89,17 +89,37 @@ const ReportService = {
       const events = cache.events;
       const attendance = cache.attendance;
 
-      let totalAttendance = attendance.length;
-      let totalPresent = attendance.filter(a => (a['Attendance Status'] || a.status) === CONFIG.ATTENDANCE_STATUS.PRESENT).length;
-      let totalAbsent = totalAttendance - totalPresent;
+      const deletionKey = CONFIG.COLUMNS.DELETION_FLAG || 'Deletion Flag';
+      const todayStr = Utils.formatDate(new Date());
+
+      // Filter active (non-deleted) records marked today
+      const todayAttendance = attendance.filter(a => {
+        if (a[deletionKey] === true || a[deletionKey] === 'true') return false;
+        const recordDateVal = a['Date'] || a['Timestamp'] || a['Attendance Time'];
+        return Utils.formatDate(recordDateVal) === todayStr;
+      });
+
+      // Present students today
+      const totalPresent = todayAttendance.filter(a =>
+        (a['Attendance Status'] || a.status) === CONFIG.ATTENDANCE_STATUS.PRESENT
+      ).length;
+
+      // Total students
+      const totalStudents = students.length;
+
+      // Absent students today
+      const totalAbsent = Math.max(0, totalStudents - totalPresent);
+
+      // Dashboard displays present count
+      const totalAttendance = totalPresent;
 
       const report = {
         totalEvents: events.length,
-        totalStudents: students.length,
+        totalStudents: totalStudents,
         totalAttendance: totalAttendance,
         totalPresent: totalPresent,
         totalAbsent: totalAbsent,
-        attendancePercentage: this._calculatePercentage(totalPresent, totalAttendance)
+        attendancePercentage: this._calculatePercentage(totalPresent, totalStudents)
       };
 
       return Utils.buildResponse(true, 'Summary generated', { report: report });

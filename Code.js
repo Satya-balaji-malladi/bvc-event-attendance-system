@@ -169,6 +169,11 @@ function getDashboardData(sessionToken) {
     // ఇప్పుడు మిగతా డేటాను తెచ్చుకుందాం
     const summaryResp = Controller.Report.getDashboardSummary(sessionToken);
     const summary = (summaryResp && summaryResp.report) ? summaryResp.report : {};
+    Logger.log("===== DASHBOARD SUMMARY =====");
+Logger.log(JSON.stringify(summary));
+Logger.log("totalAttendance = " + summary.totalAttendance);
+Logger.log("totalAbsent = " + summary.totalAbsent);
+Logger.log("attendancePercentage = " + summary.attendancePercentage);
     
     const users = (DatabaseService.readAllRows(CONFIG.SHEETS.USERS) || [])
       .filter(u => u[CONFIG.COLUMNS.DELETION_FLAG] !== true && u[CONFIG.COLUMNS.DELETION_FLAG] !== "true");

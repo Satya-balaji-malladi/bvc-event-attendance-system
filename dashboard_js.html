@@ -91,6 +91,8 @@ function refreshDashboard() {
  * Populates Quick Stats with real data
  */
 function updateStatsUI(stats) {
+  console.log("===== DASHBOARD STATS =====");
+console.log(JSON.stringify(stats, null, 2));
   if (!stats) return;
   console.log("Updating Stats UI:", stats);
   
