@@ -224,10 +224,10 @@ Logger.log(this._verifyPassword(user, password));
       return Utils.buildResponse(true, CONFIG.MESSAGES.FIRST_LOGIN, { requiresPasswordChange: true });
     }
 
-    // Session creation via SessionService only
-    if (!CONFIG.SECURITY.ALLOW_MULTIPLE_SESSIONS && SessionService.isUserLoggedIn && SessionService.isUserLoggedIn(userId)) {
-      return this._standardError(CONFIG.MESSAGES.MULTIPLE_SESSIONS_NOT_ALLOWED);
-    }
+      // Session creation via SessionService only
+      if (!CONFIG.SECURITY.ALLOW_MULTIPLE_SESSIONS && SessionService.isUserLoggedIn && SessionService.isUserLoggedIn(userId)) {
+        SessionService.logoutAllSessions(userId);
+      }
 
     var sessionData = this._createSession(user);
     try {

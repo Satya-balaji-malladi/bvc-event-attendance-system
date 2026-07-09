@@ -69,6 +69,21 @@ function getPageContent(page) {
   }
 }
 
+/**
+ * Returns the raw HTML content of an inner component (Dashboard, Users, Events, etc.)
+ * to be injected into the App Shell's pageContainer.
+ */
+function getComponentHtml(component) {
+  try {
+    // Basic mapping, assume the component name matches the HTML filename
+    // e.g., "Dashboard" -> "Dashboard.html"
+    return HtmlService.createTemplateFromFile(component).evaluate().getContent();
+  } catch (e) {
+    // Return empty state or error if component not found
+    return `<div class="alert alert-danger m-4"><i class="bi bi-exclamation-triangle-fill me-2"></i> Failed to load component: ${component}</div>`;
+  }
+}
+
 function getScriptUrl() {
   try {
     return ScriptApp.getService().getUrl();
@@ -138,18 +153,101 @@ function getAllStudents() {
   }
 }
 
-function getDashboardSummary() {
+function getDashboardData(sessionToken) {
   try {
-    const res = Controller.Report.getDashboardSummary();
-    return JSON.parse(JSON.stringify(res || {}));
+    // 1. సెషన్ వాలిడేషన్ చెక్
+    var isValid = SessionService.validateSession(sessionToken);
+    if (!isValid) {
+      return { success: false, message: 'Session is invalid.' };
+    }
+    
+    // 2. SAFE BYPASS: getCurrentUser లోపల షీట్ రైటింగ్ ఫెయిల్ అయినా క్రాష్ అవ్వకుండా 
+    // నేరుగా సెషన్ ఆబ్జెక్ట్ నుండి లేదా డేటాబేస్ నుండి యూజర్ ఐడీని తీసుకుంటున్నాం
+    var session = SessionService.getSession(sessionToken);
+    var c = CONFIG.COLUMNS || {};
+    var userIdCol = c.SESSION_USER_ID || 'User ID';
+    var userId = session ? session[userIdCol] : null;
+    
+    if (!userId) {
+      return { success: false, message: 'User not found for session.' };
+    }
+
+    // 3. డాష్‌బోర్డ్ సమ్మరీ డేటా
+    const summaryResp = Controller.Report.getDashboardSummary(sessionToken);
+    const summary = (summaryResp && summaryResp.report) ? summaryResp.report : {};
+    
+    // యూజర్స్ లిస్ట్
+    const users = (DatabaseService.readAllRows(CONFIG.SHEETS.USERS) || [])
+      .filter(u => u[CONFIG.COLUMNS.DELETION_FLAG] !== true && u[CONFIG.COLUMNS.DELETION_FLAG] !== "true");
+      
+    let totalCoordinators = 0;
+    users.forEach(u => {
+      const role = u['Role'] || u.role;
+      if (role === 'COORDINATOR' || role === 'Coordinator') totalCoordinators++;
+    });
+
+    // స్టూడెంట్స్ లిస్ట్
+    const studentsResp = Controller.Student.getAllStudents(sessionToken);
+    const students = (studentsResp && studentsResp.students) ? studentsResp.students : [];
+    const depts = new Set();
+    students.forEach(s => {
+      const d = s['Department ID'] || s.department;
+      if (d) depts.add(d);
+    });
+
+    // యాక్టివ్ ఈవెంట్స్
+    let activeEvents = [];
+    let completedEventsCount = 0;
+    try {
+      const allEventsResp = Controller.Event.getAllEvents(sessionToken);
+      const allEvents = Array.isArray(allEventsResp) ? allEventsResp : [];
+      activeEvents = allEvents.filter(e => {
+        const status = e['Event Status'] || e['Status'] || e.status;
+        return status === 'Active' || status === 'Upcoming';
+      });
+      completedEventsCount = allEvents.filter(e => {
+        const status = e['Event Status'] || e['Status'] || e.status;
+        return status === 'Completed';
+      }).length;
+    } catch(e) {}
+
+    // రీసెంట్ యాక్టివిటీస్
+    let activities = [];
+    try {
+      const logs = AuditService.getAuditLogs() || [];
+      activities = AuditService.sortAuditLogs(logs, 'timestamp', 'desc').slice(0, 10);
+    } catch(e) {}
+
+    // ఫైనల్ రెస్పాన్స్ పేలోడ్
+    const responsePayload = {
+      success: true,
+      data: {
+        stats: {
+          totalUsers: users.length,
+          totalCoordinators: totalCoordinators,
+          totalStudents: students.length,
+          totalEvents: summary.totalEvents || 0,
+          activeEvents: activeEvents.length,
+          completedEvents: completedEventsCount,
+          todayAttendance: summary.totalAttendance || 0,
+          todayAbsentees: summary.totalAbsent || 0,
+          monthlyAttendancePercentage: summary.attendancePercentage || 0,
+          totalDepartments: depts.size,
+          pendingApprovals: 0
+        },
+        activeEvents: activeEvents.slice(0, 5),
+        recentActivities: activities.slice(0, 5)
+      }
+    };
+    
+    return JSON.parse(JSON.stringify(responsePayload));
   } catch(e) {
-    return {};
+    return { success: false, message: e.message, stack: e.stack };
   }
 }
-
 function getAttendanceByEvent(eventId) {
   try {
-    const res = Controller.Attendance.getAttendanceByEvent(eventId);
+    const res = Controller.Attendance.getAttendanceByEvent(null, eventId);
     return JSON.parse(JSON.stringify(res || []));
   } catch(e) {
     return [];
