@@ -1,58 +1,429 @@
 <script>
-App.Modules.settings = {
-  init: function() {
-    this.bindEvents();
-    this.loadSettings();
-  },
-
-  bindEvents: function() {
-    const form = document.getElementById('settingsForm');
-    if (form) {
-      form.addEventListener('submit', (e) => {
-        e.preventDefault();
-        this.saveSettings();
-      });
-    }
-  },
-
-  loadSettings: function() {
-    App.API._call('getSettings').then(res => {
-      const data = res.data || {};
-      if (data.collegeName) document.getElementById('setCollegeName').value = data.collegeName;
-      if (data.pagination) document.getElementById('setPagination').value = data.pagination;
-      if (data.adminEmail) document.getElementById('setAdminEmail').value = data.adminEmail;
-      if (data.theme) document.getElementById('setTheme').value = data.theme;
-    }).catch(console.error);
-  },
-
-  saveSettings: function() {
-    const payload = {
-      collegeName: document.getElementById('setCollegeName').value.trim(),
-      pagination: document.getElementById('setPagination').value,
-      adminEmail: document.getElementById('setAdminEmail').value.trim(),
-      theme: document.getElementById('setTheme').value
-    };
+  /**
+   * ==========================================
+   * SYSTEM SETTINGS CONTROLLER
+   * ==========================================
+   */
+  App.Modules.settings = {
+    settingsData: {},
+    auditLogs: [],
+    filteredAudits: [],
     
-    App.LoadingManager.show();
-    App.API._call('saveSettings', payload).then(res => {
-      if (res.success) {
-        App.UI.showSuccess('Settings saved successfully');
-      } else {
-        App.UI.showError(res.message);
+    // Pagination for Audits
+    currentAuditPage: 1,
+    auditsPerPage: 15,
+
+    init: function() {
+      console.log('Settings module init');
+      this.bindEvents();
+      this.loadSettings();
+      this.enforceRoleVisibility();
+    },
+
+    bindEvents: function() {
+      // General Settings form
+      const genForm = document.getElementById('generalSettingsForm');
+      if (genForm) {
+        genForm.addEventListener('submit', (e) => {
+          e.preventDefault();
+          this.saveGeneralSettings();
+        });
       }
-    }).catch(err => {
-      App.ErrorHandler.handle(err);
-    }).finally(() => {
-      App.LoadingManager.hide();
-    });
-  },
-  
-  refresh: function() {
-    this.loadSettings();
-  },
-  
-  destroy: function() {
-    // cleanup
+
+      // Rules form
+      const rulesForm = document.getElementById('attendanceRulesForm');
+      if (rulesForm) {
+        rulesForm.addEventListener('submit', (e) => {
+          e.preventDefault();
+          this.saveRulesSettings();
+        });
+      }
+
+      // Action triggers for maintenance
+      document.getElementById('btnWipeAttendance')?.addEventListener('click', () => this.handleWipeAttendance());
+      document.getElementById('btnResetAll')?.addEventListener('click', () => this.handleResetSystem());
+      document.getElementById('btnBackupExcel')?.addEventListener('click', () => this.exportBackupData());
+
+      // Audit logs search
+      document.getElementById('auditSearchInput')?.addEventListener('input', (e) => {
+        this.filterAuditLogs(e.target.value);
+      });
+
+      // Export audit trails
+      document.getElementById('auditExportBtn')?.addEventListener('click', () => this.exportAuditCSV());
+
+      // Handle audit tab click to load logs dynamically
+      const auditTab = document.getElementById('audit-tab');
+      if (auditTab) {
+        auditTab.addEventListener('shown.bs.tab', () => {
+          this.loadAuditLogs();
+        });
+      }
+    },
+
+    enforceRoleVisibility: function() {
+      const user = App.Auth.currentUser || {};
+      const role = user.role || user.Role || 'Coordinator';
+
+      if (role === 'Admin') {
+        document.getElementById('tab-maintenance-wrapper')?.classList.remove('d-none');
+        document.getElementById('tab-audit-wrapper')?.classList.remove('d-none');
+      } else {
+        document.getElementById('tab-maintenance-wrapper')?.classList.add('d-none');
+        document.getElementById('tab-audit-wrapper')?.classList.add('d-none');
+      }
+    },
+
+    loadSettings: function() {
+      App.LoadingManager.show();
+      App.API._call('getSettings')
+        .then(res => {
+          App.LoadingManager.hide();
+          const d = res.data || {};
+          this.settingsData = d;
+
+          // Populate inputs
+          if (document.getElementById('setCollegeName')) document.getElementById('setCollegeName').value = d.collegeName || 'BVC Engineering College';
+          if (document.getElementById('setAdminEmail')) document.getElementById('setAdminEmail').value = d.adminEmail || '';
+          if (document.getElementById('setPagination')) document.getElementById('setPagination').value = d.pagination || '10';
+          if (document.getElementById('setTheme')) document.getElementById('setTheme').value = d.theme || 'light';
+          if (document.getElementById('setLanguage')) document.getElementById('setLanguage').value = d.language || 'en';
+          
+          if (document.getElementById('setNotificationsEnabled')) {
+            document.getElementById('setNotificationsEnabled').checked = d.notificationsEnabled !== false;
+          }
+
+          if (document.getElementById('setAttendanceThreshold')) {
+            document.getElementById('setAttendanceThreshold').value = d.attendanceThreshold || '75';
+          }
+
+          if (document.getElementById('setAcademicYears')) {
+            document.getElementById('setAcademicYears').value = d.academicYears || '2024-25, 2025-26';
+          }
+        })
+        .catch(err => {
+          App.LoadingManager.hide();
+          console.error("Failed to load settings data", err);
+          App.UI.showError("Failed to fetch settings from server.");
+        });
+    },
+
+    saveGeneralSettings: function() {
+      const form = document.getElementById('generalSettingsForm');
+      if (!form.checkValidity()) {
+        form.classList.add('was-validated');
+        return;
+      }
+
+      const payload = {
+        collegeName: document.getElementById('setCollegeName').value.trim(),
+        adminEmail: document.getElementById('setAdminEmail').value.trim(),
+        pagination: parseInt(document.getElementById('setPagination').value, 10),
+        theme: document.getElementById('setTheme').value,
+        language: document.getElementById('setLanguage').value,
+        notificationsEnabled: document.getElementById('setNotificationsEnabled').checked
+      };
+
+      this.executeSave(payload);
+    },
+
+    saveRulesSettings: function() {
+      const form = document.getElementById('attendanceRulesForm');
+      if (!form.checkValidity()) {
+        form.classList.add('was-validated');
+        return;
+      }
+
+      const payload = {
+        attendanceThreshold: parseInt(document.getElementById('setAttendanceThreshold').value, 10),
+        academicYears: document.getElementById('setAcademicYears').value.trim()
+      };
+
+      this.executeSave(payload);
+    },
+
+    executeSave: function(payload) {
+      App.LoadingManager.show();
+      App.API._call('saveSettings', payload)
+        .then(res => {
+          App.LoadingManager.hide();
+          if (res.success) {
+            App.UI.showSuccess("Settings updated successfully!");
+            this.loadSettings();
+          } else {
+            App.UI.showError(res.message || "Failed to update settings.");
+          }
+        })
+        .catch(err => {
+          App.LoadingManager.hide();
+          console.error(err);
+          App.UI.showError("Save operation crashed.");
+        });
+    },
+
+    handleWipeAttendance: function() {
+      if (confirm("WARNING: Are you sure you want to CLEAR all attendance check-in records? This action cannot be undone and will erase all scan logs!")) {
+        App.LoadingManager.show();
+        App.API._call('clearAttendanceLogs')
+          .then(res => {
+            App.LoadingManager.hide();
+            if (res.success) {
+              App.UI.showSuccess("All attendance check-in records have been wiped.");
+            } else {
+              App.UI.showError(res.message);
+            }
+          })
+          .catch(err => {
+            App.LoadingManager.hide();
+            App.UI.showError("Clear logs failed.");
+          });
+      }
+    },
+
+    handleResetSystem: function() {
+      if (confirm("CRITICAL WARNING: You are about to RESET the entire system! This will delete all attendance logs, participant lists, and scheduled events. Do you want to proceed?")) {
+        if (confirm("DOUBLE CONFIRMATION REQUIRED: This will return the application to an empty state. Type 'OK' in the next window if you are absolutely certain.")) {
+          const verify = prompt("Type 'RESET' to finalize clean system reset:");
+          if (verify === 'RESET') {
+            App.LoadingManager.show();
+            App.API._call('resetSystem')
+              .then(res => {
+                App.LoadingManager.hide();
+                if (res.success) {
+                  App.UI.showSuccess("Database reset complete. All variables returned to standard templates.");
+                  window.location.reload();
+                } else {
+                  App.UI.showError(res.message);
+                }
+              })
+              .catch(err => {
+                App.LoadingManager.hide();
+                App.UI.showError("System reset failed.");
+              });
+          }
+        }
+      }
+    },
+
+    loadAuditLogs: function() {
+      const tbody = document.getElementById('auditLogsTableBody');
+      if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-5"><div class="spinner-border spinner-border-sm text-secondary me-2"></div>Fetching audit logs trail...</td></tr>';
+      }
+
+      App.API._call('getAuditLogs')
+        .then(res => {
+          this.auditLogs = res.logs || [];
+          // Sort descending by timestamp/date
+          this.auditLogs.sort((a, b) => {
+            const timeA = new Date(a['Timestamp'] || a['Created At'] || 0).getTime();
+            const timeB = new Date(b['Timestamp'] || b['Created At'] || 0).getTime();
+            return timeB - timeA;
+          });
+          this.filteredAudits = [...this.auditLogs];
+          this.currentAuditPage = 1;
+          this.renderAuditTable();
+        })
+        .catch(err => {
+          if (tbody) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger py-4"><i class="bi bi-x-circle me-2"></i>Failed to load audit logs.</td></tr>';
+          }
+        });
+    },
+
+    filterAuditLogs: function(keyword) {
+      if (!keyword) {
+        this.filteredAudits = [...this.auditLogs];
+      } else {
+        const kw = keyword.toLowerCase().trim();
+        this.filteredAudits = this.auditLogs.filter(log => {
+          return (
+            (log['Log ID'] || '').toLowerCase().includes(kw) ||
+            (log['User ID'] || '').toLowerCase().includes(kw) ||
+            (log['Module'] || '').toLowerCase().includes(kw) ||
+            (log['Action'] || '').toLowerCase().includes(kw) ||
+            (log['Description'] || '').toLowerCase().includes(kw) ||
+            (log['Status'] || '').toLowerCase().includes(kw)
+          );
+        });
+      }
+      this.currentAuditPage = 1;
+      this.renderAuditTable();
+    },
+
+    renderAuditTable: function() {
+      const tbody = document.getElementById('auditLogsTableBody');
+      if (!tbody) return;
+
+      const total = this.filteredAudits.length;
+      if (total === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted py-5">No matching audit logs found</td></tr>';
+        document.getElementById('auditTableInfo').textContent = 'Showing 0 to 0 of 0 logs';
+        this.renderAuditPagination(0);
+        return;
+      }
+
+      const start = (this.currentAuditPage - 1) * this.auditsPerPage;
+      const end = Math.min(start + this.auditsPerPage, total);
+      const pageData = this.filteredAudits.slice(start, end);
+
+      let html = '';
+      pageData.forEach(log => {
+        const timestamp = log['Created At'] || log['Timestamp'] || '';
+        const displayTime = timestamp ? new Date(timestamp).toLocaleString() : 'N/A';
+        const badgeClass = log['Status'] === 'SUCCESS' ? 'bg-success' : 'bg-danger';
+
+        html += `
+          <tr>
+            <td class="text-nowrap font-monospace small">${displayTime}</td>
+            <td class="fw-semibold">${App.Utils.escapeHtml(log['User ID'] || '')}</td>
+            <td><span class="badge bg-secondary bg-opacity-10 text-secondary">${App.Utils.escapeHtml(log['Module'] || '')}</span></td>
+            <td class="font-monospace small fw-bold">${App.Utils.escapeHtml(log['Action'] || '')}</td>
+            <td class="text-wrap">${App.Utils.escapeHtml(log['Description'] || '')}</td>
+            <td><span class="badge ${badgeClass} text-white">${App.Utils.escapeHtml(log['Status'] || 'SUCCESS')}</span></td>
+          </tr>
+        `;
+      });
+
+      tbody.innerHTML = html;
+      document.getElementById('auditTableInfo').textContent = `Showing ${start + 1} to ${end} of ${total} logs`;
+      this.renderAuditPagination(Math.ceil(total / this.auditsPerPage));
+    },
+
+    renderAuditPagination: function(totalPages) {
+      const nav = document.getElementById('auditPagination');
+      if (!nav) return;
+
+      if (totalPages <= 1) {
+        nav.innerHTML = `
+          <li class="page-item disabled"><a class="page-link" href="#" tabindex="-1">Previous</a></li>
+          <li class="page-item active"><a class="page-link" href="#">1</a></li>
+          <li class="page-item disabled"><a class="page-link" href="#">Next</a></li>
+        `;
+        return;
+      }
+
+      let html = '';
+      const prevDisabled = this.currentAuditPage === 1 ? 'disabled' : '';
+      html += `<li class="page-item ${prevDisabled}"><a class="page-link" href="#" data-page="${this.currentAuditPage - 1}">Previous</a></li>`;
+
+      for (let i = 1; i <= totalPages; i++) {
+        const active = i === this.currentAuditPage ? 'active' : '';
+        html += `<li class="page-item ${active}"><a class="page-link" href="#" data-page="${i}">${i}</a></li>`;
+      }
+
+      const nextDisabled = this.currentAuditPage === totalPages ? 'disabled' : '';
+      html += `<li class="page-item ${nextDisabled}"><a class="page-link" href="#" data-page="${this.currentAuditPage + 1}">Next</a></li>`;
+
+      nav.innerHTML = html;
+
+      const links = nav.querySelectorAll('a.page-link');
+      links.forEach(link => {
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          const page = e.target.getAttribute('data-page');
+          if (page) {
+            this.currentAuditPage = parseInt(page, 10);
+            this.renderAuditTable();
+          }
+        });
+      });
+    },
+
+    exportAuditCSV: function() {
+      if (this.filteredAudits.length === 0) {
+        App.UI.showInfo("No logs to export.");
+        return;
+      }
+
+      const headers = ["Timestamp", "User ID", "Module", "Action", "Description", "Status"];
+      const rows = this.filteredAudits.map(log => [
+        log['Created At'] || log['Timestamp'] || '',
+        log['User ID'],
+        log['Module'],
+        log['Action'],
+        log['Description'],
+        log['Status']
+      ]);
+
+      let csv = "\uFEFF"; // UTF-8 BOM
+      csv += headers.join(",") + "\r\n";
+      rows.forEach(r => {
+        csv += r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(",") + "\r\n";
+      });
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", `audit_trail_export_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      App.UI.showSuccess("Audit logs exported to CSV.");
+    },
+
+    exportBackupData: function() {
+      // Direct CSV fallback downloader for backup
+      App.LoadingManager.show();
+      
+      // Pull Events list for backup
+      App.API._call('getAllEvents')
+        .then(events => {
+          App.LoadingManager.hide();
+          if (!Array.isArray(events) || events.length === 0) {
+            App.UI.showInfo("No data context found to back up.");
+            return;
+          }
+
+          const headers = ["Event ID", "Event Name", "Organizer", "Venue", "Start Date", "Status"];
+          let csv = "\uFEFF"; // UTF-8 BOM
+          csv += '"Events System Database Backup"\r\n';
+          csv += headers.join(",") + "\r\n";
+          
+          events.forEach(e => {
+            csv += [
+              e.event_id || e['Event ID'],
+              e.event_name || e['Event Name'],
+              e.coordinator_id || e['Organizer'],
+              e.venue || e['Location'],
+              e.start_date || e['Start Date'],
+              e.status || e['Event Status']
+            ].map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(",") + "\r\n";
+          });
+
+          const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.setAttribute("href", url);
+          link.setAttribute("download", `system_backup_${new Date().toISOString().slice(0, 10)}.csv`);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          App.UI.showSuccess("Backup csv roster downloaded successfully.");
+        })
+        .catch(err => {
+          App.LoadingManager.hide();
+          App.UI.showError("Backup failed: " + err.message);
+        });
+    },
+
+    refresh: function() {
+      this.loadSettings();
+      if (document.getElementById('audit-panel').classList.contains('show')) {
+        this.loadAuditLogs();
+      }
+    },
+
+    destroy: function() {
+      // cleanup
+    }
+  };
+
+  // Auto-init
+  if (typeof App !== 'undefined' && App.Modules && App.Modules.settings) {
+    App.Modules.settings.init();
   }
-};
 </script>

@@ -471,3 +471,9 @@ function debugCreateStudent() {
   Logger.log(JSON.stringify(result, null, 2));
 
 }
+
+function runStudentServiceUnitTests() {
+  Logger.log('--- Running StudentServiceUnitTests ---');
+  testStudentService();
+  Logger.log('--- StudentServiceUnitTests Completed ---');
+}

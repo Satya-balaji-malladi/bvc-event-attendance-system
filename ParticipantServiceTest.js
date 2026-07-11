@@ -383,6 +383,64 @@ function testEdgeCases() {
   Logger.log('');
 }
 
+function testGetAllEnrichedParticipants() {
+  Logger.log('====================================');
+  Logger.log('TEST: getAllEnrichedParticipants');
+  Logger.log('====================================');
+
+  const userId = _getTestUserId();
+  const result = ParticipantService.getAllEnrichedParticipants(userId);
+
+  if (result.success && Array.isArray(result.data)) {
+    Logger.log('✅ PASS: Fetched all enriched participants. Count = ' + result.data.length);
+    if (result.data.length > 0) {
+      const p = result.data[0];
+      if (p.student_name && p.event_name) {
+        Logger.log('✅ PASS: Enrichment columns (student_name, event_name) verified.');
+      } else {
+        throw new Error('testGetAllEnrichedParticipants FAILED: Missing enrichment columns');
+      }
+    }
+  } else {
+    Logger.log('❌ FAIL: getAllEnrichedParticipants failed.');
+    throw new Error('testGetAllEnrichedParticipants FAILED');
+  }
+  Logger.log('');
+}
+
+function testBulkAddRemoveParticipants() {
+  Logger.log('====================================');
+  Logger.log('TEST: bulkAddRemoveParticipants');
+  Logger.log('====================================');
+
+  const eventId = _getTestEventId();
+  const rollNumber = _getTestStudentRoll();
+  const userId = _getTestUserId();
+
+  _cleanupTestParticipant(eventId, rollNumber);
+
+  // Bulk add
+  const addRes = ParticipantService.bulkAddParticipants(eventId, [rollNumber], userId);
+  if (addRes.success && addRes.data.success.includes(rollNumber)) {
+    Logger.log('✅ PASS: Bulk add successful.');
+  } else {
+    _cleanupTestParticipant(eventId, rollNumber);
+    throw new Error('testBulkAddRemoveParticipants FAILED at add');
+  }
+
+  // Bulk remove
+  const removeRes = ParticipantService.bulkRemoveParticipants(eventId, [rollNumber], userId);
+  if (removeRes.success && removeRes.data.success.includes(rollNumber)) {
+    Logger.log('✅ PASS: Bulk remove successful.');
+  } else {
+    _cleanupTestParticipant(eventId, rollNumber);
+    throw new Error('testBulkAddRemoveParticipants FAILED at remove');
+  }
+
+  _cleanupTestParticipant(eventId, rollNumber);
+  Logger.log('');
+}
+
 // ============================================================
 // MAIN TEST RUNNER
 // ============================================================
@@ -405,6 +463,8 @@ function runParticipantServiceUnitTests() {
     testGetParticipantByRollNumber,
     testGetParticipantsByEvent,
     testGetAllParticipants,
+    testGetAllEnrichedParticipants,
+    testBulkAddRemoveParticipants,
     testPagination,
     testSorting,
     testEdgeCases

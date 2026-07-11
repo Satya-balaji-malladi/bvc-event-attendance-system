@@ -29,17 +29,17 @@
     </div>
 
     <!-- Toolbar -->
-    <div class="row g-2 align-items-center pb-3 border-bottom">
-      <div class="col-md-3">
+    <div class="d-flex flex-wrap gap-2 align-items-center pb-3 border-bottom">
+      <div style="flex: 1 1 200px; min-width: 150px;">
         <input type="text" id="students-search-input" class="form-control" placeholder="Search students...">
       </div>
-      <div class="col-md-2">
+      <div style="flex: 1 1 120px; min-width: 100px;">
         <select id="students-dept-filter" class="form-select">
           <option value="">All Depts</option>
           <!-- Populated dynamically -->
         </select>
       </div>
-      <div class="col-md-2">
+      <div style="flex: 1 1 120px; min-width: 100px;">
         <select id="students-year-filter" class="form-select">
           <option value="">All Years</option>
           <option value="1">Year 1</option>
@@ -48,18 +48,30 @@
           <option value="4">Year 4</option>
         </select>
       </div>
-      <div class="col-md-2">
+      <div style="flex: 1 1 120px; min-width: 100px;">
         <select id="students-section-filter" class="form-select">
           <option value="">All Sections</option>
-          <!-- Populated dynamically or can be hardcoded like A, B, C but prompt says support sections. Will populate dynamically -->
+          <!-- Populated dynamically -->
         </select>
       </div>
-      <div class="col-md-2">
+      <div style="flex: 1 1 120px; min-width: 100px;">
+        <select id="students-gender-filter" class="form-select">
+          <option value="">All Genders</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div style="flex: 1 1 120px; min-width: 100px;">
         <select id="students-status-filter" class="form-select">
           <option value="">All Statuses</option>
           <option value="Active">Active</option>
           <option value="Inactive">Inactive</option>
         </select>
+      </div>
+      <div class="d-flex gap-2 ms-auto">
+        <button class="btn btn-outline-secondary" id="students-export-btn" title="Export CSV" data-action="export-students"><i class="bi bi-download"></i></button>
+        <button class="btn btn-primary text-nowrap" id="students-add-btn" data-action="add-student"><i class="bi bi-person-plus me-2"></i>Add Student</button>
       </div>
     </div>
   </div>
@@ -79,7 +91,7 @@
             <th>Email</th>
             <th>Mobile</th>
             <th>Status</th>
-            <th class="text-end">View</th>
+            <th class="text-end">Actions</th>
           </tr>
         </thead>
         <tbody id="students-table-body">
@@ -137,8 +149,11 @@
               
               <div class="col-md-6">
                 <label for="studentDepartment" class="form-label">Department <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" id="studentDepartment" required placeholder="e.g. CSE">
-                <div class="invalid-feedback">Department is required.</div>
+                <select class="form-select" id="studentDepartment" required>
+                  <option value="">Select Department</option>
+                  <!-- Populated dynamically -->
+                </select>
+                <div class="invalid-feedback">Please select a department.</div>
               </div>
               <div class="col-md-6">
                 <label for="studentYear" class="form-label">Year <span class="text-danger">*</span></label>
@@ -190,6 +205,41 @@
                 <label for="studentCreatedAt" class="form-label">Created Date</label>
                 <input type="text" class="form-control" id="studentCreatedAt" readonly disabled>
               </div>
+              
+              <!-- Student View Only Metadata Fields -->
+              <div id="studentViewOnlyFields" class="col-12 d-none">
+                <hr class="my-4">
+                <h5 class="fw-bold mb-3 text-secondary"><i class="bi bi-clock-history me-2"></i>System & Attendance Metadata</h5>
+                
+                <div class="row g-3">
+                  <div class="col-md-4">
+                    <label class="form-label text-muted small mb-1">Student ID</label>
+                    <input type="text" class="form-control bg-light border-0 text-dark fw-medium" id="studentIdDisplay" readonly disabled>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label text-muted small mb-1">Last Updated At</label>
+                    <input type="text" class="form-control bg-light border-0 text-dark fw-medium" id="studentUpdatedAt" readonly disabled>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label text-muted small mb-1">Total Attendance Count</label>
+                    <div class="input-group">
+                      <span class="input-group-text bg-success bg-opacity-10 text-success border-0"><i class="bi bi-check-circle-fill"></i></span>
+                      <input type="text" class="form-control bg-light border-0 fw-bold text-success" id="studentAttendanceCount" readonly disabled value="0">
+                    </div>
+                  </div>
+                  
+                  <!-- Recent Events Timeline -->
+                  <div class="col-12 mt-4">
+                    <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-calendar-check me-2"></i>Recent Events & Participation</h6>
+                    <div class="border rounded p-3 bg-light" style="max-height: 200px; overflow-y: auto;">
+                      <div id="studentEventsTimeline" class="timeline-small small text-muted">
+                        <!-- Populated dynamically -->
+                        No recent event logs.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
           <div class="modal-footer">
@@ -227,3 +277,6 @@
     </div>
   </div>
 </div>
+
+<?!= include('students_css'); ?>
+<?!= include('students_js'); ?>

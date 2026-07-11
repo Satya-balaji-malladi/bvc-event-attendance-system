@@ -48,6 +48,10 @@ const CONFIG = {
     USER_ROLE: 'Role',
     USER_STATUS: 'Status',
     USER_EMPLOYEE_ID: "Employee ID",
+    USER_PHONE: 'Phone',
+    USER_DEPARTMENT: 'Department',
+    USER_CREATED_AT: 'Created Date',
+    USER_LAST_LOGIN: 'Last Login',
 
     // Backward compatibility aliases
     USER_FULL_NAME: 'First Name', // alias for compatibility

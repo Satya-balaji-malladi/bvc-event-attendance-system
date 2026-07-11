@@ -495,3 +495,11 @@ function testReadUnlockedUser() {
   Logger.log("Account Locked: " + user["Account Locked"]);
 
 }
+
+function runAuthServiceUnitTests() {
+  Logger.log('--- Running AuthServiceUnitTests ---');
+  testPasswordHash();
+  testLogoutVerification();
+  testUnlockAccount();
+  Logger.log('--- AuthServiceUnitTests Completed ---');
+}

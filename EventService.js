@@ -173,31 +173,26 @@ const EventService = {
   },
 
   _getEventValidationPayload_: function(eventData) {
-    // ValidationService expects {eventName,startDate,endDate,startTime,endTime,venueId,status}
-    // Map from sheet-style CONFIG.COLUMNS keys.
     try {
       var out = {};
-      out.eventName = eventData && eventData[CONFIG.COLUMNS.EVENT_NAME] !== undefined ? eventData[CONFIG.COLUMNS.EVENT_NAME] : eventData && eventData.eventName;
-      out.startDate = eventData && eventData[CONFIG.COLUMNS.START_DATE] !== undefined ? eventData[CONFIG.COLUMNS.START_DATE] : eventData && eventData.startDate;
-      out.endDate = eventData && eventData[CONFIG.COLUMNS.END_DATE] !== undefined ? eventData[CONFIG.COLUMNS.END_DATE] : eventData && eventData.endDate;
-      out.startTime = eventData && eventData[CONFIG.COLUMNS.START_TIME] !== undefined ? eventData[CONFIG.COLUMNS.START_TIME] : eventData && eventData.startTime;
-      out.endTime = eventData && eventData[CONFIG.COLUMNS.END_TIME] !== undefined ? eventData[CONFIG.COLUMNS.END_TIME] : eventData && eventData.endTime;
-      // ValidationService uses venueId key but existing service uses COLUMNS.VENUE.
-      // Keep backward-compatible by passing COLUMNS.VENUE.
-      out.venueId = eventData && eventData[CONFIG.COLUMNS.VENUE] !== undefined ? eventData[CONFIG.COLUMNS.VENUE] : (eventData && eventData.venueId);
+      out.eventName = eventData && (eventData[CONFIG.COLUMNS.EVENT_NAME] !== undefined ? eventData[CONFIG.COLUMNS.EVENT_NAME] : (eventData.eventName || eventData.event_name));
+      out.startDate = eventData && (eventData[CONFIG.COLUMNS.START_DATE] !== undefined ? eventData[CONFIG.COLUMNS.START_DATE] : (eventData.startDate || eventData.start_date));
+      out.endDate = eventData && (eventData[CONFIG.COLUMNS.END_DATE] !== undefined ? eventData[CONFIG.COLUMNS.END_DATE] : (eventData.endDate || eventData.end_date));
+      out.startTime = eventData && (eventData[CONFIG.COLUMNS.START_TIME] !== undefined ? eventData[CONFIG.COLUMNS.START_TIME] : (eventData.startTime || eventData.start_time));
+      out.endTime = eventData && (eventData[CONFIG.COLUMNS.END_TIME] !== undefined ? eventData[CONFIG.COLUMNS.END_TIME] : (eventData.endTime || eventData.end_time));
+      out.venueId = eventData && (eventData[CONFIG.COLUMNS.VENUE] !== undefined ? eventData[CONFIG.COLUMNS.VENUE] : (eventData.venueId || eventData.venue || eventData.location));
       out.status = eventData && (eventData[CONFIG.COLUMNS.EVENT_STATUS] !== undefined ? eventData[CONFIG.COLUMNS.EVENT_STATUS] : (eventData[CONFIG.COLUMNS.STATUS] !== undefined ? eventData[CONFIG.COLUMNS.STATUS] : eventData.status));
       return out;
     } catch (e) {
       Logger.log('EventService._getEventValidationPayload_ error: ' + (e && e.message ? e.message : e));
-      // Return minimal payload so validator can fail gracefully
       return {
-        eventName: eventData && eventData[CONFIG.COLUMNS.EVENT_NAME],
-        startDate: eventData && eventData[CONFIG.COLUMNS.START_DATE],
-        endDate: eventData && eventData[CONFIG.COLUMNS.END_DATE],
-        startTime: eventData && eventData[CONFIG.COLUMNS.START_TIME],
-        endTime: eventData && eventData[CONFIG.COLUMNS.END_TIME],
-        venueId: eventData && eventData[CONFIG.COLUMNS.VENUE],
-        status: eventData && (eventData[CONFIG.COLUMNS.EVENT_STATUS] !== undefined ? eventData[CONFIG.COLUMNS.EVENT_STATUS] : eventData[CONFIG.COLUMNS.STATUS])
+        eventName: eventData && (eventData[CONFIG.COLUMNS.EVENT_NAME] || eventData.eventName || eventData.event_name),
+        startDate: eventData && (eventData[CONFIG.COLUMNS.START_DATE] || eventData.startDate || eventData.start_date),
+        endDate: eventData && (eventData[CONFIG.COLUMNS.END_DATE] || eventData.endDate || eventData.end_date),
+        startTime: eventData && (eventData[CONFIG.COLUMNS.START_TIME] || eventData.startTime || eventData.start_time),
+        endTime: eventData && (eventData[CONFIG.COLUMNS.END_TIME] || eventData.endTime || eventData.end_time),
+        venueId: eventData && (eventData[CONFIG.COLUMNS.VENUE] || eventData.venueId || eventData.venue || eventData.location),
+        status: eventData && (eventData[CONFIG.COLUMNS.EVENT_STATUS] || eventData[CONFIG.COLUMNS.STATUS] || eventData.status)
       };
     }
   },
@@ -237,9 +232,63 @@ const EventService = {
     }
   },
 
+  _normalizeEventPayload: function(eventData) {
+    if (!eventData) return {};
+    var out = {};
+    
+    var name = eventData[CONFIG.COLUMNS.EVENT_NAME] !== undefined ? eventData[CONFIG.COLUMNS.EVENT_NAME] : (eventData.event_name || eventData.eventName);
+    if (name !== undefined) out[CONFIG.COLUMNS.EVENT_NAME] = name;
+    
+    var desc = eventData[CONFIG.COLUMNS.DESCRIPTION] !== undefined ? eventData[CONFIG.COLUMNS.DESCRIPTION] : eventData.description;
+    if (desc !== undefined) out[CONFIG.COLUMNS.DESCRIPTION] = desc;
+    
+    var sDate = eventData[CONFIG.COLUMNS.START_DATE] !== undefined ? eventData[CONFIG.COLUMNS.START_DATE] : (eventData.start_date || eventData.startDate);
+    if (sDate !== undefined) out[CONFIG.COLUMNS.START_DATE] = sDate;
+    
+    var eDate = eventData[CONFIG.COLUMNS.END_DATE] !== undefined ? eventData[CONFIG.COLUMNS.END_DATE] : (eventData.end_date || eventData.endDate);
+    if (eDate !== undefined) out[CONFIG.COLUMNS.END_DATE] = eDate;
+    
+    var sTime = eventData[CONFIG.COLUMNS.START_TIME] !== undefined ? eventData[CONFIG.COLUMNS.START_TIME] : (eventData.start_time || eventData.startTime);
+    if (sTime !== undefined) out[CONFIG.COLUMNS.START_TIME] = sTime;
+    
+    var eTime = eventData[CONFIG.COLUMNS.END_TIME] !== undefined ? eventData[CONFIG.COLUMNS.END_TIME] : (eventData.end_time || eventData.endTime);
+    if (eTime !== undefined) out[CONFIG.COLUMNS.END_TIME] = eTime;
+    
+    var venueVal = eventData[CONFIG.COLUMNS.VENUE] !== undefined ? eventData[CONFIG.COLUMNS.VENUE] : (eventData.venue || eventData.venueId);
+    if (venueVal !== undefined) out[CONFIG.COLUMNS.VENUE] = venueVal;
+    
+    var coordId = eventData[CONFIG.COLUMNS.COORDINATOR_ID] !== undefined ? eventData[CONFIG.COLUMNS.COORDINATOR_ID] : (eventData.coordinator_id || eventData.coordinatorId);
+    if (coordId !== undefined) out[CONFIG.COLUMNS.COORDINATOR_ID] = coordId;
+    
+    var depts = eventData[CONFIG.COLUMNS.DEPARTMENTS] !== undefined ? eventData[CONFIG.COLUMNS.DEPARTMENTS] : eventData.departments;
+    if (depts !== undefined) out[CONFIG.COLUMNS.DEPARTMENTS] = depts;
+    
+    var yrs = eventData[CONFIG.COLUMNS.YEARS] !== undefined ? eventData[CONFIG.COLUMNS.YEARS] : eventData.years;
+    if (yrs !== undefined) out[CONFIG.COLUMNS.YEARS] = yrs;
+    
+    var cap = eventData[CONFIG.COLUMNS.CAPACITY] !== undefined ? eventData[CONFIG.COLUMNS.CAPACITY] : eventData.capacity;
+    if (cap !== undefined) out[CONFIG.COLUMNS.CAPACITY] = cap;
+    
+    var statusVal = eventData[CONFIG.COLUMNS.EVENT_STATUS] !== undefined ? eventData[CONFIG.COLUMNS.EVENT_STATUS] : (eventData[CONFIG.COLUMNS.STATUS] !== undefined ? eventData[CONFIG.COLUMNS.STATUS] : (eventData.status || eventData.event_status));
+    if (statusVal !== undefined) out[CONFIG.COLUMNS.EVENT_STATUS] = statusVal;
+    
+    var createdBy = eventData[CONFIG.COLUMNS.CREATED_BY] !== undefined ? eventData[CONFIG.COLUMNS.CREATED_BY] : (eventData.created_by || eventData.createdBy);
+    if (createdBy !== undefined) out[CONFIG.COLUMNS.CREATED_BY] = createdBy;
+    
+    var updatedBy = eventData[CONFIG.COLUMNS.UPDATED_BY] !== undefined ? eventData[CONFIG.COLUMNS.UPDATED_BY] : (eventData.updated_by || eventData.updatedBy);
+    if (updatedBy !== undefined) out[CONFIG.COLUMNS.UPDATED_BY] = updatedBy;
+
+    for (var k in eventData) {
+      if (out[k] === undefined && eventData[k] !== undefined) {
+        out[k] = eventData[k];
+      }
+    }
+    return out;
+  },
+
   createEvent: function(eventData) {
     try {
-      eventData = eventData || {};
+      eventData = this._normalizeEventPayload(eventData);
 
       const coordinatorId = eventData[CONFIG.COLUMNS.COORDINATOR_ID];
       const coordinator = coordinatorId ? UserService.getUserById(coordinatorId) : null;
@@ -339,7 +388,7 @@ const EventService = {
     try {
       const eventsSheet = CONFIG.SHEETS.EVENTS;
 
-      eventData = eventData || {};
+      eventData = this._normalizeEventPayload(eventData);
 
       // Prefer cached record set (best-effort) to reduce reads.
       // Using getEventById avoids an extra readAllRows on update path when possible.

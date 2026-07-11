@@ -242,5 +242,93 @@ const ParticipantService = {
 
   restoreParticipant: function(eventId, rollNumber, userId) {
     return this.addParticipant(eventId, rollNumber, userId); // Add logic already handles restore
+  },
+
+  getAllEnrichedParticipants: function(userId) {
+    // 1. Check user authorization
+    const user = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, CONFIG.COLUMNS.ROLE || 'Role', '') ? DatabaseService.findByColumn(CONFIG.SHEETS.USERS, CONFIG.COLUMNS.USER_ID || 'User ID', userId)[0] : null;
+    if (!user) {
+      // Direct lookup fallback if findByColumn fails or config column is missing
+      const allUsers = DatabaseService.readAllRows(CONFIG.SHEETS.USERS) || [];
+      const found = allUsers.find(u => String(u[CONFIG.COLUMNS.USER_ID || 'User ID']) === String(userId));
+      if (!found) throw new Error('Unauthorized: User not found.');
+    }
+    const trueUser = user || DatabaseService.readAllRows(CONFIG.SHEETS.USERS).find(u => String(u[CONFIG.COLUMNS.USER_ID || 'User ID']) === String(userId));
+
+    // 2. Read all participant rows
+    let participants = DatabaseService.readAllRows(CONFIG.SHEETS.EVENT_PARTICIPANTS) || [];
+    
+    // Filter by Deletion Flag if it exists
+    if (CONFIG.COLUMNS.DELETION_FLAG) {
+      participants = participants.filter(p => p[CONFIG.COLUMNS.DELETION_FLAG] !== true && p[CONFIG.COLUMNS.DELETION_FLAG] !== 'true');
+    }
+    
+    // Filter out rows where Registration Status is Cancelled
+    participants = participants.filter(p => p['Registration Status'] !== 'Cancelled');
+    
+    // If coordinator, filter participants to only events they manage
+    if (trueUser[CONFIG.COLUMNS.ROLE || 'Role'] === CONFIG.ROLES.COORDINATOR) {
+      const allEvents = DatabaseService.readAllRows(CONFIG.SHEETS.EVENTS) || [];
+      const myEventIds = allEvents
+        .filter(e => e[CONFIG.COLUMNS.COORDINATOR_ID || 'Organizer'] === userId)
+        .map(e => e[CONFIG.COLUMNS.EVENT_ID || 'Event ID']);
+      participants = participants.filter(p => myEventIds.includes(p['Event ID']));
+    }
+
+    // 3. Read students and events for enrichment
+    const allStudents = DatabaseService.readAllRows(CONFIG.SHEETS.STUDENTS) || [];
+    const allEvents = DatabaseService.readAllRows(CONFIG.SHEETS.EVENTS) || [];
+
+    const enriched = participants.map(p => {
+      const student = allStudents.find(s => s['Roll Number'] === p['Roll Number']) || {};
+      const event = allEvents.find(e => e['Event ID'] === p['Event ID']) || {};
+      return {
+        ...p,
+        student_name: student['Student Name'] || 'Unknown',
+        department: student['Department ID'] || 'Unknown',
+        year: student['Year'] || 'Unknown',
+        section: student['Section'] || 'Unknown',
+        event_name: event['Event Name'] || 'Unknown',
+        event_date: event['Start Date'] || 'Unknown'
+      };
+    });
+
+    return { success: true, data: enriched };
+  },
+
+  bulkAddParticipants: function(eventId, rollNumbers, userId) {
+    const results = { success: [], errors: [] };
+    for (let i = 0; i < rollNumbers.length; i++) {
+      const roll = rollNumbers[i];
+      try {
+        const res = this.addParticipant(eventId, roll, userId);
+        if (res.success) {
+          results.success.push(roll);
+        } else {
+          results.errors.push({ roll: roll, error: res.message || 'Unknown error' });
+        }
+      } catch (err) {
+        results.errors.push({ roll: roll, error: err.message });
+      }
+    }
+    return { success: true, data: results };
+  },
+
+  bulkRemoveParticipants: function(eventId, rollNumbers, userId) {
+    const results = { success: [], errors: [] };
+    for (let i = 0; i < rollNumbers.length; i++) {
+      const roll = rollNumbers[i];
+      try {
+        const res = this.removeParticipant(eventId, roll, userId);
+        if (res.success) {
+          results.success.push(roll);
+        } else {
+          results.errors.push({ roll: roll, error: res.message || 'Unknown error' });
+        }
+      } catch (err) {
+        results.errors.push({ roll: roll, error: err.message });
+      }
+    }
+    return { success: true, data: results };
   }
 };

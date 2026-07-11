@@ -150,27 +150,22 @@ window.App = {
   // API Layer (Centralized google.script.run wrapper)
   API: {
     _call: function(serverMethod, ...args) {
-      console.log("FRONTEND STEP 2.1: _call started for", serverMethod);
+      console.log(serverMethod.toUpperCase() + " | STEP 6 - API called | Args: " + JSON.stringify(args));
       return new Promise((resolve, reject) => {
-        console.log("FRONTEND STEP 2.2: inside promise executor");
         try {
           App.LoadingManager.show();
         } catch (e) {
-          console.error("FRONTEND STEP 2.3: App.LoadingManager.show crashed", e);
+          console.error("App.LoadingManager.show crashed", e);
         }
         
-        console.log("FRONTEND STEP 2.4: App.Environment =", App.Environment);
         if (App.Environment === 'production') {
-          console.log("FRONTEND STEP 2.5: checking typeof google.script.run");
           if (typeof google.script.run[serverMethod] === 'function') {
-            const token = localStorage.getItem('bvc_session');
+            const token = localStorage.getItem('sessionToken');
             const callArgs = (serverMethod !== 'login' && serverMethod !== 'authenticate') ? [token, ...args] : args;
             
-            console.log("FRONTEND STEP 2.6: calling google.script.run." + serverMethod);
             google.script.run
               .withSuccessHandler((res) => {
                 App.LoadingManager.hide();
-                console.log("STEP 1 - Raw res:", res);
                 let resolvedData = null;
                 if (Array.isArray(res)) {
                   resolvedData = res;
@@ -183,11 +178,12 @@ window.App = {
                 } else {
                   resolvedData = res;
                 }
-                console.log("STEP 1 - Resolved Response:", resolvedData);
+                console.log(serverMethod.toUpperCase() + " | STEP 7 - Response received | Result: ", resolvedData);
                 resolve(resolvedData);
               })
               .withFailureHandler((err) => {
                 App.LoadingManager.hide();
+                console.error(serverMethod.toUpperCase() + " | STEP 7 - API error: ", err);
                 reject(err);
               })
               [serverMethod](...callArgs);
@@ -204,6 +200,14 @@ window.App = {
         }
       });
     },
+    getTotalUsers: function() { return this._call('getTotalUsers'); },
+    getTotalStudents: function() { return this._call('getTotalStudents'); },
+    getTotalEvents: function() { return this._call('getTotalEvents'); },
+    getActiveEvents: function() { return this._call('getActiveEvents'); },
+    getUpcomingEvents: function() { return this._call('getUpcomingEvents'); },
+    getTotalParticipants: function() { return this._call('getTotalParticipants'); },
+    getAttendanceToday: function() { return this._call('getAttendanceToday'); },
+    getRecentEvents: function() { return this._call('getRecentEvents'); },
     getDashboardSummary: function() { return this._call('getDashboardSummary'); },
     getReportsDashboardSummary: function() { return this._call('getReportsDashboardSummary'); },
     getEventReport: function(filters) { return this._call('getEventReport', filters); },
@@ -221,6 +225,14 @@ window.App = {
     getCancelledEvents: function(filters) { return this._call('getCancelledEvents', filters); },
     getCoordinatorPerformance: function(coordinatorId) { return this._call('getCoordinatorPerformance', coordinatorId); },
     getStudentEventHistory: function(rollNumber) { return this._call('getStudentEventHistory', rollNumber); },
+    getAnalyticsSummary: function() { return this._call('getAnalyticsSummary'); },
+    getTrendData: function() { return this._call('getTrendData'); },
+    getDepartmentData: function() { return this._call('getDepartmentData'); },
+    getEventWiseData: function() { return this._call('getEventWiseData'); },
+    getCheckInPatterns: function() { return this._call('getCheckInPatterns'); },
+    getPerformanceDistribution: function() { return this._call('getPerformanceDistribution'); },
+    getDefaulterDistribution: function() { return this._call('getDefaulterDistribution'); },
+    getLeaderboard: function() { return this._call('getLeaderboard'); },
     getDashboardData: function() { return this._call('getDashboardData'); },
     getAllEvents: function() { return this._call('getAllEvents'); },
     createEvent: function(eventData) { return this._call('createEvent', eventData); },
@@ -233,17 +245,30 @@ window.App = {
     deleteUser: function(userId) { return this._call('deleteUser', userId); },
     resetPassword: function(userId) { return this._call('resetPassword', userId); },
     getUserById: function(userId) { return this._call('getUserById', userId); },
+    importUsers: function(usersDataArray) { return this._call('importUsers', usersDataArray); },
     getAllStudents: function() { return this._call('getAllStudents'); },
+    getActiveDepartments: function() { return this._call('getActiveDepartments'); },
     createStudent: function(studentData) { return this._call('createStudent', studentData); },
     updateStudent: function(rollNumber, studentData) { return this._call('updateStudent', rollNumber, studentData); },
     deleteStudent: function(rollNumber) { return this._call('deleteStudent', rollNumber); },
     getStudentById: function(rollNumber) { return this._call('getStudentByRollNumber', rollNumber); },
     getSettings: function() { return this._call('getSettings'); },
     saveSettings: function(payload) { return this._call('saveSettings', payload); },
+    clearAttendanceLogs: function() { return this._call('clearAttendanceLogs'); },
+    resetSystem: function() { return this._call('resetSystem'); },
+    getAuditLogs: function() { return this._call('getAuditLogs'); },
     login: function(credentials) { return this._call('login', credentials); },
     logout: function() { return this._call('logout'); },
     authenticate: function(sessionToken) { return this._call('authenticate', sessionToken); },
     getAttendanceByEvent: function(eventId) { return this._call('getAttendanceByEvent', eventId); },
+    getAllEnrichedParticipants: function() { return this._call('getAllEnrichedParticipants'); },
+    getEventParticipants: function(eventId) { return this._call('getEventParticipants', eventId); },
+    addParticipant: function(eventId, rollNumber) { return this._call('addParticipant', eventId, rollNumber); },
+    removeParticipant: function(eventId, rollNumber) { return this._call('removeParticipant', eventId, rollNumber); },
+    restoreParticipant: function(eventId, rollNumber) { return this._call('restoreParticipant', eventId, rollNumber); },
+    checkEligibility: function(eventId, rollNumber) { return this._call('checkEligibility', eventId, rollNumber); },
+    bulkAddParticipants: function(eventId, rollNumbers) { return this._call('bulkAddParticipants', eventId, rollNumbers); },
+    bulkRemoveParticipants: function(eventId, rollNumbers) { return this._call('bulkRemoveParticipants', eventId, rollNumbers); },
     _getMock: function(m) {
       if (m === 'getDashboardSummary') return { report: { totalStudents: 1250, totalEvents: 45, totalAttendance: 15420, totalPresent: 14200, totalAbsent: 1220, attendancePercentage: 92.08 } };
       if (m === 'getAllEvents') return [{ event_id: 'EVT-01', event_name: 'Tech Symposium', event_date: '2026-07-15', status: App.Constants.EVENT_STATUS.COMPLETED, coordinator_id: 'USR-01' }];
@@ -268,12 +293,21 @@ window.App = {
         return;
       }
       
+      // Delegate to Index page loadPage if available
+      if (typeof loadPage === 'function') {
+        loadPage(pageName);
+        App.State.activeModule = pageName;
+        return;
+      }
+      
       // Cleanup previous module
       if (App.State.activeModule && App.Modules[App.State.activeModule] && typeof App.Modules[App.State.activeModule].destroy === 'function') {
         App.Modules[App.State.activeModule].destroy();
       }
 
-      document.getElementById('module-empty').classList.add('d-none');
+      const emptyEl = document.getElementById('module-empty');
+      if (emptyEl) emptyEl.classList.add('d-none');
+      
       document.querySelectorAll('.app-module').forEach(el => el.classList.add('d-none'));
       
       const targetModule = document.getElementById(`module-${pageName}`);
@@ -316,7 +350,7 @@ window.App = {
       const splash = document.getElementById('splash-screen');
       const text = document.getElementById('splash-text');
       
-      const token = localStorage.getItem('bvc_session');
+      const token = localStorage.getItem('sessionToken');
       if (!token) {
         setTimeout(() => this.showLogin(), 1000);
         return;
@@ -336,23 +370,27 @@ window.App = {
     },
 
     setSession: function(token, user) {
-      localStorage.setItem('bvc_session', token);
+      localStorage.setItem('sessionToken', token);
       App.State.currentUser = user;
     },
 
     transitionToApp: function(fromLogin = true) {
-      document.getElementById('splash-screen').classList.add('d-none');
-      document.getElementById('auth-bg').classList.add('d-none');
-      document.getElementById('login-container').classList.add('d-none');
-      document.getElementById('error-container').classList.add('d-none');
+      const splash = document.getElementById('splash-screen');
+      if (splash) splash.classList.add('d-none');
+      const bg = document.getElementById('auth-bg');
+      if (bg) bg.classList.add('d-none');
+      const loginContainer = document.getElementById('login-container');
+      if (loginContainer) loginContainer.classList.add('d-none');
+      const errorContainer = document.getElementById('error-container');
+      if (errorContainer) errorContainer.classList.add('d-none');
       
       const appWrapper = document.getElementById('app-wrapper');
-      appWrapper.classList.remove('d-none');
+      if (appWrapper) appWrapper.classList.remove('d-none');
       
       // Update UI Header
       const userNameEl = document.getElementById('user-name');
       if (userNameEl && App.State.currentUser) {
-        userNameEl.innerText = App.State.currentUser.full_name;
+        userNameEl.innerText = App.State.currentUser.full_name || App.State.currentUser.Username || 'User';
       }
 
       // Role Routing
@@ -370,17 +408,28 @@ window.App = {
     },
 
     showLogin: function(sessionExpired = false) {
-      document.getElementById('splash-screen').classList.add('d-none');
-      document.getElementById('app-wrapper').classList.add('d-none');
-      document.getElementById('error-container').classList.add('d-none');
+      const splash = document.getElementById('splash-screen');
+      if (splash) splash.classList.add('d-none');
+      const appWrapper = document.getElementById('app-wrapper');
+      if (appWrapper) appWrapper.classList.add('d-none');
+      const errorContainer = document.getElementById('error-container');
+      if (errorContainer) errorContainer.classList.add('d-none');
       
-      document.getElementById('auth-bg').classList.remove('d-none');
-      document.getElementById('login-container').classList.remove('d-none');
-      
-      if (App.Modules.login) App.Modules.login.init();
-      
-      if (sessionExpired) {
-        App.UI.showError('Session Expired. Please login again.');
+      const bg = document.getElementById('auth-bg');
+      if (bg) bg.classList.remove('d-none');
+      const loginContainer = document.getElementById('login-container');
+      if (loginContainer) {
+        loginContainer.classList.remove('d-none');
+        if (App.Modules.login) App.Modules.login.init();
+        if (sessionExpired) {
+          App.UI.showError('Session Expired. Please login again.');
+        }
+      } else {
+        console.log('Not on Login page. Redirecting to Login URL...');
+        const scriptUrl = window.APP_SCRIPT_URL || '';
+        if (scriptUrl) {
+          window.location.href = scriptUrl + "?page=login" + (sessionExpired ? "&expired=true" : "");
+        }
       }
     },
 
@@ -388,8 +437,8 @@ window.App = {
       console.log('=== LOGOUT STARTED ===');
       
       // Immediately clear local state and show login (no waiting for backend)
-      const token = localStorage.getItem('bvc_session');
-      localStorage.removeItem('bvc_session');
+      const token = localStorage.getItem('sessionToken');
+      localStorage.removeItem('sessionToken');
       App.State.currentUser = null;
       App.LoadingManager.hide(true);
       
@@ -460,7 +509,9 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!pageName) return;
       document.querySelectorAll('.sidebar-nav .nav-link').forEach(l => l.classList.remove('active'));
       this.classList.add('active');
-      App.UI.updateBreadcrumb('Home', this.querySelector('.nav-text').innerText);
+      const textEl = this.querySelector('.nav-text') || this.querySelector('span');
+      const textVal = textEl ? textEl.innerText : pageName;
+      App.UI.updateBreadcrumb('Home', textVal);
       if (window.innerWidth < 768) body.classList.remove('sidebar-open');
       App.Router.navigate(pageName);
     });

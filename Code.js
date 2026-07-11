@@ -117,38 +117,82 @@ function getAllEvents() {
   }
 }
 
-function getAllUsers() {
+function getAllUsers(sessionToken) {
+  Logger.log("BACKEND STEP 1: Entering global getAllUsers with sessionToken: " + sessionToken);
   try {
-    const res = Controller.User.getAllUsers();
-    Logger.log("STEP 2 - Code.js received from Controller: " + typeof res + " / Array? " + Array.isArray(res) + " / Length: " + (res ? res.length : 0));
+    const res = Controller.User.getAllUsers(sessionToken);
+    Logger.log("BACKEND STEP 2: Code.js received from Controller: " + typeof res + " / Array? " + Array.isArray(res) + " / Length: " + (res ? res.length : 0));
     // Force serialization to strip any Google Apps Script internal types (like Dates)
     const serialized = JSON.parse(JSON.stringify(res || []));
-    Logger.log("STEP 2 - Code.js returning serialized: " + typeof serialized + " / Array? " + Array.isArray(serialized) + " / Length: " + serialized.length);
+    Logger.log("BACKEND STEP 3: Code.js returning serialized: " + typeof serialized + " / Array? " + Array.isArray(serialized) + " / Length: " + serialized.length);
     return serialized;
   } catch (e) {
-    Logger.log("STEP 2 - Error in global getAllUsers: " + e.message);
+    Logger.log("BACKEND STEP 4: Error in global getAllUsers: " + e.message + "\nStack: " + e.stack);
     return [];
   }
 }
 
-function createUser(userData) {
+
+
+function createUser(sessionToken, userData) {
   try {
-    Logger.log("BACKEND STEP 1: Code.js createUser started.");
-    const result = Controller.User.createUser(userData);
-    const serialized = JSON.parse(JSON.stringify(result || {}));
-    Logger.log("BACKEND STEP 8: Code.js createUser finished. Returning: " + JSON.stringify(serialized));
-    return serialized;
+    const result = Controller.User.createUser(sessionToken, userData);
+    return JSON.parse(JSON.stringify(result || {}));
   } catch (e) {
-    Logger.log("BACKEND EXCEPTION in Code.js createUser: " + e.message + "\\n" + e.stack);
+    Logger.log("BACKEND EXCEPTION in Code.js createUser: " + e.message + "\n" + e.stack);
     return { success: false, message: "Backend crash: " + e.message };
   }
 }
 
-function getAllStudents() {
+function importUsers(sessionToken, usersDataArray) {
   try {
-    const res = Controller.Student.getAllStudents();
-    return JSON.parse(JSON.stringify(res || []));
+    const result = Controller.User.importUsers(sessionToken, usersDataArray);
+    return JSON.parse(JSON.stringify(result || {}));
+  } catch (e) {
+    Logger.log("BACKEND EXCEPTION in Code.js importUsers: " + e.message);
+    return { success: false, message: "Backend crash: " + e.message };
+  }
+}
+
+function updateUser(sessionToken, userId, userData) {
+  try {
+    const result = Controller.User.updateUser(sessionToken, userId, userData);
+    return JSON.parse(JSON.stringify(result || {}));
+  } catch (e) {
+    Logger.log("BACKEND EXCEPTION in Code.js updateUser: " + e.message);
+    return { success: false, message: "Backend crash: " + e.message };
+  }
+}
+
+function deleteUser(sessionToken, userId) {
+  try {
+    const result = Controller.User.deleteUser(sessionToken, userId);
+    return JSON.parse(JSON.stringify(result || {}));
+  } catch (e) {
+    Logger.log("BACKEND EXCEPTION in Code.js deleteUser: " + e.message);
+    return { success: false, message: "Backend crash: " + e.message };
+  }
+}
+
+function resetPassword(sessionToken, userId) {
+  try {
+    const result = Controller.User.resetPassword(sessionToken, userId);
+    return JSON.parse(JSON.stringify(result || {}));
+  } catch (e) {
+    Logger.log("BACKEND EXCEPTION in Code.js resetPassword: " + e.message);
+    return { success: false, message: "Backend crash: " + e.message };
+  }
+}
+
+function getAllStudents(sessionToken) {
+  Logger.log("STUDENTS_MODULE | STEP 1 - Request received | Function: getAllStudents");
+  try {
+    const res = Controller.Student.getAllStudents(sessionToken);
+    const serialized = JSON.parse(JSON.stringify(res || []));
+    Logger.log("STUDENTS_MODULE | STEP 5 - Returning response | Success: true");
+    return serialized;
   } catch(e) {
+    Logger.log("STUDENTS_MODULE | STEP 5 - Returning response | Success: false | Error: " + e.message);
     return [];
   }
 }
@@ -170,10 +214,10 @@ function getDashboardData(sessionToken) {
     const summaryResp = Controller.Report.getDashboardSummary(sessionToken);
     const summary = (summaryResp && summaryResp.report) ? summaryResp.report : {};
     Logger.log("===== DASHBOARD SUMMARY =====");
-Logger.log(JSON.stringify(summary));
-Logger.log("totalAttendance = " + summary.totalAttendance);
-Logger.log("totalAbsent = " + summary.totalAbsent);
-Logger.log("attendancePercentage = " + summary.attendancePercentage);
+    Logger.log(JSON.stringify(summary));
+    Logger.log("totalAttendance = " + summary.totalAttendance);
+    Logger.log("totalAbsent = " + summary.totalAbsent);
+    Logger.log("attendancePercentage = " + summary.attendancePercentage);
     
     const users = (DatabaseService.readAllRows(CONFIG.SHEETS.USERS) || [])
       .filter(u => u[CONFIG.COLUMNS.DELETION_FLAG] !== true && u[CONFIG.COLUMNS.DELETION_FLAG] !== "true");
@@ -195,27 +239,27 @@ Logger.log("attendancePercentage = " + summary.attendancePercentage);
     let activeEvents = [];
     let completedEventsCount = 0;
     try {
-  const allEventsResp = Controller.Event.getAllEvents(sessionToken);
-  const allEvents = Array.isArray(allEventsResp) ? allEventsResp : [];
+      const allEventsResp = Controller.Event.getAllEvents(sessionToken);
+      const allEvents = Array.isArray(allEventsResp) ? allEventsResp : [];
 
-  Logger.log("===== DASHBOARD EVENTS =====");
-  Logger.log("Total Events Returned = " + allEvents.length);
+      Logger.log("===== DASHBOARD EVENTS =====");
+      Logger.log("Total Events Returned = " + allEvents.length);
 
-  activeEvents = allEvents.filter(function(e) {
-    const status = e["Event Status"] || e["Status"] || e.status;
-    return status === "Active";
-  });
+      activeEvents = allEvents.filter(function(e) {
+        const status = e["Event Status"] || e["Status"] || e.status;
+        return status === "Active";
+      });
 
-  Logger.log("Active Events Count = " + activeEvents.length);
+      Logger.log("Active Events Count = " + activeEvents.length);
 
-  completedEventsCount = allEvents.filter(function(e) {
-    const status = e["Event Status"] || e["Status"] || e.status;
-    return status === "Completed";
-  }).length;
+      completedEventsCount = allEvents.filter(function(e) {
+        const status = e["Event Status"] || e["Status"] || e.status;
+        return status === "Completed";
+      }).length;
 
-} catch (e) {
-  Logger.log("Error while loading events: " + e.message);
-}
+    } catch (e) {
+      Logger.log("Error while loading events: " + e.message);
+    }
 
     let activities = [];
     try {
@@ -249,6 +293,107 @@ Logger.log("attendancePercentage = " + summary.attendancePercentage);
     return { success: false, message: e.message, stack: e.stack };
   }
 }
+
+// ==========================================
+// Dashboard Feature-Based Endpoints (STEP 1 & 5 Logging)
+// ==========================================
+
+function getTotalUsers(sessionToken) {
+  Logger.log("DASHBOARD_MODULE | STEP 1 - Request received | Function: getTotalUsers");
+  try {
+    const res = Controller.Dashboard.getTotalUsers(sessionToken);
+    Logger.log("DASHBOARD_MODULE | STEP 5 - Returning response | Success: true | Value: " + res);
+    return res;
+  } catch(e) {
+    Logger.log("DASHBOARD_MODULE | STEP 5 - Returning response | Success: false | Error: " + e.message);
+    return 0;
+  }
+}
+
+function getTotalStudents(sessionToken) {
+  Logger.log("DASHBOARD_MODULE | STEP 1 - Request received | Function: getTotalStudents");
+  try {
+    const res = Controller.Dashboard.getTotalStudents(sessionToken);
+    Logger.log("DASHBOARD_MODULE | STEP 5 - Returning response | Success: true | Value: " + res);
+    return res;
+  } catch(e) {
+    Logger.log("DASHBOARD_MODULE | STEP 5 - Returning response | Success: false | Error: " + e.message);
+    return 0;
+  }
+}
+
+function getTotalEvents(sessionToken) {
+  Logger.log("DASHBOARD_MODULE | STEP 1 - Request received | Function: getTotalEvents");
+  try {
+    const res = Controller.Dashboard.getTotalEvents(sessionToken);
+    Logger.log("DASHBOARD_MODULE | STEP 5 - Returning response | Success: true | Value: " + res);
+    return res;
+  } catch(e) {
+    Logger.log("DASHBOARD_MODULE | STEP 5 - Returning response | Success: false | Error: " + e.message);
+    return 0;
+  }
+}
+
+function getActiveEvents(sessionToken) {
+  Logger.log("DASHBOARD_MODULE | STEP 1 - Request received | Function: getActiveEvents");
+  try {
+    const res = Controller.Dashboard.getActiveEvents(sessionToken);
+    Logger.log("DASHBOARD_MODULE | STEP 5 - Returning response | Success: true | Value: " + res);
+    return res;
+  } catch(e) {
+    Logger.log("DASHBOARD_MODULE | STEP 5 - Returning response | Success: false | Error: " + e.message);
+    return 0;
+  }
+}
+
+function getUpcomingEvents(sessionToken) {
+  Logger.log("DASHBOARD_MODULE | STEP 1 - Request received | Function: getUpcomingEvents");
+  try {
+    const res = Controller.Dashboard.getUpcomingEvents(sessionToken);
+    Logger.log("DASHBOARD_MODULE | STEP 5 - Returning response | Success: true | Value: " + res);
+    return res;
+  } catch(e) {
+    Logger.log("DASHBOARD_MODULE | STEP 5 - Returning response | Success: false | Error: " + e.message);
+    return 0;
+  }
+}
+
+function getTotalParticipants(sessionToken) {
+  Logger.log("DASHBOARD_MODULE | STEP 1 - Request received | Function: getTotalParticipants");
+  try {
+    const res = Controller.Dashboard.getTotalParticipants(sessionToken);
+    Logger.log("DASHBOARD_MODULE | STEP 5 - Returning response | Success: true | Value: " + res);
+    return res;
+  } catch(e) {
+    Logger.log("DASHBOARD_MODULE | STEP 5 - Returning response | Success: false | Error: " + e.message);
+    return 0;
+  }
+}
+
+function getAttendanceToday(sessionToken) {
+  Logger.log("DASHBOARD_MODULE | STEP 1 - Request received | Function: getAttendanceToday");
+  try {
+    const res = Controller.Dashboard.getAttendanceToday(sessionToken);
+    Logger.log("DASHBOARD_MODULE | STEP 5 - Returning response | Success: true | Value: " + res);
+    return res;
+  } catch(e) {
+    Logger.log("DASHBOARD_MODULE | STEP 5 - Returning response | Success: false | Error: " + e.message);
+    return 0;
+  }
+}
+
+function getRecentEvents(sessionToken) {
+  Logger.log("DASHBOARD_MODULE | STEP 1 - Request received | Function: getRecentEvents");
+  try {
+    const res = Controller.Dashboard.getRecentEvents(sessionToken);
+    Logger.log("DASHBOARD_MODULE | STEP 5 - Returning response | Success: true");
+    return JSON.parse(JSON.stringify(res || []));
+  } catch(e) {
+    Logger.log("DASHBOARD_MODULE | STEP 5 - Returning response | Success: false | Error: " + e.message);
+    return [];
+  }
+}
+
 function getAttendanceByEvent(eventId) {
   try {
     const res = Controller.Attendance.getAttendanceByEvent(null, eventId);

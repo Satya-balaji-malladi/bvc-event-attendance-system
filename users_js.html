@@ -7,7 +7,17 @@
 console.log("Users Module Registered");
 App.Modules.users = {
   usersData: [],
+  filteredData: [],
   userModalInstance: null,
+  deleteModalInstance: null,
+  resetModalInstance: null,
+  importModalInstance: null,
+  
+  // State for Sorting and Pagination
+  sortKey: 'user_id',
+  sortDir: 'asc',
+  currentPage: 1,
+  pageSize: 10,
   
   init: function() {
     console.log("Users Init");
@@ -17,28 +27,43 @@ App.Modules.users = {
   },
   
   load: function() {
-    console.log("Users Load");
+    console.log("FRONTEND STEP 1: users_js.html load() started");
     const tbody = document.getElementById('users-table-body');
     if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-5"><div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>Loading users...</td></tr>';
     
+    console.log("FRONTEND STEP 2: Calling App.API.getAllUsers()");
     App.API.getAllUsers()
       .then(users => {
-        // Safe mapping to handle capitalization or mismatched properties
-        const mappedUsers = (users || []).map(u => ({
-          ...u,
-          user_id: u.user_id || u.UserID || u.userId || u.id || 'N/A',
-          full_name: u.full_name || u.FullName || u.fullName || u.name || 'N/A',
-          email: u.email || u.Email || 'N/A',
-          role: u.role || u.Role || 'N/A',
-          department: u.department || u.Department || u.dept || 'N/A',
-          status: u.status || u.Status || 'N/A'
-        }));
+        console.log("FRONTEND STEP 3: App.API.getAllUsers() success. Received users count:", users ? users.length : 0, "Data:", users);
+        const mappedUsers = (users || []).map(u => {
+          if (u === null) {
+            console.warn("FRONTEND STEP 4 WARNING: Received null user record in array!");
+            return { user_id: 'N/A', employee_id: 'N/A', full_name: 'N/A', email: 'N/A', phone: 'N/A', role: 'N/A', department: 'N/A', status: 'N/A', created_date: 'N/A', last_login: 'N/A' };
+          }
+          return {
+            ...u,
+            user_id: u.user_id || u['User ID'] || u.UserID || u.userId || u.id || 'N/A',
+            employee_id: u.employee_id || u['Employee ID'] || u.EmployeeID || 'N/A',
+            full_name: u.full_name || u['First Name'] || u.FullName || u.fullName || u.name || 'N/A',
+            email: u.email || u['Email Address'] || u.Email || 'N/A',
+            phone: u.phone || u['Phone'] || u.Phone || 'N/A',
+            role: u.role || u['Role'] || u.Role || 'N/A',
+            department: u.department || u['Department'] || u.Department || u.dept || 'N/A',
+            status: u.status || u['Status'] || u.Status || 'N/A',
+            created_date: u.created_date || u['Created Date'] || u.createdAt || 'N/A',
+            last_login: u.last_login || u['Last Login'] || u.lastLogin || 'N/A'
+          };
+        });
         
+        console.log("FRONTEND STEP 5: Mapped users count:", mappedUsers.length, "Mapped Data:", mappedUsers);
         this.usersData = mappedUsers;
-        this.populateDepartmentFilter();
+        console.log("USERS_MODULE | STEP 8 - Rendering UI");
+        this.populateFilters();
         this.applyFilters();
+        console.log("USERS_MODULE | STEP 9 - Render completed");
       })
       .catch(err => {
+        console.error("FRONTEND STEP 6 ERROR: App.API.getAllUsers() catch handler caught:", err);
         if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger py-5">Failed to load users</td></tr>';
         App.ErrorHandler.handle(err, "Failed to load users in Users module");
       });
@@ -55,234 +80,101 @@ App.Modules.users = {
     if (deptFilter) deptFilter.addEventListener('change', () => this.applyFilters());
     if (statusFilter) statusFilter.addEventListener('change', () => this.applyFilters());
 
+    // Toolbar Buttons
     const addUserBtn = document.querySelector('button[data-action="add-user"]');
-    if (addUserBtn) {
-      addUserBtn.addEventListener('click', () => this.openAddUserModal());
-    }
+    if (addUserBtn) addUserBtn.addEventListener('click', () => this.openAddUserModal());
 
+    const exportBtn = document.querySelector('button[data-action="export-users"]');
+    if (exportBtn) exportBtn.addEventListener('click', () => this.exportToCSV());
+
+    const importBtn = document.querySelector('button[data-action="import-users"]');
+    if (importBtn) importBtn.addEventListener('click', () => this.openImportModal());
+
+    // Forms
     const userForm = document.getElementById('userForm');
-    if (userForm) {
-      userForm.addEventListener('submit', (e) => this.handleUserSubmit(e));
-    }
-    
+    if (userForm) userForm.addEventListener('submit', (e) => this.handleUserSubmit(e));
+
+    const importForm = document.getElementById('userImportForm');
+    if (importForm) importForm.addEventListener('submit', (e) => this.handleImportSubmit(e));
+
+    // Confirm Buttons for Delete and Reset
+    const confirmDeleteBtn = document.getElementById('userConfirmDeleteBtn');
+    if (confirmDeleteBtn) confirmDeleteBtn.addEventListener('click', () => this.executeDelete());
+
+    const confirmResetBtn = document.getElementById('userConfirmResetBtn');
+    if (confirmResetBtn) confirmResetBtn.addEventListener('click', () => this.executeReset());
+
+    // Table Header Sorting
+    const sortableHeaders = document.querySelectorAll('th.sortable');
+    sortableHeaders.forEach(th => {
+      th.addEventListener('click', (e) => {
+        const key = e.currentTarget.getAttribute('data-sort');
+        if (this.sortKey === key) {
+          this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+          this.sortKey = key;
+          this.sortDir = 'asc';
+        }
+        this.updateSortIcons();
+        this.applyFilters();
+      });
+    });
+
+    // Event Delegation for Table Actions
     const tbody = document.getElementById('users-table-body');
     if (tbody) {
       tbody.addEventListener('click', (e) => {
         const btn = e.target.closest('button[data-action]');
         if (!btn) return;
+        
         const action = btn.getAttribute('data-action');
         const id = btn.getAttribute('data-id');
         
-        if (action === 'view-user') this.openViewUserModal(id);
-        else if (action === 'edit-user') this.openEditUserModal(id);
-        else if (action === 'delete-user') this.openDeleteUserModal(id);
-        else if (action === 'reset-pwd-user') this.openResetPasswordModal(id);
+        if (action === 'edit-user') this.openEditUserModal(id);
+        if (action === 'delete-user') this.openDeleteModal(id);
+        if (action === 'reset-pwd') this.openResetModal(id);
+        if (action === 'view-user') App.UI.showToast("View feature coming soon for user " + id, "info");
       });
     }
-    
-    const confirmDeleteBtn = document.getElementById('userConfirmDeleteBtn');
-    if (confirmDeleteBtn) {
-      confirmDeleteBtn.addEventListener('click', () => this.handleDeleteUser());
-    }
-    
-    const confirmResetBtn = document.getElementById('userConfirmResetBtn');
-    if (confirmResetBtn) {
-      confirmResetBtn.addEventListener('click', () => this.handleResetPassword());
-    }
   },
+
+  updateSortIcons: function() {
+    const sortableHeaders = document.querySelectorAll('th.sortable');
+    sortableHeaders.forEach(th => {
+      const icon = th.querySelector('i');
+      if (icon) {
+        icon.className = 'bi bi-arrow-down-up text-muted ms-1 small';
+        if (th.getAttribute('data-sort') === this.sortKey) {
+          icon.className = this.sortDir === 'asc' ? 'bi bi-arrow-down text-primary ms-1 small' : 'bi bi-arrow-up text-primary ms-1 small';
+        }
+      }
+    });
+  },
+
+  /* ==========================================================
+   * CRUD Modals & Submits
+   * ========================================================== */
 
   openAddUserModal: function() {
     const form = document.getElementById('userForm');
     if (form) {
       form.reset();
       form.classList.remove('was-validated');
-      
-      // Reset disabled states
-      Array.from(form.elements).forEach(el => {
-        if (el.tagName === 'INPUT' || el.tagName === 'SELECT') {
-          el.disabled = false;
-          el.readOnly = false;
-        }
-      });
-    }
-    
-    document.getElementById('userOriginalId').value = '';
-    document.getElementById('userModalLabel').textContent = 'Add User';
-    
-    // Show/hide fields
-    document.getElementById('userIdGroup').classList.add('d-none');
-    document.getElementById('userUsernameGroup').classList.add('d-none');
-    document.getElementById('userCreatedAtGroup').classList.add('d-none');
-    
-    // Show the User ID input field for new users
-    const customIdField = document.getElementById('userCustomId');
-    if (customIdField) {
-      customIdField.value = '';
-      customIdField.disabled = false;
-    }
-    
-    const pwdGroup = document.getElementById('userPasswordGroup');
-    const confirmPwdGroup = document.getElementById('userConfirmPasswordGroup');
-    pwdGroup.classList.remove('d-none');
-    confirmPwdGroup.classList.remove('d-none');
-    
-    document.getElementById('userPassword').setAttribute('required', 'true');
-    document.getElementById('userConfirmPassword').setAttribute('required', 'true');
-    
-    const saveBtn = document.getElementById('userSaveBtn');
-    if (saveBtn) {
-      saveBtn.classList.remove('d-none');
-      document.getElementById('userSaveBtnText').textContent = 'Save User';
-    }
-    
-    const errorAlert = document.getElementById('userModalError');
-    if (errorAlert) errorAlert.classList.add('d-none');
-    
-    if (!this.userModalInstance) {
-      const modalEl = document.getElementById('userModal');
-      if (modalEl) {
-        this.userModalInstance = new bootstrap.Modal(modalEl);
+      // Create a hidden input for mode if it doesn't exist
+      if (!document.getElementById('userFormMode')) {
+        form.insertAdjacentHTML('beforeend', '<input type="hidden" id="userFormMode">');
+        form.insertAdjacentHTML('beforeend', '<input type="hidden" id="userFormId">');
       }
-    }
-    
-    if (this.userModalInstance) {
-      this.userModalInstance.show();
-    }
-  },
-
-  openViewUserModal: function(userId) {
-    const user = this.usersData.find(u => String(u.user_id) === String(userId));
-    if (!user) return;
-    
-    const form = document.getElementById('userForm');
-    if (form) {
-      form.reset();
-      form.classList.remove('was-validated');
-    }
-    
-    document.getElementById('userModalLabel').textContent = 'View User';
-    
-    document.getElementById('userOriginalId').value = user.user_id;
-    document.getElementById('userIdDisplay').value = user.user_id;
-    document.getElementById('userUsername').value = user.username || 'N/A';
-    document.getElementById('userName').value = user.full_name || '';
-    document.getElementById('userEmail').value = user.email || '';
-    document.getElementById('userDepartment').value = user.department || '';
-    document.getElementById('userRole').value = user.role || '';
-    document.getElementById('userStatus').value = user.status || '';
-    document.getElementById('userCreatedAt').value = user.created_at || user.CreatedAt || user.createdAt || 'N/A';
-    
-    document.getElementById('userIdGroup').classList.remove('d-none');
-    document.getElementById('userUsernameGroup').classList.remove('d-none');
-    document.getElementById('userCreatedAtGroup').classList.remove('d-none');
-    
-    const pwdGroup = document.getElementById('userPasswordGroup');
-    const confirmPwdGroup = document.getElementById('userConfirmPasswordGroup');
-    pwdGroup.classList.add('d-none');
-    confirmPwdGroup.classList.add('d-none');
-    
-    document.getElementById('userPassword').removeAttribute('required');
-    document.getElementById('userConfirmPassword').removeAttribute('required');
-    
-    const saveBtn = document.getElementById('userSaveBtn');
-    if (saveBtn) saveBtn.classList.add('d-none');
-    
-    const errorAlert = document.getElementById('userModalError');
-    if (errorAlert) errorAlert.classList.add('d-none');
-    
-    // Disable all inputs
-    Array.from(form.elements).forEach(el => {
-      if (el.tagName === 'INPUT' || el.tagName === 'SELECT') {
-        el.disabled = true;
-      }
-    });
-    
-    if (!this.userModalInstance) {
-      const modalEl = document.getElementById('userModal');
-      if (modalEl) this.userModalInstance = new bootstrap.Modal(modalEl);
-    }
-    
-    if (this.userModalInstance) {
-      this.userModalInstance.show();
-    }
-  },
-
-  openEditUserModal: function(userId) {
-    const user = this.usersData.find(u => String(u.user_id) === String(userId));
-    if (!user) return;
-    
-    const form = document.getElementById('userForm');
-    if (form) {
-      form.reset();
-      form.classList.remove('was-validated');
+      document.getElementById('userFormMode').value = 'add';
+      document.getElementById('userFormId').value = '';
+      document.getElementById('userModalLabel').innerText = 'Add New User';
       
-      // Reset disabled states for editable fields
-      Array.from(form.elements).forEach(el => {
-        if (el.tagName === 'INPUT' || el.tagName === 'SELECT') {
-          el.disabled = false;
-          el.readOnly = false;
-        }
-      });
-    }
-    
-    document.getElementById('userModalLabel').textContent = 'Edit User';
-    
-    document.getElementById('userOriginalId').value = user.user_id;
-    
-    // User ID field - read-only for edit
-    const customIdField = document.getElementById('userCustomId');
-    if (customIdField) {
-      customIdField.value = user.user_id || '';
-      customIdField.readOnly = true;
-      customIdField.disabled = true;
-    }
-    
-    // Read-only fields
-    const idDisplay = document.getElementById('userIdDisplay');
-    idDisplay.value = user.user_id;
-    idDisplay.readOnly = true;
-    idDisplay.disabled = true;
-    
-    const usernameDisplay = document.getElementById('userUsername');
-    usernameDisplay.value = user.username || 'N/A';
-    usernameDisplay.readOnly = true;
-    usernameDisplay.disabled = true;
-    
-    const createdDisplay = document.getElementById('userCreatedAt');
-    createdDisplay.value = user.created_at || user.CreatedAt || user.createdAt || 'N/A';
-    createdDisplay.readOnly = true;
-    createdDisplay.disabled = true;
-    
-    // Editable fields
-    document.getElementById('userName').value = user.full_name || '';
-    document.getElementById('userEmail').value = user.email || '';
-    document.getElementById('userDepartment').value = user.department || '';
-    document.getElementById('userRole').value = user.role || '';
-    document.getElementById('userStatus').value = user.status || '';
-    
-    const roleSelect = document.getElementById('userRole');
-    if (App.State && App.State.currentUser && String(App.State.currentUser.user_id) === String(userId)) {
-      roleSelect.disabled = true;
-    } else {
-      roleSelect.disabled = false;
-    }
-    
-    document.getElementById('userIdGroup').classList.remove('d-none');
-    document.getElementById('userUsernameGroup').classList.remove('d-none');
-    document.getElementById('userCreatedAtGroup').classList.remove('d-none');
-    
-    const pwdGroup = document.getElementById('userPasswordGroup');
-    const confirmPwdGroup = document.getElementById('userConfirmPasswordGroup');
-    pwdGroup.classList.add('d-none');
-    confirmPwdGroup.classList.add('d-none');
-    
-    document.getElementById('userPassword').removeAttribute('required');
-    document.getElementById('userConfirmPassword').removeAttribute('required');
-    
-    const saveBtn = document.getElementById('userSaveBtn');
-    if (saveBtn) {
-      saveBtn.classList.remove('d-none');
-      document.getElementById('userSaveBtnText').textContent = 'Update User';
+      const pwdGroup = document.getElementById('passwordGroup');
+      if (pwdGroup) pwdGroup.style.display = 'block';
+      const pwdInput = document.getElementById('userPassword');
+      const confirmInput = document.getElementById('userConfirmPassword');
+      if (pwdInput) pwdInput.setAttribute('required', 'true');
+      if (confirmInput) confirmInput.setAttribute('required', 'true');
     }
     
     const errorAlert = document.getElementById('userModalError');
@@ -292,52 +184,67 @@ App.Modules.users = {
       const modalEl = document.getElementById('userModal');
       if (modalEl) this.userModalInstance = new bootstrap.Modal(modalEl);
     }
-    
-    if (this.userModalInstance) {
-      this.userModalInstance.show();
-    }
+    if (this.userModalInstance) this.userModalInstance.show();
   },
 
-  openDeleteUserModal: function(userId) {
-    if (App.State && App.State.currentUser && String(App.State.currentUser.user_id) === String(userId)) {
-      App.UI.showError("You cannot delete your own account.");
-      return;
-    }
-    
-    document.getElementById('userDeleteId').value = userId;
-    const modalEl = document.getElementById('userDeleteModal');
-    if (modalEl) {
-      const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
-      modal.show();
-    }
-  },
+  openEditUserModal: function(id) {
+    const user = this.usersData.find(u => String(u.user_id) === String(id));
+    if (!user) return;
 
-  openResetPasswordModal: function(userId) {
-    document.getElementById('userResetId').value = userId;
-    const modalEl = document.getElementById('userResetModal');
-    if (modalEl) {
-      const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
-      modal.show();
+    const form = document.getElementById('userForm');
+    if (form) {
+      form.reset();
+      form.classList.remove('was-validated');
+      if (!document.getElementById('userFormMode')) {
+        form.insertAdjacentHTML('beforeend', '<input type="hidden" id="userFormMode">');
+        form.insertAdjacentHTML('beforeend', '<input type="hidden" id="userFormId">');
+      }
+      document.getElementById('userFormMode').value = 'edit';
+      document.getElementById('userFormId').value = id;
+      document.getElementById('userModalLabel').innerText = 'Edit User: ' + user.full_name;
+      
+      document.getElementById('userEmail').value = user.email || '';
+      document.getElementById('userName').value = user.full_name || '';
+      document.getElementById('userDepartment').value = user.department || '';
+      document.getElementById('userRole').value = String(user.role).toUpperCase() || 'USER';
+      document.getElementById('userStatus').value = String(user.status).toUpperCase() === 'ACTIVE' ? 'Active' : 'Inactive';
+
+      // Hide passwords on edit
+      const pwdGroup = document.getElementById('passwordGroup');
+      if (pwdGroup) pwdGroup.style.display = 'none';
+      const pwdInput = document.getElementById('userPassword');
+      const confirmInput = document.getElementById('userConfirmPassword');
+      if (pwdInput) pwdInput.removeAttribute('required');
+      if (confirmInput) confirmInput.removeAttribute('required');
     }
+
+    const errorAlert = document.getElementById('userModalError');
+    if (errorAlert) errorAlert.classList.add('d-none');
+
+    if (!this.userModalInstance) {
+      const modalEl = document.getElementById('userModal');
+      if (modalEl) this.userModalInstance = new bootstrap.Modal(modalEl);
+    }
+    if (this.userModalInstance) this.userModalInstance.show();
   },
 
   handleUserSubmit: function(e) {
     e.preventDefault();
     const form = e.target;
+    const modeEl = document.getElementById('userFormMode');
+    const idEl = document.getElementById('userFormId');
+    const mode = modeEl ? modeEl.value : 'add';
+    const id = idEl ? idEl.value : '';
     
-    const originalId = document.getElementById('userOriginalId').value;
-    const isEdit = !!originalId;
-    
-    // Custom validation for passwords matching (only if not editing)
-    if (!isEdit) {
-      const pwd = document.getElementById('userPassword').value;
-      const confirmPwd = document.getElementById('userConfirmPassword').value;
+    if (mode === 'add') {
+      const pwdInput = document.getElementById('userPassword');
       const confirmInput = document.getElementById('userConfirmPassword');
-      
-      if (pwd !== confirmPwd) {
-        confirmInput.setCustomValidity("Passwords do not match");
-      } else {
-        confirmInput.setCustomValidity("");
+      if (pwdInput && confirmInput) {
+        if (pwdInput.value !== confirmInput.value) {
+          confirmInput.setCustomValidity("Passwords do not match");
+        } else {
+          confirmInput.setCustomValidity("");
+        }
       }
     }
     
@@ -347,177 +254,372 @@ App.Modules.users = {
       return;
     }
     
-    // Pass validation, submit
-    console.log("FRONTEND STEP 1: handleUserSubmit triggered");
-    this.setModalLoading(true);
+    this.setModalLoading(true, 'userSaveBtn', 'userSaveSpinner');
     
     const emailVal = document.getElementById('userEmail').value.trim();
-    const userCustomId = document.getElementById('userCustomId').value.trim();
     const userData = {
       full_name: document.getElementById('userName').value.trim(),
       email: emailVal,
       department: document.getElementById('userDepartment').value,
       role: document.getElementById('userRole').value,
-      status: document.getElementById('userStatus').value,
-      user_id: userCustomId
+      status: document.getElementById('userStatus').value
     };
-    
-    if (!isEdit) {
+
+    if (mode === 'add') {
       userData.username = emailVal.split('@')[0];
-      userData.password = document.getElementById('userPassword').value;
-    }
-    
-    if (isEdit) {
-      console.log("FRONTEND STEP 2: App.API.updateUser called with:", userData);
-      App.API.updateUser(originalId, userData)
-        .then(res => {
-          this.setModalLoading(false);
-          if (this.userModalInstance) this.userModalInstance.hide();
-          App.UI.showSuccess("User updated successfully!");
-          this.load();
-        })
-        .catch(err => {
-          this.setModalLoading(false);
-          const errorAlert = document.getElementById('userModalError');
-          if (errorAlert) {
-            errorAlert.textContent = err.message || "Failed to update user.";
-            errorAlert.classList.remove('d-none');
-          }
-          App.UI.showError(err.message || "Failed to update user.");
-        });
-    } else {
-      console.log("FRONTEND STEP 2: App.API.createUser called with:", userData);
+      const pwdInput = document.getElementById('userPassword');
+      if (pwdInput) userData.password = pwdInput.value;
+      
       App.API.createUser(userData)
-        .then(res => {
-          this.setModalLoading(false);
-          if (this.userModalInstance) this.userModalInstance.hide();
-          App.UI.showSuccess("User created successfully!");
-          this.load();
-        })
-        .catch(err => {
-          this.setModalLoading(false);
-          const errorAlert = document.getElementById('userModalError');
-          if (errorAlert) {
-            errorAlert.textContent = err.message || "Failed to create user.";
-            errorAlert.classList.remove('d-none');
-          }
-          App.UI.showError(err.message || "Failed to create user.");
-        });
+        .then(res => this.handleSuccess(res, 'User created successfully', this.userModalInstance))
+        .catch(err => this.handleError(err, 'userModalError', 'Failed to create user'));
+    } else {
+      App.API.updateUser(id, userData)
+        .then(res => this.handleSuccess(res, 'User updated successfully', this.userModalInstance))
+        .catch(err => this.handleError(err, 'userModalError', 'Failed to update user'));
     }
   },
 
-  handleDeleteUser: function() {
-    const userId = document.getElementById('userDeleteId').value;
-    if (!userId) return;
-    
-    const btn = document.getElementById('userConfirmDeleteBtn');
-    const spinner = document.getElementById('userDeleteSpinner');
-    if (btn) btn.disabled = true;
-    if (spinner) spinner.classList.remove('d-none');
-    
-    App.API.deleteUser(userId)
-      .then(() => {
-        if (btn) btn.disabled = false;
-        if (spinner) spinner.classList.add('d-none');
-        
-        const modalEl = document.getElementById('userDeleteModal');
-        if (modalEl) {
-          const modal = bootstrap.Modal.getInstance(modalEl);
-          if (modal) modal.hide();
-        }
-        App.UI.showSuccess("User deleted successfully!");
-        this.load();
-      })
+  /* Delete Actions */
+  openDeleteModal: function(id) {
+    const delInput = document.getElementById('userDeleteId');
+    if (delInput) delInput.value = id;
+    if (!this.deleteModalInstance) {
+      const modalEl = document.getElementById('userDeleteModal');
+      if (modalEl) this.deleteModalInstance = new bootstrap.Modal(modalEl);
+    }
+    if (this.deleteModalInstance) this.deleteModalInstance.show();
+  },
+
+  executeDelete: function() {
+    const id = document.getElementById('userDeleteId').value;
+    this.setModalLoading(true, 'userConfirmDeleteBtn', 'userDeleteSpinner');
+    App.API.deleteUser(id)
+      .then(res => this.handleSuccess(res, 'User deleted successfully', this.deleteModalInstance))
       .catch(err => {
-        if (btn) btn.disabled = false;
-        if (spinner) spinner.classList.add('d-none');
-        App.UI.showError(err.message || "Failed to delete user.");
+        this.setModalLoading(false, 'userConfirmDeleteBtn', 'userDeleteSpinner');
+        App.UI.showError(err.message || 'Failed to delete user');
       });
   },
 
-  handleResetPassword: function() {
-    const userId = document.getElementById('userResetId').value;
-    if (!userId) return;
-    
-    const btn = document.getElementById('userConfirmResetBtn');
-    const spinner = document.getElementById('userResetSpinner');
-    if (btn) btn.disabled = true;
-    if (spinner) spinner.classList.remove('d-none');
-    
-    App.API.resetPassword(userId)
-      .then(() => {
-        if (btn) btn.disabled = false;
-        if (spinner) spinner.classList.add('d-none');
-        
-        const modalEl = document.getElementById('userResetModal');
-        if (modalEl) {
-          const modal = bootstrap.Modal.getInstance(modalEl);
-          if (modal) modal.hide();
-        }
-        App.UI.showSuccess("Password reset successfully!");
-        this.load();
-      })
+  /* Reset Password Actions */
+  openResetModal: function(id) {
+    const resetInput = document.getElementById('userResetId');
+    if (resetInput) resetInput.value = id;
+    if (!this.resetModalInstance) {
+      const modalEl = document.getElementById('userResetModal');
+      if (modalEl) this.resetModalInstance = new bootstrap.Modal(modalEl);
+    }
+    if (this.resetModalInstance) this.resetModalInstance.show();
+  },
+
+  executeReset: function() {
+    const id = document.getElementById('userResetId').value;
+    this.setModalLoading(true, 'userConfirmResetBtn', 'userResetSpinner');
+    App.API.resetPassword(id)
+      .then(res => this.handleSuccess(res, 'Password reset successfully', this.resetModalInstance))
       .catch(err => {
-        if (btn) btn.disabled = false;
-        if (spinner) spinner.classList.add('d-none');
-        App.UI.showError(err.message || "Failed to reset password.");
+        this.setModalLoading(false, 'userConfirmResetBtn', 'userResetSpinner');
+        App.UI.showError(err.message || 'Failed to reset password');
       });
   },
 
-  setModalLoading: function(isLoading) {
-    const btn = document.getElementById('userSaveBtn');
-    const spinner = document.getElementById('userSaveSpinner');
+  /* Import CSV Actions */
+  openImportModal: function() {
+    const form = document.getElementById('userImportForm');
+    if (form) form.reset();
+    
+    const alertEl = document.getElementById('userImportResult');
+    if (alertEl) alertEl.classList.add('d-none');
+
+    if (!this.importModalInstance) {
+      const modalEl = document.getElementById('userImportModal');
+      if (modalEl) this.importModalInstance = new bootstrap.Modal(modalEl);
+    }
+    if (this.importModalInstance) this.importModalInstance.show();
+  },
+
+  handleImportSubmit: function(e) {
+    e.preventDefault();
+    const fileInput = document.getElementById('userImportFile');
+    if (!fileInput || !fileInput.files.length) return;
+    const file = fileInput.files[0];
+
+    this.setModalLoading(true, 'userImportBtn', 'userImportSpinner');
+    
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const csv = event.target.result;
+      this.processCSVImport(csv);
+    };
+    reader.readAsText(file);
+  },
+
+  processCSVImport: function(csvText) {
+    const lines = csvText.split('\n').filter(line => line.trim().length > 0);
+    if (lines.length < 2) {
+      this.showImportError("CSV file is empty or missing data.");
+      return;
+    }
+
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
+    const emailIdx = headers.indexOf('email');
+    const nameIdx = headers.indexOf('full_name');
+    
+    if (emailIdx === -1 || nameIdx === -1) {
+      this.showImportError("CSV must contain 'email' and 'full_name' headers.");
+      return;
+    }
+
+    const payload = [];
+    for (let i = 1; i < lines.length; i++) {
+      // Basic CSV split
+      const row = lines[i].split(',').map(cell => cell.trim().replace(/"/g, ''));
+      const uData = {};
+      headers.forEach((h, idx) => {
+        uData[h] = row[idx] || '';
+      });
+      if (!uData.username && uData.email) uData.username = uData.email.split('@')[0];
+      payload.push(uData);
+    }
+
+    App.API.importUsers(payload)
+      .then(res => {
+        const msg = res.message || 'Import successful';
+        if (res.success !== false) { // could be array or object
+          this.handleSuccess(res, msg, this.importModalInstance);
+        } else {
+          this.showImportError(msg);
+        }
+      })
+      .catch(err => this.showImportError(err.message || 'Import failed.'));
+  },
+
+  showImportError: function(msg) {
+    this.setModalLoading(false, 'userImportBtn', 'userImportSpinner');
+    const alertEl = document.getElementById('userImportResult');
+    if (alertEl) {
+      alertEl.className = 'alert alert-danger';
+      alertEl.textContent = msg;
+      alertEl.classList.remove('d-none');
+    }
+  },
+
+  /* Export CSV Actions */
+  exportToCSV: function() {
+    if (!this.filteredData || this.filteredData.length === 0) {
+      App.UI.showToast("No data to export", "warning");
+      return;
+    }
+    
+    const headers = ['User ID', 'Employee ID', 'Name', 'Email', 'Phone', 'Department', 'Role', 'Status', 'Created Date', 'Last Login'];
+    const csvRows = [];
+    csvRows.push(headers.join(','));
+
+    this.filteredData.forEach(u => {
+      const row = [
+        u.user_id,
+        u.employee_id,
+        u.full_name,
+        u.email,
+        u.phone,
+        u.department,
+        u.role,
+        u.status,
+        u.created_date,
+        u.last_login
+      ].map(cell => `"${String(cell).replace(/"/g, '""')}"`);
+      csvRows.push(row.join(','));
+    });
+
+    const csvString = csvRows.join('\n');
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `users_export_${new Date().getTime()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  },
+
+  /* ==========================================================
+   * Helpers
+   * ========================================================== */
+
+  handleSuccess: function(res, successMsg, modalInstance) {
+    this.setModalLoading(false, 'userSaveBtn', 'userSaveSpinner');
+    this.setModalLoading(false, 'userConfirmDeleteBtn', 'userDeleteSpinner');
+    this.setModalLoading(false, 'userConfirmResetBtn', 'userResetSpinner');
+    this.setModalLoading(false, 'userImportBtn', 'userImportSpinner');
+    
+    if (modalInstance) modalInstance.hide();
+    App.UI.showSuccess(successMsg);
+    this.load();
+  },
+
+  handleError: function(err, errorElId, fallbackMsg) {
+    this.setModalLoading(false, 'userSaveBtn', 'userSaveSpinner');
+    const errorAlert = document.getElementById(errorElId);
+    if (errorAlert) {
+      errorAlert.textContent = err.message || fallbackMsg;
+      errorAlert.classList.remove('d-none');
+    }
+    App.UI.showError(err.message || fallbackMsg);
+  },
+
+  setModalLoading: function(isLoading, btnId, spinnerId) {
+    const btn = document.getElementById(btnId);
+    const spinner = document.getElementById(spinnerId);
     if (!btn || !spinner) return;
     
     btn.disabled = isLoading;
-    if (isLoading) {
-      spinner.classList.remove('d-none');
-    } else {
-      spinner.classList.add('d-none');
+    if (isLoading) spinner.classList.remove('d-none');
+    else spinner.classList.add('d-none');
+  },
+
+  populateFilters: function() {
+    const deptFilter = document.getElementById('users-dept-filter');
+    const roleFilter = document.getElementById('users-role-filter');
+    const statusFilter = document.getElementById('users-status-filter');
+
+    if (deptFilter) {
+      const depts = [...new Set(this.usersData.map(u => String(u.department).trim()).filter(d => d && d !== 'N/A'))].sort();
+      deptFilter.innerHTML = '<option value="">All Depts</option>';
+      depts.forEach(dept => { deptFilter.innerHTML += `<option value="${dept}">${dept}</option>`; });
+    }
+
+    if (roleFilter) {
+      const roles = [...new Set(this.usersData.map(u => String(u.role).trim()).filter(r => r && r !== 'N/A'))].sort();
+      roleFilter.innerHTML = '<option value="">All Roles</option>';
+      roles.forEach(role => { roleFilter.innerHTML += `<option value="${role}">${role}</option>`; });
+    }
+
+    if (statusFilter) {
+      const statuses = [...new Set(this.usersData.map(u => String(u.status).trim()).filter(s => s && s !== 'N/A'))].sort();
+      statusFilter.innerHTML = '<option value="">All Statuses</option>';
+      statuses.forEach(status => { statusFilter.innerHTML += `<option value="${status}">${status}</option>`; });
     }
   },
 
-  populateDepartmentFilter: function() {
-    const deptFilter = document.getElementById('users-dept-filter');
-    if (!deptFilter) return;
-
-    // Extract unique departments, removing 'N/A' or empties for the filter list if desired
-    const depts = [...new Set(this.usersData.map(u => String(u.department).trim()).filter(d => d && d !== 'N/A'))].sort();
-    
-    // Keep the "All Depts" default option
-    deptFilter.innerHTML = '<option value="">All Depts</option>';
-    depts.forEach(dept => {
-      deptFilter.innerHTML += `<option value="${dept}">${dept}</option>`;
-    });
-  },
+  /* ==========================================================
+   * Rendering & Processing
+   * ========================================================== */
 
   applyFilters: function() {
-    const searchTerm = (document.getElementById('users-search-input')?.value || '').toLowerCase().trim();
-    const roleVal = (document.getElementById('users-role-filter')?.value || '').toLowerCase();
-    const deptVal = (document.getElementById('users-dept-filter')?.value || '').toLowerCase();
-    const statusVal = (document.getElementById('users-status-filter')?.value || '').toLowerCase();
+    const searchInput = document.getElementById('users-search-input');
+    const roleFilter = document.getElementById('users-role-filter');
+    const deptFilter = document.getElementById('users-dept-filter');
+    const statusFilter = document.getElementById('users-status-filter');
 
-    const filtered = this.usersData.filter(user => {
-      // Search
+    const searchTerm = (searchInput ? searchInput.value : '').toLowerCase().trim();
+    const roleVal = (roleFilter ? roleFilter.value : '').toLowerCase();
+    const deptVal = (deptFilter ? deptFilter.value : '').toLowerCase();
+    const statusVal = (statusFilter ? statusFilter.value : '').toLowerCase();
+
+    let filtered = this.usersData.filter(user => {
       const matchesSearch = !searchTerm || 
         String(user.user_id).toLowerCase().includes(searchTerm) ||
         String(user.full_name).toLowerCase().includes(searchTerm) ||
         String(user.email).toLowerCase().includes(searchTerm);
-
-      // Role
       const matchesRole = !roleVal || String(user.role).toLowerCase() === roleVal;
-      
-      // Department
       const matchesDept = !deptVal || String(user.department).toLowerCase() === deptVal;
-      
-      // Status
       const matchesStatus = !statusVal || String(user.status).toLowerCase() === statusVal;
 
       return matchesSearch && matchesRole && matchesDept && matchesStatus;
     });
 
-    this.renderStats(filtered);
-    this.renderUsers(filtered);
+    // Apply Sorting
+    filtered.sort((a, b) => {
+      let valA = a[this.sortKey] || '';
+      let valB = b[this.sortKey] || '';
+      if (typeof valA === 'string') valA = valA.toLowerCase();
+      if (typeof valB === 'string') valB = valB.toLowerCase();
+      
+      if (valA < valB) return this.sortDir === 'asc' ? -1 : 1;
+      if (valA > valB) return this.sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    this.filteredData = filtered;
+    this.currentPage = 1; // reset on filter
+    this.renderStats(this.filteredData);
+    this.paginateAndRender();
+  },
+
+  paginateAndRender: function() {
+    const startIdx = (this.currentPage - 1) * this.pageSize;
+    const endIdx = startIdx + this.pageSize;
+    const pageData = this.filteredData.slice(startIdx, endIdx);
+
+    this.renderUsers(pageData);
+    this.renderPagination();
+    
+    // Update text
+    const total = this.filteredData.length;
+    const elStart = document.getElementById('users-page-start');
+    const elEnd = document.getElementById('users-page-end');
+    const elTotalText = document.getElementById('users-page-total');
+    if (elStart) elStart.innerText = total === 0 ? 0 : startIdx + 1;
+    if (elEnd) elEnd.innerText = Math.min(endIdx, total);
+    if (elTotalText) elTotalText.innerText = total;
+  },
+
+  renderPagination: function() {
+    const total = this.filteredData.length;
+    const totalPages = Math.ceil(total / this.pageSize);
+    const ul = document.getElementById('users-pagination');
+    if (!ul) return;
+    ul.innerHTML = '';
+
+    if (totalPages <= 1) return;
+
+    // Prev
+    const prevClass = this.currentPage === 1 ? 'disabled' : '';
+    ul.innerHTML += `<li class="page-item ${prevClass}"><a class="page-link" href="#" data-page="${this.currentPage - 1}">Previous</a></li>`;
+
+    // Pages
+    // Show max 5 pages
+    let startPage = Math.max(1, this.currentPage - 2);
+    let endPage = Math.min(totalPages, startPage + 4);
+    if (endPage - startPage < 4) {
+      startPage = Math.max(1, endPage - 4);
+    }
+
+    if (startPage > 1) {
+      ul.innerHTML += `<li class="page-item"><a class="page-link" href="#" data-page="1">1</a></li>`;
+      if (startPage > 2) ul.innerHTML += `<li class="page-item disabled"><a class="page-link" href="#">...</a></li>`;
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      const activeClass = this.currentPage === i ? 'active' : '';
+      ul.innerHTML += `<li class="page-item ${activeClass}"><a class="page-link" href="#" data-page="${i}">${i}</a></li>`;
+    }
+
+    if (endPage < totalPages) {
+      if (endPage < totalPages - 1) ul.innerHTML += `<li class="page-item disabled"><a class="page-link" href="#">...</a></li>`;
+      ul.innerHTML += `<li class="page-item"><a class="page-link" href="#" data-page="${totalPages}">${totalPages}</a></li>`;
+    }
+
+    // Next
+    const nextClass = this.currentPage === totalPages ? 'disabled' : '';
+    ul.innerHTML += `<li class="page-item ${nextClass}"><a class="page-link" href="#" data-page="${this.currentPage + 1}">Next</a></li>`;
+
+    // Attach events
+    ul.querySelectorAll('a.page-link').forEach(a => {
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        const pageAttr = e.target.getAttribute('data-page');
+        if (pageAttr) {
+          const page = parseInt(pageAttr);
+          if (page >= 1 && page <= totalPages) {
+            this.currentPage = page;
+            this.paginateAndRender();
+          }
+        }
+      });
+    });
   },
 
   renderStats: function(users) {
@@ -539,15 +641,11 @@ App.Modules.users = {
   
   renderUsers: function(users) {
     const tbody = document.getElementById('users-table-body');
-    if (!tbody) {
-      console.error("users-table-body not found");
-      return;
-    }
+    if (!tbody) return;
     
     tbody.innerHTML = '';
-    
     if (!users || users.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-5">No Users Found</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="11" class="text-center text-muted py-5">No Users Found</td></tr>';
       return;
     }
     
@@ -555,22 +653,25 @@ App.Modules.users = {
       let statusBadge = String(user.status).toLowerCase() === 'active' ? 'bg-success' : 'bg-danger';
       let roleBadge = String(user.role).toLowerCase() === 'admin' ? 'bg-dark' : 'bg-primary';
                   
-      const rowHTML = `
-        <tr>
-          <td class="text-muted">${App.Utils.escapeHtml(String(user.user_id))}</td>
-          <td class="fw-medium">${App.Utils.escapeHtml(String(user.full_name))}</td>
-          <td>${App.Utils.escapeHtml(String(user.email))}</td>
-          <td><span class="badge ${roleBadge} rounded-pill">${App.Utils.escapeHtml(String(user.role))}</span></td>
-          <td>${App.Utils.escapeHtml(String(user.department))}</td>
-          <td><span class="badge ${statusBadge} rounded-pill">${App.Utils.escapeHtml(String(user.status))}</span></td>
-          <td class="text-end">
-            <button class="btn btn-sm btn-light text-primary me-1" data-action="view-user" data-id="${App.Utils.escapeHtml(String(user.user_id))}" title="View"><i class="bi bi-eye"></i></button>
-            <button class="btn btn-sm btn-light text-warning me-1" data-action="edit-user" data-id="${App.Utils.escapeHtml(String(user.user_id))}" title="Edit"><i class="bi bi-pencil"></i></button>
-            <button class="btn btn-sm btn-light text-info me-1" data-action="reset-pwd-user" data-id="${App.Utils.escapeHtml(String(user.user_id))}" title="Reset Password"><i class="bi bi-key"></i></button>
-            <button class="btn btn-sm btn-light text-danger" data-action="delete-user" data-id="${App.Utils.escapeHtml(String(user.user_id))}" title="Delete"><i class="bi bi-trash"></i></button>
-          </td>
-        </tr>
-      `;
+      const rowHTML = 
+        '<tr>' +
+          '<td class="text-muted">' + App.Utils.escapeHtml(String(user.user_id)) + '</td>' +
+          '<td>' + App.Utils.escapeHtml(String(user.employee_id)) + '</td>' +
+          '<td class="fw-medium">' + App.Utils.escapeHtml(String(user.full_name)) + '</td>' +
+          '<td>' + App.Utils.escapeHtml(String(user.email)) + '</td>' +
+          '<td>' + App.Utils.escapeHtml(String(user.phone)) + '</td>' +
+          '<td>' + App.Utils.escapeHtml(String(user.department)) + '</td>' +
+          '<td><span class="badge ' + roleBadge + ' rounded-pill">' + App.Utils.escapeHtml(String(user.role)) + '</span></td>' +
+          '<td><span class="badge ' + statusBadge + ' rounded-pill">' + App.Utils.escapeHtml(String(user.status)) + '</span></td>' +
+          '<td>' + App.Utils.escapeHtml(String(user.created_date)) + '</td>' +
+          '<td>' + App.Utils.escapeHtml(String(user.last_login)) + '</td>' +
+          '<td class="text-end">' +
+            '<button class="btn btn-sm btn-light text-primary me-1" data-action="view-user" data-id="' + App.Utils.escapeHtml(String(user.user_id)) + '" title="View"><i class="bi bi-eye"></i></button>' +
+            '<button class="btn btn-sm btn-light text-warning me-1" data-action="edit-user" data-id="' + App.Utils.escapeHtml(String(user.user_id)) + '" title="Edit"><i class="bi bi-pencil"></i></button>' +
+            '<button class="btn btn-sm btn-light text-info me-1" data-action="reset-pwd" data-id="' + App.Utils.escapeHtml(String(user.user_id)) + '" title="Reset Password"><i class="bi bi-key"></i></button>' +
+            '<button class="btn btn-sm btn-light text-danger" data-action="delete-user" data-id="' + App.Utils.escapeHtml(String(user.user_id)) + '" title="Delete"><i class="bi bi-trash"></i></button>' +
+          '</td>' +
+        '</tr>';
       tbody.insertAdjacentHTML('beforeend', rowHTML);
     });
   },
@@ -583,4 +684,9 @@ App.Modules.users = {
     App.Logger.info('Users destroy');
   }
 };
+
+// Auto-initialize the module since DOM is already loaded
+if (typeof App !== 'undefined' && App.Modules && App.Modules.users) {
+  App.Modules.users.init();
+}
 </script>

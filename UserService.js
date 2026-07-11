@@ -173,6 +173,35 @@ const UserService = {
     return this._getUserByIdRecord(userId);
   },
 
+  getAllUsers: function() {
+    Logger.log("BACKEND STEP 8a: Entering UserService.getAllUsers (first def)");
+    try {
+      var usersSheet = this._mustUsersSheet();
+      Logger.log("BACKEND STEP 9a: usersSheet logical name resolved: " + usersSheet);
+      var records = DatabaseService.readAllRows(usersSheet) || [];
+      Logger.log("BACKEND STEP 10a: readAllRows returned: " + records.length + " records");
+      
+      // Filter out deleted users
+      var delCol = CONFIG.COLUMNS && CONFIG.COLUMNS.DELETION_FLAG;
+      Logger.log("BACKEND STEP 11a: deletion flag column: " + delCol);
+      if (delCol) {
+        records = records.filter(function(r) { return r[delCol] !== true && r[delCol] !== "true"; });
+        Logger.log("BACKEND STEP 12a: records after filter: " + records.length);
+      }
+
+      var sanitized = [];
+      for (var i = 0; i < records.length; i++) {
+        var clean = this._sanitizeUserSafe(records[i]);
+        if (clean) sanitized.push(clean);
+      }
+      Logger.log("BACKEND STEP 13a: returning sanitized count: " + sanitized.length);
+      return sanitized;
+    } catch (e) {
+      Logger.log('BACKEND STEP 14a: UserService.getAllUsers (first def) error: ' + (e && e.message ? e.message : e));
+      return [];
+    }
+  },
+
   createUser: function(userData) {
     try {
       if (!userData) return Utils.buildResponse(false, (CONFIG.MESSAGES && CONFIG.MESSAGES.USER_CREATE_FAILED) ? CONFIG.MESSAGES.USER_CREATE_FAILED : 'User data missing');
@@ -257,7 +286,11 @@ if (CONFIG.COLUMNS.USER_LAST_NAME) {
 
       if (CONFIG.COLUMNS && CONFIG.COLUMNS.DELETION_FLAG) newUser[CONFIG.COLUMNS.DELETION_FLAG] = false;
 
-      var inserted = DatabaseService.insertRow(usersSheet, newUser);
+      // Merge all other custom fields provided in userData (e.g., Department, Designation, Phone Number)
+      // that exactly match the sheet headers.
+      var rowToInsert = Object.assign({}, userData, newUser);
+
+      var inserted = DatabaseService.insertRow(usersSheet, rowToInsert);
       if (!inserted) {
         return Utils.buildResponse(false, (CONFIG.MESSAGES && CONFIG.MESSAGES.USER_CREATE_FAILED) ? CONFIG.MESSAGES.USER_CREATE_FAILED : 'User create failed');
       }
@@ -285,6 +318,51 @@ if (CONFIG.COLUMNS.USER_LAST_NAME) {
     } catch (e) {
       Logger.log('UserService.createUser error: ' + (e && e.message ? e.message : e));
       return Utils.buildResponse(false, (CONFIG.MESSAGES && CONFIG.MESSAGES.USER_CREATE_FAILED) ? CONFIG.MESSAGES.USER_CREATE_FAILED : 'User create failed');
+    }
+  },
+
+  importUsers: function(usersDataArray) {
+    try {
+      if (!Array.isArray(usersDataArray) || usersDataArray.length === 0) {
+        return Utils.buildResponse(false, 'No valid data to import');
+      }
+
+      var usersSheet = this._mustUsersSheet();
+      var importedCount = 0;
+      var failedCount = 0;
+      var errors = [];
+
+      for (var i = 0; i < usersDataArray.length; i++) {
+        var uData = usersDataArray[i];
+        
+        // Basic required fields check to skip empty rows gracefully
+        if (!uData.email || !uData.full_name) {
+          failedCount++;
+          continue;
+        }
+
+        // We leverage the existing createUser logic to ensure validation, ID generation, and hash/salt are handled perfectly.
+        var result = this.createUser(uData);
+        if (result && result.success) {
+          importedCount++;
+        } else {
+          failedCount++;
+          errors.push('Row ' + (i + 1) + ': ' + (result ? result.message : 'Failed'));
+        }
+      }
+
+      if (importedCount === 0 && failedCount > 0) {
+        return Utils.buildResponse(false, 'Import failed. Errors: ' + errors.join(', '));
+      }
+
+      return Utils.buildResponse(true, importedCount + ' users imported successfully. ' + (failedCount > 0 ? failedCount + ' failed.' : ''), {
+        imported: importedCount,
+        failed: failedCount,
+        errors: errors
+      });
+    } catch (e) {
+      Logger.log('UserService.importUsers error: ' + (e && e.message ? e.message : e));
+      return Utils.buildResponse(false, 'Bulk import failed');
     }
   },
 
@@ -555,6 +633,8 @@ if (CONFIG.COLUMNS.USER_LAST_NAME) {
   // ==============================
   // Listing/search/filter/sort/pagination
   // ==============================
+
+
 
   paginateUsers: function(page, pageSize) {
   try {

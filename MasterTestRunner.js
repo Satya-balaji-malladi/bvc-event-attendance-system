@@ -25,11 +25,18 @@ function runMasterSystemTests() {
 
   // 2. Run Sprint-specific unit test suites
   const serviceRunners = [
+    { name: 'AuthServiceTest', fn: typeof runAuthServiceUnitTests !== 'undefined' ? runAuthServiceUnitTests : null },
+    { name: 'DatabaseServiceTest', fn: typeof runDatabaseServiceUnitTests !== 'undefined' ? runDatabaseServiceUnitTests : null },
+    { name: 'DepartmentServiceTest', fn: typeof runDepartmentServiceUnitTests !== 'undefined' ? runDepartmentServiceUnitTests : null },
+    { name: 'SessionServiceTest', fn: typeof runSessionServiceUnitTests !== 'undefined' ? runSessionServiceUnitTests : null },
+    { name: 'StudentServiceTest', fn: typeof runStudentServiceUnitTests !== 'undefined' ? runStudentServiceUnitTests : null },
+    { name: 'UserServiceTest', fn: typeof runUserServiceUnitTests !== 'undefined' ? runUserServiceUnitTests : null },
     { name: 'EventServiceTest', fn: typeof runEventServiceUnitTests !== 'undefined' ? runEventServiceUnitTests : null },
     { name: 'ParticipantServiceTest', fn: typeof runParticipantServiceUnitTests !== 'undefined' ? runParticipantServiceUnitTests : null },
     { name: 'AttendanceServiceTest', fn: typeof runAttendanceServiceUnitTests !== 'undefined' ? runAttendanceServiceUnitTests : null },
     { name: 'CoordinatorServiceTest', fn: typeof runCoordinatorServiceUnitTests !== 'undefined' ? runCoordinatorServiceUnitTests : null },
     { name: 'ReportServiceTest', fn: typeof runReportServiceUnitTests !== 'undefined' ? runReportServiceUnitTests : null },
+    { name: 'AnalyticsServiceTest', fn: typeof runAnalyticsServiceUnitTests !== 'undefined' ? runAnalyticsServiceUnitTests : null },
     { name: 'NotificationServiceTest', fn: typeof runNotificationServiceUnitTests !== 'undefined' ? runNotificationServiceUnitTests : null },
     { name: 'SettingsServiceTest', fn: typeof runSettingsServiceUnitTests !== 'undefined' ? runSettingsServiceUnitTests : null }
   ];

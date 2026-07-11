@@ -291,6 +291,31 @@ function testEdgeCases() {
   Logger.log('');
 }
 
+function testMaintenanceAuthorization() {
+  Logger.log('====================================');
+  Logger.log('TEST: testMaintenanceAuthorization');
+  Logger.log('====================================');
+
+  const allUsers = DatabaseService.readAllRows(CONFIG.SHEETS.USERS) || [];
+  const coord = allUsers.find(u => u['Role'] === 'Coordinator' || u.role === 'Coordinator');
+  
+  if (coord) {
+    const userId = coord['User ID'] || coord.user_id;
+    const clearRes = SettingsService.clearAttendanceLogs(userId);
+    const resetRes = SettingsService.resetSystem(userId);
+
+    if (!clearRes.success && clearRes.message.includes('Unauthorized') &&
+        !resetRes.success && resetRes.message.includes('Unauthorized')) {
+      Logger.log('✅ PASS: Correctly blocked unauthorized coordinator from clear & reset.');
+    } else {
+      throw new Error('testMaintenanceAuthorization FAILED: Allowed coordinator access');
+    }
+  } else {
+    Logger.log('⚠️ SKIPPED: No coordinator user available to test validation block.');
+  }
+  Logger.log('');
+}
+
 // ============================================================
 // MAIN TEST RUNNER
 // ============================================================
@@ -314,7 +339,8 @@ function runSettingsServiceUnitTests() {
     testNotificationSettings,
     testEmailSettings,
     testSecuritySettings,
-    testEdgeCases
+    testEdgeCases,
+    testMaintenanceAuthorization
   ];
 
   var passed = 0;

@@ -97,7 +97,9 @@ const SettingsService = {
         'theme': { category: 'System', type: 'String', desc: 'UI Theme' },
         'language': { category: 'System', type: 'String', desc: 'UI Language' },
         'notificationsEnabled': { category: 'Notification', type: 'Boolean', desc: 'Enable notifications' },
-        'securityLevel': { category: 'Security', type: 'String', desc: 'System security level' }
+        'securityLevel': { category: 'Security', type: 'String', desc: 'System security level' },
+        'attendanceThreshold': { category: 'Attendance', type: 'Integer', desc: 'Default attendance threshold (%)' },
+        'academicYears': { category: 'Academic', type: 'String', desc: 'Active academic years config' }
       };
 
       Object.keys(keysToSave).forEach(key => {
@@ -257,6 +259,70 @@ const SettingsService = {
 
   getSecuritySettings: function() {
     return this.getCategory('Security');
+  },
+
+  clearAttendanceLogs: function(userId) {
+    try {
+      const user = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, 'User ID', userId)[0];
+      const role = user ? (user['Role'] || user.role) : null;
+      if (role !== CONFIG.ROLES.ADMIN) {
+        return Utils.buildResponse(false, 'Unauthorized. Admins only.');
+      }
+
+      const sheet = DatabaseService.getSheet(CONFIG.SHEETS.ATTENDANCE);
+      if (sheet) {
+        const lastRow = sheet.getLastRow();
+        if (lastRow > 1) {
+          sheet.deleteRows(2, lastRow - 1);
+        }
+        DatabaseService.clearCache(CONFIG.SHEETS.ATTENDANCE);
+      }
+
+      try {
+        AuditService.logAction(userId, 'SettingsService', 'CLEAR_ATTENDANCE_LOGS', '', 'Attendance', 'Attendance sheet logs cleared', '', 'SUCCESS', userId);
+      } catch (e) {}
+
+      return Utils.buildResponse(true, 'Attendance logs cleared successfully.');
+    } catch (e) {
+      Logger.log('SettingsService.clearAttendanceLogs error: ' + e.message);
+      return Utils.buildResponse(false, e.message);
+    }
+  },
+
+  resetSystem: function(userId) {
+    try {
+      const user = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, 'User ID', userId)[0];
+      const role = user ? (user['Role'] || user.role) : null;
+      if (role !== CONFIG.ROLES.ADMIN) {
+        return Utils.buildResponse(false, 'Unauthorized. Admins only.');
+      }
+
+      const targetSheets = [
+        CONFIG.SHEETS.ATTENDANCE,
+        CONFIG.SHEETS.EVENT_PARTICIPANTS,
+        CONFIG.SHEETS.EVENTS
+      ];
+
+      targetSheets.forEach(s => {
+        const sheet = DatabaseService.getSheet(s);
+        if (sheet) {
+          const lastRow = sheet.getLastRow();
+          if (lastRow > 1) {
+            sheet.deleteRows(2, lastRow - 1);
+          }
+          DatabaseService.clearCache(s);
+        }
+      });
+
+      try {
+        AuditService.logAction(userId, 'SettingsService', 'RESET_SYSTEM', '', 'System', 'System environment fully reset to empty templates', '', 'SUCCESS', userId);
+      } catch (e) {}
+
+      return Utils.buildResponse(true, 'System reset successfully.');
+    } catch (e) {
+      Logger.log('SettingsService.resetSystem error: ' + e.message);
+      return Utils.buildResponse(false, e.message);
+    }
   }
 
 };

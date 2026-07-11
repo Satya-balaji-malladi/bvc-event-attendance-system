@@ -12,7 +12,7 @@ var StudentService = {
   /**
    * Helper to fetch the raw student sheet mapping.
    */
-  _studentsSheet: function() {
+  _studentsSheet: function () {
     return CONFIG.SHEETS && CONFIG.SHEETS.STUDENTS ? CONFIG.SHEETS.STUDENTS : null;
   },
 
@@ -20,11 +20,11 @@ var StudentService = {
    * Reads all active students who are not soft-deleted.
    * @return {Array<Object>} List of active raw student records
    */
-  _getStudents: function() {
+  _getStudents: function () {
     try {
       var sheet = this._studentsSheet();
       var records = DatabaseService.readAllRows(sheet) || [];
-      return records.filter(function(s) {
+      return records.filter(function (s) {
         return !s[CONFIG.COLUMNS.DELETION_FLAG];
       });
     } catch (error) {
@@ -38,12 +38,12 @@ var StudentService = {
    * @param {string} rollNumber
    * @return {Object|null} Raw student record or null
    */
-  _getStudent: function(rollNumber) {
+  _getStudent: function (rollNumber) {
     try {
       if (!rollNumber) return null;
       var searchRoll = String(rollNumber).trim().toUpperCase();
       var records = this._getStudents();
-      return records.find(function(s) {
+      return records.find(function (s) {
         return String(s[CONFIG.COLUMNS.STUDENT_ROLL_NUMBER]).trim().toUpperCase() === searchRoll;
       }) || null;
     } catch (error) {
@@ -57,7 +57,7 @@ var StudentService = {
    * @param {string} rollNumber
    * @return {boolean} True if exists
    */
-  _studentExists: function(rollNumber) {
+  _studentExists: function (rollNumber) {
     try {
       return this._getStudent(rollNumber) !== null;
     } catch (error) {
@@ -71,7 +71,7 @@ var StudentService = {
    * @param {Object} data Raw data payload
    * @return {Object} Cleaned, normalized data payload cloned
    */
-  _normalizeStudentData: function(data) {
+  _normalizeStudentData: function (data) {
     var out = Object.assign({}, data);
     if (out[CONFIG.COLUMNS.STUDENT_ROLL_NUMBER] !== undefined && out[CONFIG.COLUMNS.STUDENT_ROLL_NUMBER] !== null) {
       out[CONFIG.COLUMNS.STUDENT_ROLL_NUMBER] = String(out[CONFIG.COLUMNS.STUDENT_ROLL_NUMBER]).trim().toUpperCase();
@@ -100,11 +100,11 @@ var StudentService = {
    * @param {string} createdBy Username or Operator Identity
    * @return {Object} Finished model object
    */
-  _buildStudentObject: function(normalizedData, createdBy) {
+  _buildStudentObject: function (normalizedData, createdBy) {
     try {
       var now = Utils.getCurrentTimestamp();
       var obj = {};
-      
+
       obj[CONFIG.COLUMNS.STUDENT_ID] = IdService && typeof IdService.generateStudentId === 'function' ? IdService.generateStudentId() : 'STU' + now;
       obj[CONFIG.COLUMNS.STUDENT_ROLL_NUMBER] = normalizedData[CONFIG.COLUMNS.STUDENT_ROLL_NUMBER];
       obj[CONFIG.COLUMNS.STUDENT_NAME] = normalizedData[CONFIG.COLUMNS.STUDENT_NAME];
@@ -116,13 +116,13 @@ var StudentService = {
       if (CONFIG.COLUMNS.STUDENT_STATUS !== 'Status') {
         obj['Status'] = obj[CONFIG.COLUMNS.STUDENT_STATUS];
       }
-      
+
       obj[CONFIG.COLUMNS.DELETION_FLAG] = false;
       obj[CONFIG.COLUMNS.CREATED_BY] = createdBy || 'System';
       obj[CONFIG.COLUMNS.CREATED_AT] = now;
       obj[CONFIG.COLUMNS.UPDATED_BY] = createdBy || 'System';
       obj[CONFIG.COLUMNS.UPDATED_AT] = now;
-      
+
       return obj;
     } catch (error) {
       Logger.log('StudentService._buildStudentObject error: ' + (error && error.message ? error.message : error));
@@ -133,7 +133,7 @@ var StudentService = {
   /**
    * Securely maps audit logs without interrupting the parent business runtime contexts.
    */
-  _logAuditSafe: function(entityId, action, description, operator) {
+  _logAuditSafe: function (entityId, action, description, operator) {
     try {
       if (typeof AuditService !== 'undefined' && typeof AuditService.logAction === 'function') {
         AuditService.logAction(
@@ -156,11 +156,11 @@ var StudentService = {
   /**
    * Helper to check department state directly against DepartmentService custom response wrapper.
    */
-  _validateDepartmentLinkActive: function(departmentId) {
+  _validateDepartmentLinkActive: function (departmentId) {
     try {
       if (!DepartmentService || typeof DepartmentService.getDepartmentById !== 'function') return true;
       var deptResp = DepartmentService.getDepartmentById(departmentId);
-      
+
       // Support structural response unpack mapping or fallback if returned straight raw model object
       var dept = null;
       if (deptResp) {
@@ -169,9 +169,9 @@ var StudentService = {
         else if (deptResp.success !== undefined) dept = null; // Unhandled success response with no key payload
         else dept = deptResp; // Treat as raw fallback object
       }
-      
+
       if (!dept) return false;
-      
+
       var statusField = CONFIG.COLUMNS.STATUS || 'Status';
       return dept[statusField] === CONFIG.DEPARTMENT_STATUS.ACTIVE;
     } catch (e) {
@@ -187,13 +187,13 @@ var StudentService = {
   /**
    * Registers a new student to the tracking database.
    */
-  createStudent: function(studentData, createdBy) {
+  createStudent: function (studentData, createdBy) {
     try {
       var failMsg = CONFIG.MESSAGES.STUDENT_CREATE_FAILED || 'Student create failed';
       if (!studentData) return Utils.buildResponse(false, failMsg);
 
       var normalized = this._normalizeStudentData(studentData);
-      
+
       // Centralized validation on normalized target payload
       var validationResult = ValidationService.validateStudent(normalized);
       if (!validationResult || !validationResult.valid) {
@@ -216,11 +216,11 @@ var StudentService = {
       var success = DatabaseService.insertRow(this._studentsSheet(), newStudentObj);
       if (success) {
         var cleanedOutput = Utils.sanitizeStudent(newStudentObj);
-        
+
         this._logAuditSafe(
-          newStudentObj[CONFIG.COLUMNS.STUDENT_ROLL_NUMBER], 
-          'CREATE_STUDENT', 
-          'Student created successfully', 
+          newStudentObj[CONFIG.COLUMNS.STUDENT_ROLL_NUMBER],
+          'CREATE_STUDENT',
+          'Student created successfully',
           createdBy
         );
 
@@ -236,7 +236,7 @@ var StudentService = {
   /**
    * Updates an existing student tracking record details.
    */
-  updateStudent: function(rollNumber, studentData, updatedBy) {
+  updateStudent: function (rollNumber, studentData, updatedBy) {
     try {
       var failMsg = CONFIG.MESSAGES.STUDENT_UPDATE_FAILED || 'Student update failed';
       if (!rollNumber || !studentData) return Utils.buildResponse(false, failMsg);
@@ -248,7 +248,7 @@ var StudentService = {
       }
 
       var inputNormalized = this._normalizeStudentData(studentData);
-      
+
       // Prevent mutations to system key mappings or historical tracking data records
       delete inputNormalized[CONFIG.COLUMNS.STUDENT_ID];
       delete inputNormalized[CONFIG.COLUMNS.CREATED_BY];
@@ -263,15 +263,15 @@ var StudentService = {
       }
 
       // Verify business constraint mappings if key links are altering
-      if (inputNormalized[CONFIG.COLUMNS.STUDENT_DEPARTMENT_ID] && 
-          inputNormalized[CONFIG.COLUMNS.STUDENT_DEPARTMENT_ID] !== existing[CONFIG.COLUMNS.STUDENT_DEPARTMENT_ID]) {
+      if (inputNormalized[CONFIG.COLUMNS.STUDENT_DEPARTMENT_ID] &&
+        inputNormalized[CONFIG.COLUMNS.STUDENT_DEPARTMENT_ID] !== existing[CONFIG.COLUMNS.STUDENT_DEPARTMENT_ID]) {
         if (!this._validateDepartmentLinkActive(inputNormalized[CONFIG.COLUMNS.STUDENT_DEPARTMENT_ID])) {
           return Utils.buildResponse(false, CONFIG.MESSAGES.INVALID_DEPARTMENT || 'Invalid or inactive department specified');
         }
       }
 
-      if (inputNormalized[CONFIG.COLUMNS.STUDENT_ROLL_NUMBER] && 
-          inputNormalized[CONFIG.COLUMNS.STUDENT_ROLL_NUMBER] !== existing[CONFIG.COLUMNS.STUDENT_ROLL_NUMBER]) {
+      if (inputNormalized[CONFIG.COLUMNS.STUDENT_ROLL_NUMBER] &&
+        inputNormalized[CONFIG.COLUMNS.STUDENT_ROLL_NUMBER] !== existing[CONFIG.COLUMNS.STUDENT_ROLL_NUMBER]) {
         if (this._studentExists(inputNormalized[CONFIG.COLUMNS.STUDENT_ROLL_NUMBER])) {
           return Utils.buildResponse(false, CONFIG.MESSAGES.ROLL_NUMBER_EXISTS || 'Roll number already exists');
         }
@@ -282,9 +282,9 @@ var StudentService = {
       inputNormalized[CONFIG.COLUMNS.UPDATED_AT] = Utils.getCurrentTimestamp();
 
       var success = DatabaseService.updateRow(
-        this._studentsSheet(), 
-        CONFIG.COLUMNS.STUDENT_ROLL_NUMBER, 
-        searchRoll, 
+        this._studentsSheet(),
+        CONFIG.COLUMNS.STUDENT_ROLL_NUMBER,
+        searchRoll,
         inputNormalized
       );
 
@@ -293,9 +293,9 @@ var StudentService = {
         var cleanedOutput = Utils.sanitizeStudent(completeUpdatedObj);
 
         this._logAuditSafe(
-          searchRoll, 
-          'UPDATE_STUDENT', 
-          'Student details updated successfully', 
+          searchRoll,
+          'UPDATE_STUDENT',
+          'Student details updated successfully',
           updatedBy
         );
 
@@ -311,7 +311,7 @@ var StudentService = {
   /**
    * Triggers a secure soft delete lifecycle flag toggling.
    */
-  deleteStudent: function(rollNumber, updatedBy) {
+  deleteStudent: function (rollNumber, updatedBy) {
     try {
       var failMsg = CONFIG.MESSAGES.STUDENT_DELETE_FAILED || 'Student delete failed';
       if (!rollNumber) return Utils.buildResponse(false, failMsg);
@@ -347,7 +347,7 @@ var StudentService = {
   // Activation / Deactivation Operations
   // ==========================================
 
-  activateStudent: function(rollNumber, updatedBy) {
+  activateStudent: function (rollNumber, updatedBy) {
     try {
       var failMsg = CONFIG.MESSAGES.STUDENT_ACTIVATE_FAILED || 'Activation failed';
       if (!rollNumber) return Utils.buildResponse(false, failMsg);
@@ -379,7 +379,7 @@ var StudentService = {
     }
   },
 
-  deactivateStudent: function(rollNumber, updatedBy) {
+  deactivateStudent: function (rollNumber, updatedBy) {
     try {
       var failMsg = CONFIG.MESSAGES.STUDENT_DEACTIVATE_FAILED || 'Deactivation failed';
       if (!rollNumber) return Utils.buildResponse(false, failMsg);
@@ -415,7 +415,7 @@ var StudentService = {
   // Read / Query / Fetching Operations
   // ==========================================
 
-  getStudentByRollNumber: function(rollNumber) {
+  getStudentByRollNumber: function (rollNumber) {
     try {
       if (!rollNumber) return Utils.buildResponse(false, 'Missing roll number parameter');
       var student = this._getStudent(rollNumber);
@@ -429,9 +429,13 @@ var StudentService = {
     }
   },
 
-  getAllStudents: function() {
+  getAllStudents: function () {
     try {
-      var sanitizedItems = this._getStudents().map(function(s) {
+      Logger.log("STUDENTS_MODULE | STEP 3 - Reading Google Sheet | Sheet Name: " + this._studentsSheet());
+      var rawStudents = this._getStudents();
+      
+      Logger.log("STUDENTS_MODULE | STEP 4 - Processing data | Records found: " + rawStudents.length);
+      var sanitizedItems = rawStudents.map(function (s) {
         return Utils.sanitizeStudent(s);
       });
       return Utils.buildResponse(true, 'All students fetched successfully', { students: sanitizedItems });
@@ -441,13 +445,13 @@ var StudentService = {
     }
   },
 
-  getActiveStudents: function() {
+  getActiveStudents: function () {
     try {
       var sanitizedItems = this._getStudents()
-        .filter(function(s) {
+        .filter(function (s) {
           return s[CONFIG.COLUMNS.STUDENT_STATUS] === CONFIG.STUDENT_STATUS.ACTIVE;
         })
-        .map(function(s) {
+        .map(function (s) {
           return Utils.sanitizeStudent(s);
         });
       return Utils.buildResponse(true, 'Active students fetched successfully', { students: sanitizedItems });
@@ -457,14 +461,14 @@ var StudentService = {
     }
   },
 
-  getStudentBasicInfo: function(rollNumber) {
+  getStudentBasicInfo: function (rollNumber) {
     try {
       if (!rollNumber) return Utils.buildResponse(false, 'Missing roll number parameter');
       var student = this._getStudent(rollNumber);
       if (!student) {
         return Utils.buildResponse(false, CONFIG.MESSAGES.STUDENT_NOT_FOUND || 'Student not found');
       }
-      
+
       var basicInfo = {};
       basicInfo[CONFIG.COLUMNS.STUDENT_ROLL_NUMBER] = student[CONFIG.COLUMNS.STUDENT_ROLL_NUMBER];
       basicInfo[CONFIG.COLUMNS.STUDENT_NAME] = student[CONFIG.COLUMNS.STUDENT_NAME];
@@ -484,7 +488,7 @@ var StudentService = {
   // Searching, Sorting & Pagination
   // ==========================================
 
-  sortStudents: function(sortBy, order) {
+  sortStudents: function (sortBy, order) {
     try {
       var allowedFields = [
         CONFIG.COLUMNS.STUDENT_NAME,
@@ -502,7 +506,7 @@ var StudentService = {
       }
 
       var records = this._getStudents();
-      records.sort(function(a, b) {
+      records.sort(function (a, b) {
         var valA = String(a[sortBy] || '').toUpperCase();
         var valB = String(b[sortBy] || '').toUpperCase();
         if (order === 'desc') {
@@ -511,7 +515,7 @@ var StudentService = {
         return valA > valB ? 1 : -1;
       });
 
-      var sanitizedOutput = records.map(function(s) {
+      var sanitizedOutput = records.map(function (s) {
         return Utils.sanitizeStudent(s);
       });
       return Utils.buildResponse(true, 'Students sorted successfully', { students: sanitizedOutput });
@@ -521,7 +525,7 @@ var StudentService = {
     }
   },
 
-  paginateStudents: function(page, pageSize, filterOptions) {
+  paginateStudents: function (page, pageSize, filterOptions) {
     try {
       var intPage = parseInt(page, 10);
       var intPageSize = parseInt(pageSize, 10);
@@ -542,27 +546,27 @@ var StudentService = {
       if (filterOptions) {
         if (filterOptions.department) {
           var fDept = String(filterOptions.department).trim().toUpperCase();
-          records = records.filter(function(s) {
+          records = records.filter(function (s) {
             return String(s[CONFIG.COLUMNS.STUDENT_DEPARTMENT_ID]).toUpperCase() === fDept;
           });
         }
         if (filterOptions.year) {
           var fYear = String(filterOptions.year).trim();
-          records = records.filter(function(s) {
+          records = records.filter(function (s) {
             return String(s[CONFIG.COLUMNS.STUDENT_YEAR]) === fYear;
           });
         }
         if (filterOptions.section) {
           var fSec = String(filterOptions.section).trim().toUpperCase();
-          records = records.filter(function(s) {
+          records = records.filter(function (s) {
             return String(s[CONFIG.COLUMNS.STUDENT_SECTION]).toUpperCase() === fSec;
           });
         }
         if (filterOptions.search) {
           var query = String(filterOptions.search).trim().toUpperCase();
-          records = records.filter(function(s) {
+          records = records.filter(function (s) {
             return String(s[CONFIG.COLUMNS.STUDENT_NAME]).toUpperCase().includes(query) ||
-                   String(s[CONFIG.COLUMNS.STUDENT_ROLL_NUMBER]).toUpperCase().includes(query);
+              String(s[CONFIG.COLUMNS.STUDENT_ROLL_NUMBER]).toUpperCase().includes(query);
           });
         }
       }
@@ -570,8 +574,8 @@ var StudentService = {
       var totalRecords = records.length;
       var totalPages = Math.ceil(totalRecords / intPageSize);
       var startIndex = (intPage - 1) * intPageSize;
-      
-      var items = records.slice(startIndex, startIndex + intPageSize).map(function(s) {
+
+      var items = records.slice(startIndex, startIndex + intPageSize).map(function (s) {
         return Utils.sanitizeStudent(s);
       });
 
@@ -598,18 +602,18 @@ var StudentService = {
   // Operational Dashboard Summaries
   // ==========================================
 
-  getStudentSummary: function() {
+  getStudentSummary: function () {
     try {
       var students = this._getStudents();
       var total = students.length;
-      var active = students.filter(function(s) { return s[CONFIG.COLUMNS.STUDENT_STATUS] === CONFIG.STUDENT_STATUS.ACTIVE; }).length;
-      var inactive = students.filter(function(s) { return s[CONFIG.COLUMNS.STUDENT_STATUS] === CONFIG.STUDENT_STATUS.INACTIVE; }).length;
+      var active = students.filter(function (s) { return s[CONFIG.COLUMNS.STUDENT_STATUS] === CONFIG.STUDENT_STATUS.ACTIVE; }).length;
+      var inactive = students.filter(function (s) { return s[CONFIG.COLUMNS.STUDENT_STATUS] === CONFIG.STUDENT_STATUS.INACTIVE; }).length;
 
       var deptCounts = {};
       var yearCounts = {};
       var sectionCounts = {};
 
-      students.forEach(function(s) {
+      students.forEach(function (s) {
         var dept = s[CONFIG.COLUMNS.STUDENT_DEPARTMENT_ID] || 'UNKNOWN';
         var year = s[CONFIG.COLUMNS.STUDENT_YEAR] || 'UNKNOWN';
         var section = s[CONFIG.COLUMNS.STUDENT_SECTION] || 'UNKNOWN';
@@ -639,7 +643,7 @@ var StudentService = {
   // Data Exchange Layer Imports/Exports
   // ==========================================
 
-  importStudents: function(dataset, operator) {
+  importStudents: function (dataset, operator) {
     try {
       this._logAuditSafe('BATCH_IMPORT', 'IMPORT_STUDENTS', 'Student data import triggered', operator);
       return Utils.buildResponse(false, CONFIG.MESSAGES.NOT_IMPLEMENTED || 'Feature not implemented');
@@ -649,7 +653,7 @@ var StudentService = {
     }
   },
 
-  exportStudents: function(filterOptions, operator) {
+  exportStudents: function (filterOptions, operator) {
     try {
       this._logAuditSafe('BATCH_EXPORT', 'EXPORT_STUDENTS', 'Student data export triggered', operator);
       return Utils.buildResponse(false, CONFIG.MESSAGES.NOT_IMPLEMENTED || 'Feature not implemented');

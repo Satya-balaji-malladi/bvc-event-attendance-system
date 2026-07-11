@@ -569,6 +569,25 @@ if (CONFIG.COLUMNS.USER_OTP_ATTEMPTS)
       Logger.log('AuthService.resetPassword error: ' + (e && e.message ? e.message : e));
       return Utils.buildResponse(false, CONFIG.MESSAGES.PASSWORD_RESET_FAILED);
     }
+  },
+
+  unlockAccount: function(userId) {
+    try {
+      var updates = {};
+      var lockCol = CONFIG.COLUMNS.USER_ACCOUNT_LOCKED;
+      var attemptsCol = CONFIG.COLUMNS.USER_FAILED_ATTEMPTS;
+      if (lockCol) updates[lockCol] = "No";
+      if (attemptsCol) updates[attemptsCol] = 0;
+      
+      var success = DatabaseService.updateRow(CONFIG.SHEETS.USERS, CONFIG.ID_COLUMNS.USERS, userId, updates);
+      if (success) {
+        return Utils.buildResponse(true, 'Account unlocked successfully');
+      }
+      return Utils.buildResponse(false, 'Failed to unlock account');
+    } catch (e) {
+      Logger.log('AuthService.unlockAccount error: ' + e.message);
+      return Utils.buildResponse(false, e.message);
+    }
   }
 };
 

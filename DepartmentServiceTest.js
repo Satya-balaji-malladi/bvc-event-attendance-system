@@ -1014,3 +1014,11 @@ function testSortDepartments() {
   Logger.log("==================================");
 
 }
+
+function runDepartmentServiceUnitTests() {
+  Logger.log('--- Running DepartmentServiceUnitTests ---');
+  testDepartmentService();
+  testGetAllDepartments();
+  testPaginateDepartments();
+  Logger.log('--- DepartmentServiceUnitTests Completed ---');
+}

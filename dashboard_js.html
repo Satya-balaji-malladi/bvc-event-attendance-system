@@ -58,14 +58,15 @@ function loadDashboardData() {
 
   console.log("Fetching dashboard data with token:", sessionToken);
 
-  // Single backend call to fetch all dashboard data
   google.script.run
     .withSuccessHandler(function(response) {
       console.log("Backend Response Received:", response);
       if (response && response.success && response.data) {
+        console.log("DASHBOARD_MODULE | STEP 8 - Rendering UI");
         updateStatsUI(response.data.stats);
         loadActivitiesUI(response.data.recentActivities);
         loadEventsUI(response.data.activeEvents);
+        console.log("DASHBOARD_MODULE | STEP 9 - Render completed");
       } else {
         console.error("Failed to load dashboard stats. Response structure invalid:", response);
         showToast('Error loading dashboard data.', 'danger');
@@ -101,7 +102,7 @@ console.log(JSON.stringify(stats, null, 2));
   const todayAttendanceEl = document.getElementById('todayAttendance');
   const totalDepartmentsEl = document.getElementById('totalDepartments');
 
-  if (totalUsersEl) totalUsersEl.textContent = stats.totalUsers !== undefined ? stats.totalUsers : '-';
+  if (totalUsersEl) totalUsersEl.textContent = stats.totalCoordinators !== undefined ? stats.totalCoordinators : '-';
   // Fallback to totalEvents if activeEvents is undefined
   if (activeEventsEl) activeEventsEl.textContent = stats.activeEvents !== undefined ? stats.activeEvents : (stats.totalEvents !== undefined ? stats.totalEvents : '-');
   if (todayAttendanceEl) todayAttendanceEl.textContent = stats.todayAttendance !== undefined ? stats.todayAttendance : '-';

@@ -763,3 +763,16 @@ function testSortUsers() {
   Logger.log(result);
 
 }
+
+function runUserServiceUnitTests() {
+  Logger.log('--- Running UserServiceUnitTests ---');
+  testCreateUser();
+  testGetUserById();
+  testUpdateUserSuccess();
+  testDeleteUserSuccess();
+  testActivateUserSuccess();
+  testDeactivateUser();
+  testResetPassword();
+  testSortUsers();
+  Logger.log('--- UserServiceUnitTests Completed ---');
+}

@@ -259,3 +259,14 @@ function testCache(){
   Logger.log("Execution Time : " + (end-start) + " ms");
 
 }
+
+function runDatabaseServiceUnitTests() {
+  Logger.log('--- Running DatabaseServiceUnitTests ---');
+  testGetSheet();
+  testGetHeaderRow();
+  testReadAllRows();
+  testFindOne();
+  testGenerateNextId();
+  testCache();
+  Logger.log('--- DatabaseServiceUnitTests Completed ---');
+}

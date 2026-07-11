@@ -109,24 +109,38 @@ const DatabaseService = {
   },
 
   readAllRows: function(sheetName) {
+    Logger.log("DB STEP 1: readAllRows called for sheetName: " + sheetName);
     try {
       const logicalKey = this._getLogicalSheetKey(sheetName);
+      Logger.log("DB STEP 2: Resolved logicalKey: " + logicalKey);
       const cached = this._cache[logicalKey];
-      if (cached && cached.records) return cached.records;
+      if (cached && cached.records) {
+        Logger.log("DB STEP 3: Returning cached records: " + cached.records.length);
+        return cached.records;
+      }
 
       const sheet = this.getSheet(logicalKey);
-      if (!sheet) return [];
+      if (!sheet) {
+        Logger.log("DB STEP 4 WARNING: getSheet returned null/undefined for logicalKey: " + logicalKey);
+        return [];
+      }
 
       const data = sheet.getDataRange().getValues();
-      if (!data || data.length <= 1) return [];
+      Logger.log("DB STEP 5: getDataRange().getValues() returned raw rows: " + (data ? data.length : 0));
+      if (!data || data.length <= 1) {
+        Logger.log("DB STEP 6 WARNING: sheet empty or only headers found");
+        return [];
+      }
 
       const headers = data.shift();
+      Logger.log("DB STEP 7: Parsed sheet headers: " + JSON.stringify(headers));
       const records = data.map(function(row) { return DatabaseService.mapRowToObject(headers, row); });
+      Logger.log("DB STEP 8: Mapped rows count: " + records.length);
 
       this._cache[logicalKey] = { records: records, headers: headers };
       return records;
     } catch (e) {
-      Logger.log('DatabaseService.readAllRows error: ' + (e && e.message ? e.message : e));
+      Logger.log('DB STEP 9 ERROR: DatabaseService.readAllRows error: ' + (e && e.message ? e.message : e) + "\nStack: " + e.stack);
       return [];
     }
   },

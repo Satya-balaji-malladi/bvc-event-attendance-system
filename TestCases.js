@@ -131,7 +131,7 @@ var TestCases = (function() {
 
   function _hasService(serviceName) {
     try {
-      return (typeof globalThis !== 'undefined' && globalThis[serviceName]) || (typeof this !== 'undefined' && this[serviceName]);
+      return eval('typeof ' + serviceName) !== 'undefined';
     } catch (e) {
       return false;
     }

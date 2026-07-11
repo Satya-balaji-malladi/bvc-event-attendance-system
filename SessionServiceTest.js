@@ -180,3 +180,11 @@ function inspectSessionColumns() {
     );
   }
 }
+
+function runSessionServiceUnitTests() {
+  Logger.log('--- Running SessionServiceUnitTests ---');
+  testCreateSession();
+  testGetSession();
+  testValidateSession();
+  Logger.log('--- SessionServiceUnitTests Completed ---');
+}

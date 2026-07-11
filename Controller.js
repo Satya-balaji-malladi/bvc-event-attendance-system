@@ -92,6 +92,20 @@ const Controller = {
     },
 
     /**
+     * Imports multiple users in bulk.
+     * @param {object[]} usersDataArray 
+     * @returns {object} Response object.
+     */
+    importUsers: function(sessionToken, usersDataArray) {
+      return SessionService.withSession(sessionToken, function(_sessionUserId) {
+      Logger.log("BACKEND STEP 2: Controller.User.importUsers started");
+      const result = UserService.importUsers(usersDataArray);
+      Logger.log("BACKEND STEP 7: Controller.User.importUsers finished.");
+      return result;
+      });
+    },
+
+    /**
      * Retrieves a user by ID.
      * @param {string} userId 
      * @returns {object|null}
@@ -117,10 +131,12 @@ const Controller = {
      * @returns {object[]} Array of all users.
      */
     getAllUsers: function(sessionToken) {
+      Logger.log("BACKEND STEP 5: Entering Controller.User.getAllUsers");
       return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      const users = UserService.getAllUsers();
-      Logger.log("STEP 3 - Controller.User.getAllUsers received from UserService: " + typeof users + " / Array? " + Array.isArray(users) + " / Length: " + (users ? users.length : 0));
-      return users || [];
+        Logger.log("BACKEND STEP 6: Session validated. sessionUserId: " + _sessionUserId);
+        const users = UserService.getAllUsers();
+        Logger.log("BACKEND STEP 7 - Controller.User.getAllUsers received from UserService: " + typeof users + " / Array? " + Array.isArray(users) + " / Length: " + (users ? users.length : 0));
+        return users || [];
       });
     },
 
@@ -743,6 +759,87 @@ const Controller = {
       });
     },
 
+    getAllEnrichedParticipants: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(sessionUserId) {
+        try {
+          return ParticipantService.getAllEnrichedParticipants(sessionUserId);
+        } catch (e) {
+          Logger.log('Controller.Participant.getAllEnrichedParticipants error: ' + (e && e.message ? e.message : e));
+          return Utils.buildResponse(false, e && e.message ? e.message : 'Failed to get enriched participants');
+        }
+      });
+    },
+
+    bulkAddParticipants: function(sessionToken, eventId, rollNumbers) {
+      return SessionService.withSession(sessionToken, function(sessionUserId) {
+        try {
+          if (!eventId || !rollNumbers || !Array.isArray(rollNumbers)) return Utils.buildResponse(false, 'Invalid bulk import request');
+          return ParticipantService.bulkAddParticipants(eventId, rollNumbers, sessionUserId);
+        } catch (e) {
+          Logger.log('Controller.Participant.bulkAddParticipants error: ' + (e && e.message ? e.message : e));
+          return Utils.buildResponse(false, e && e.message ? e.message : 'Failed to bulk add participants');
+        }
+      });
+    },
+
+    bulkRemoveParticipants: function(sessionToken, eventId, rollNumbers) {
+      return SessionService.withSession(sessionToken, function(sessionUserId) {
+        try {
+          if (!eventId || !rollNumbers || !Array.isArray(rollNumbers)) return Utils.buildResponse(false, 'Invalid bulk remove request');
+          return ParticipantService.bulkRemoveParticipants(eventId, rollNumbers, sessionUserId);
+        } catch (e) {
+          Logger.log('Controller.Participant.bulkRemoveParticipants error: ' + (e && e.message ? e.message : e));
+          return Utils.buildResponse(false, e && e.message ? e.message : 'Failed to bulk remove participants');
+        }
+      });
+    }
+
+  },
+
+  // ==========================================
+  // Analytics API
+  // ==========================================
+  Analytics: {
+    getAnalyticsSummary: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return AnalyticsService.getAnalyticsSummary(userId);
+      });
+    },
+    getTrendData: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return AnalyticsService.getTrendData(userId);
+      });
+    },
+    getDepartmentData: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return AnalyticsService.getDepartmentData(userId);
+      });
+    },
+    getEventWiseData: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return AnalyticsService.getEventWiseData(userId);
+      });
+    },
+    getCheckInPatterns: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return AnalyticsService.getCheckInPatterns(userId);
+      });
+    },
+    getPerformanceDistribution: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return AnalyticsService.getPerformanceDistribution(userId);
+      });
+    },
+    getDefaulterDistribution: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return AnalyticsService.getDefaulterDistribution(userId);
+      });
+    },
+    getLeaderboard: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return AnalyticsService.getLeaderboard(userId);
+      });
+    }
   },
 
   // ==========================================
@@ -751,14 +848,107 @@ const Controller = {
   Settings: {
     getSettings: function(sessionToken) {
       return SessionService.withSession(sessionToken, function(userId) {
-      return SettingsService.getSettings();
+        return SettingsService.getSettings();
       });
     },
     saveSettings: function(sessionToken, payload) {
       return SessionService.withSession(sessionToken, function(userId) {
-      return SettingsService.saveSettings(payload);
+        return SettingsService.saveSettings(payload);
       });
     },
+    clearAttendanceLogs: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return SettingsService.clearAttendanceLogs(userId);
+      });
+    },
+    resetSystem: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return SettingsService.resetSystem(userId);
+      });
+    }
+  },
+
+  // ==========================================
+  // Audit API
+  // ==========================================
+  Audit: {
+    getAuditLogs: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        const user = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, 'User ID', userId)[0];
+        const role = user ? (user['Role'] || user.role) : null;
+        if (role !== CONFIG.ROLES.ADMIN) {
+          return Utils.buildResponse(false, 'Unauthorized. Admins only.');
+        }
+        const logs = AuditService.getAuditLogs();
+        return Utils.buildResponse(true, 'Logs retrieved', { logs: logs });
+      });
+    }
+  },
+
+  // ==========================================
+  // Department API
+  // ==========================================
+  Department: {
+    getActiveDepartments: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return DepartmentService.getActiveDepartments();
+      });
+    }
+  },
+
+  // ==========================================
+  // Dashboard API (Feature-Based Development)
+  // ==========================================
+  Dashboard: {
+    getTotalUsers: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        Logger.log("DASHBOARD_MODULE | STEP 2 - Session validated | User ID: " + userId);
+        return DashboardService.getTotalUsersCount();
+      });
+    },
+    getTotalStudents: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        Logger.log("DASHBOARD_MODULE | STEP 2 - Session validated | User ID: " + userId);
+        return DashboardService.getTotalStudentsCount();
+      });
+    },
+    getTotalEvents: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        Logger.log("DASHBOARD_MODULE | STEP 2 - Session validated | User ID: " + userId);
+        return DashboardService.getTotalEventsCount();
+      });
+    },
+    getActiveEvents: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        Logger.log("DASHBOARD_MODULE | STEP 2 - Session validated | User ID: " + userId);
+        return DashboardService.getActiveEventsCount();
+      });
+    },
+    getUpcomingEvents: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        Logger.log("DASHBOARD_MODULE | STEP 2 - Session validated | User ID: " + userId);
+        return DashboardService.getUpcomingEventsCount();
+      });
+    },
+    getTotalParticipants: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        Logger.log("DASHBOARD_MODULE | STEP 2 - Session validated | User ID: " + userId);
+        // Fallback or placeholder for participants list check
+        return DashboardService.getTotalCoordinatorsCount();
+      });
+    },
+    getAttendanceToday: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        Logger.log("DASHBOARD_MODULE | STEP 2 - Session validated | User ID: " + userId);
+        return DashboardService.getAttendanceTodayCount(userId);
+      });
+    },
+    getRecentEvents: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        Logger.log("DASHBOARD_MODULE | STEP 2 - Session validated | User ID: " + userId);
+        return DashboardService.getRecentActivities();
+      });
+    }
   }
 
 };
