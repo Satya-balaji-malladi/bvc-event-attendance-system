@@ -78,6 +78,15 @@
     function loadPage(pageName) {
       console.log(`Page layout swap requested for destination component: ${pageName}.html`);
       
+      // Cleanup previous module first
+      if (App.State.activeModule && App.Modules[App.State.activeModule] && typeof App.Modules[App.State.activeModule].destroy === 'function') {
+        try {
+          App.Modules[App.State.activeModule].destroy();
+        } catch(e) {
+          console.error("Failed to destroy module:", App.State.activeModule, e);
+        }
+      }
+      
       showLoader();
       
       google.script.run
@@ -100,6 +109,10 @@
           
           setPageTitle(pageName);
           setActiveMenu(pageName);
+          
+          if (typeof App !== 'undefined' && App.State) {
+            App.State.activeModule = pageName.toLowerCase();
+          }
           
           // Optionally update the history state for navigation (ignore if it fails)
           try {
@@ -238,6 +251,7 @@
 
     // Structural platform execution context init parameters setup on launch
     setNotificationBadgeCount(0); // Pass values > 0 to expose the indicator anchor badge element dynamically
+    window.loadPage = loadPage;
     
     // Automatically load the Dashboard component when the shell initializes
     // First, check if there's a specific page requested in the URL
