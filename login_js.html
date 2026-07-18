@@ -237,29 +237,48 @@
   // ==========================
 
   if (role === 'COORDINATOR') {
-    // Coordinator needs camera access. Google Apps Script serves web apps inside
-    // a sandboxed iframe with Permissions-Policy: camera=() which blocks camera.
-    // The ONLY way to escape this is to navigate the browser to the GAS URL directly
-    // with ?page=coordinator, which triggers doGet() and serves the page top-level.
-    //
-    // We pass the session token in the URL so Coordinator.html can pick it up.
-    google.script.run
-      .withSuccessHandler(function(scriptUrl) {
-        const coordUrl = scriptUrl + '?page=coordinator&token=' + encodeURIComponent(actualToken);
-        console.log('Redirecting coordinator to standalone page:', coordUrl);
-        // Use top-level navigation to escape the GAS sandbox iframe
-        try {
-          window.top.location.href = coordUrl;
-        } catch (e) {
-          // Fallback if cross-origin top navigation blocked
-          window.location.href = coordUrl;
-        }
-      })
-      .withFailureHandler(function(err) {
-        console.error('Failed to get script URL:', err);
-        showAlert('Failed to load coordinator terminal.', 'danger');
-      })
-      .getScriptUrl();
+    // Hide form, show direct user gesture button to prevent browser blocking top-level navigation
+    loginForm.classList.add('d-none');
+    const redirectContainer = document.getElementById('coordinatorRedirectContainer');
+    const btnOpen = document.getElementById('btnOpenCoordinator');
+    
+    if (redirectContainer && btnOpen) {
+      redirectContainer.classList.remove('d-none');
+      
+      // Request script URL in advance so it is ready
+      google.script.run
+        .withSuccessHandler(function(scriptUrl) {
+          btnOpen.addEventListener('click', function() {
+            const coordUrl = scriptUrl + '?page=coordinator&token=' + encodeURIComponent(actualToken);
+            console.log('User gesture triggered redirection to standalone page:', coordUrl);
+            try {
+              window.top.location.href = coordUrl;
+            } catch (e) {
+              window.location.href = coordUrl;
+            }
+          });
+        })
+        .withFailureHandler(function(err) {
+          console.error('Failed to pre-fetch script URL:', err);
+          btnOpen.addEventListener('click', function() {
+            const fallbackUrl = window.APP_SCRIPT_URL + '?page=coordinator&token=' + encodeURIComponent(actualToken);
+            try {
+              window.top.location.href = fallbackUrl;
+            } catch (e) {
+              window.location.href = fallbackUrl;
+            }
+          });
+        })
+        .getScriptUrl();
+    } else {
+      // Fallback if elements are missing
+      const fallbackUrl = window.APP_SCRIPT_URL + '?page=coordinator&token=' + encodeURIComponent(actualToken);
+      try {
+        window.top.location.href = fallbackUrl;
+      } catch (e) {
+        window.location.href = fallbackUrl;
+      }
+    }
 
   } else {
     // Admin / Super Admin: load the full dashboard shell via document.write
