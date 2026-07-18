@@ -13,7 +13,8 @@
         console.log('Initializing Profile Module...');
         
         if (typeof App !== 'undefined' && App.State && App.State.currentUser) {
-          this.userId = App.State.currentUser.user_id || App.State.currentUser.userId;
+          console.log("Profile Current User Object:", App.State.currentUser);
+          this.userId = App.State.currentUser['User ID'] || App.State.currentUser.user_id || App.State.currentUser.userId;
         }
 
         if (!this.userId) {
