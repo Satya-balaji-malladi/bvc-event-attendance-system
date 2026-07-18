@@ -12,16 +12,42 @@
       init: function () {
         console.log('Initializing Profile Module...');
         
+        let currentUserId = null;
         if (typeof App !== 'undefined' && App.State && App.State.currentUser) {
           console.log("Profile Current User Object:", App.State.currentUser);
-          this.userId = App.State.currentUser['User ID'] || App.State.currentUser.user_id || App.State.currentUser.userId;
+          currentUserId = App.State.currentUser['User ID'] || App.State.currentUser.user_id || App.State.currentUser.userId;
         }
 
-        if (!this.userId) {
-          App.UI.showError("Failed to identify current user session. Please log in again.");
+        if (!currentUserId) {
+          console.log("User ID not found in App.State.currentUser. Resolving from session...");
+          const token = localStorage.getItem('sessionToken');
+          if (!token) {
+            App.UI.showError("Failed to identify current user session. Please log in again.");
+            return;
+          }
+          
+          App.LoadingManager.show();
+          App.API._call('authenticate', token)
+            .then(res => {
+              if (res && res.success && res.user) {
+                App.State.currentUser = res.user;
+                this.userId = res.user['User ID'] || res.user.user_id || res.user.userId;
+                this.bindEvents();
+                this.loadProfileData();
+              } else {
+                App.LoadingManager.hide();
+                App.UI.showError("Session expired or invalid. Please log in again.");
+              }
+            })
+            .catch(err => {
+              App.LoadingManager.hide();
+              console.error("Session validation error", err);
+              App.UI.showError("Error validating session: " + err.message);
+            });
           return;
         }
 
+        this.userId = currentUserId;
         this.bindEvents();
         this.loadProfileData();
       },
