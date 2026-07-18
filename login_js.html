@@ -281,6 +281,7 @@
     }
 
   } else {
+    const targetPage = 'dashboard';
     // Admin / Super Admin: load the full dashboard shell via document.write
     google.script.run
       .withSuccessHandler(function(html) {
