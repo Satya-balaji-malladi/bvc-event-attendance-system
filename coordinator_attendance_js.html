@@ -1,853 +1,965 @@
 <script>
 /**
- * BVC Event Attendance Management System
- * Frontend UI Behavioral Controller (Premium Redesigned Mobile-First Edition)
+ * BVC Coordinator Terminal – JavaScript Controller (v2.0)
+ * Fully responsive, camera-aware, history-rich, enterprise-grade attendance scanner.
+ *
+ * Architecture: IIFE module with private state and clean public API.
+ * Preserves all existing GAS API calls unchanged.
  */
+'use strict';
+
 const CoordinatorUI = (() => {
+
   // ==========================================================================
-  // Private System State Configuration (Live Backend Mirror States)
+  //  PRIVATE STATE
   // ==========================================================================
   const state = {
-    statistics: {
-      present: 0,
-      remaining: 0,
-      total: 0
-    },
-    duplicatesCount: 0, // Local track count for UI display
-    recentScans: [],
-    isProcessing: false,
     sessionToken: null,
+    isProcessing: false,
     lastInputType: 'Barcode',
-    activeEventAttendanceType: 'Fixed' // Track attendance policy: Fixed or Open
+    activeEventAttendanceType: 'Fixed',
+    statistics: { present: 0, remaining: 0, total: 0 },
+    duplicatesCount: 0,
+    // Full scan history from server; client-side search/filter applied on this
+    allScans: [],
+    // Cameras
+    availableCameras: [],          // { id, label }
+    activeCameraIndex: 0,          // index into availableCameras
+    cameraRunning: false,
+    facingMode: 'environment',     // 'environment' | 'user'
+    // Duplicate prevention cooldown
+    recentRolls: {},               // { roll: timestamp }
+    DUPLICATE_COOLDOWN_MS: 5000,
+    // Search/filter state
+    searchQuery: '',
+    deptFilter: '',
   };
 
-  // Cache elements securely
   let dom = {};
   let html5QrCode = null;
 
   // ==========================================================================
-  // Core Initialization Module
+  //  INIT
   // ==========================================================================
   const init = () => {
     cacheDOM();
     bindEvents();
     extractSessionToken();
-    setupAutoFocusLock();
+    monitorConnection();
     loadBackendTerminalData();
-    startCameraScanner();
+    initCamera();
   };
 
   const cacheDOM = () => {
     dom = {
-      form: document.getElementById('attendance-input-form'),
-      input: document.getElementById('barcode-roll-input'),
-      submitBtn: document.getElementById('btn-submit-attendance'),
-      scannerStatus: document.getElementById('scanner-status'),
-      previewCard: document.getElementById('student-preview-card'),
+      // Form & Input
+      form:              document.getElementById('attendance-input-form'),
+      input:             document.getElementById('barcode-roll-input'),
+      submitBtn:         document.getElementById('btn-submit-attendance'),
+      scannerStatus:     document.getElementById('scanner-status'),
+
+      // Event info
+      eventTitleDisplay: document.getElementById('event-title-display'),
+      terminalEventName: document.getElementById('terminal-event-name'),
+      eventDate:         document.getElementById('terminal-event-date'),
+      coordName:         document.getElementById('terminal-coordinator-name'),
+      eventStatusBadge:  document.getElementById('event-status-badge'),
+      lastScanTime:      document.getElementById('last-scan-time'),
+      cameraStatusText:  document.getElementById('camera-status-text'),
+
+      // Stats
+      statsPresent:      document.getElementById('stat-present-count'),
+      statsRemaining:    document.getElementById('stat-remaining-count'),
+      statsTotal:        document.getElementById('stat-total-count'),
+      statsDuplicate:    document.getElementById('stat-duplicate-count'),
+      statsPct:          document.getElementById('stat-percent-count'),
+      statsProgress:     document.getElementById('stat-progress-bar'),
+
+      // Student preview
       previewPlaceholder: document.getElementById('student-preview-placeholder'),
-      previewContent: document.getElementById('student-preview-content'),
-      previewName: document.getElementById('preview-student-name'),
-      previewRoll: document.getElementById('preview-student-roll'),
-      previewDept: document.getElementById('preview-student-dept'),
-      previewYear: document.getElementById('preview-student-year'),
-      previewAvatarBadge: document.getElementById('preview-avatar-badge'),
-      previewStatusStrip: document.getElementById('preview-status-strip'),
-      statsPresent: document.getElementById('stat-present-count'),
-      statsRemaining: document.getElementById('stat-remaining-count'),
-      statsTotal: document.getElementById('stat-total-count'),
-      statsDuplicate: document.getElementById('stat-duplicate-count'),
-      recentContainer: document.getElementById('recent-scans-container'),
-      logoutBtn: document.getElementById('btn-terminal-logout'),
-      refreshBtn: document.getElementById('btn-terminal-refresh'),
-      syncBtn: document.getElementById('btn-terminal-sync'),
-      eventName: document.getElementById('terminal-event-name'),
-      eventDate: document.getElementById('terminal-event-date'),
-      coordName: document.getElementById('terminal-coordinator-name'),
-      connectionStatus: document.getElementById('connection-status'),
-      
-      // Spot enrollment DOM elements
-      spotModalElement: document.getElementById('spotRegistrationModal'),
-      spotForm: document.getElementById('spot-registration-form'),
-      spotRollInput: document.getElementById('spot-roll-input'),
-      spotNameInput: document.getElementById('spot-name-input'),
-      spotCollegeInput: document.getElementById('spot-college-input'),
-      spotDeptSelect: document.getElementById('spot-dept-select'),
-      spotYearSelect: document.getElementById('spot-year-select'),
-      
-      spotOpenEventView: document.getElementById('spot-open-event-view'),
-      spotFixedEventView: document.getElementById('spot-fixed-event-view'),
-      spotOpenRollDisplay: document.getElementById('spot-open-roll-display'),
-      spotFixedRollDisplay: document.getElementById('spot-fixed-roll-display'),
-      spotDeptOtherContainer: document.getElementById('spot-dept-other-container'),
-      spotDeptOtherInput: document.getElementById('spot-dept-other-input'),
-      btnConfirmSpotOpen: document.getElementById('btn-confirm-spot-open')
+      previewContent:    document.getElementById('student-preview-content'),
+      previewStrip:      document.getElementById('preview-status-strip'),
+      previewName:       document.getElementById('preview-student-name'),
+      previewRoll:       document.getElementById('preview-student-roll'),
+      previewDept:       document.getElementById('preview-student-dept'),
+      previewYear:       document.getElementById('preview-student-year'),
+      previewAvatar:     document.getElementById('preview-avatar-badge'),
+
+      // Camera
+      viewportPlaceholder: document.getElementById('viewport-placeholder'),
+      cameraDeviceSelect:  document.getElementById('camera-device-select'),
+      btnFlipCamera:       document.getElementById('btn-flip-camera'),
+      btnToggleCamera:     document.getElementById('btn-toggle-camera'),
+      cameraToggleIcon:    document.getElementById('camera-toggle-icon'),
+
+      // History
+      historyFeed:       document.getElementById('recent-scans-container'),
+      historySkeleton:   document.getElementById('history-skeleton'),
+      historyEmptyState: document.getElementById('history-empty-state'),
+      historyCountBadge: document.getElementById('history-count-badge'),
+      searchInput:       document.getElementById('history-search-input'),
+      deptFilter:        document.getElementById('history-dept-filter'),
+
+      // Header buttons
+      refreshBtn:        document.getElementById('btn-terminal-refresh'),
+      syncBtn:           document.getElementById('btn-terminal-sync'),
+      logoutBtn:         document.getElementById('btn-terminal-logout'),
+      connectionStatus:  document.getElementById('connection-status'),
+      connDot:           document.getElementById('conn-dot'),
+      connLabel:         document.getElementById('conn-label'),
+
+      // Toast
+      toastStack:        document.getElementById('coord-toast-stack'),
+
+      // Spot modal
+      spotModalElement:  document.getElementById('spotRegistrationModal'),
+      spotForm:          document.getElementById('spot-registration-form'),
+      spotRollInput:     document.getElementById('spot-roll-input'),
+      spotNameInput:     document.getElementById('spot-name-input'),
+      spotCollegeInput:  document.getElementById('spot-college-input'),
+      spotDeptSelect:    document.getElementById('spot-dept-select'),
+      spotYearSelect:    document.getElementById('spot-year-select'),
+      spotOpenView:      document.getElementById('spot-open-event-view'),
+      spotFixedView:     document.getElementById('spot-fixed-event-view'),
+      spotOpenRollDisp:  document.getElementById('spot-open-roll-display'),
+      spotFixedRollDisp: document.getElementById('spot-fixed-roll-display'),
+      spotDeptOtherCont: document.getElementById('spot-dept-other-container'),
+      spotDeptOtherInp:  document.getElementById('spot-dept-other-input'),
+      btnConfirmSpotOpen:document.getElementById('btn-confirm-spot-open'),
     };
 
+    // Bootstrap modal init
     if (dom.spotModalElement && typeof bootstrap !== 'undefined') {
       dom.spotModal = new bootstrap.Modal(dom.spotModalElement);
     }
   };
 
+  // ==========================================================================
+  //  EVENT BINDING
+  // ==========================================================================
   const bindEvents = () => {
-    if (!dom.form || !dom.input) return;
-
-    // Track input type mutations (fast character streaming implies physical scan engine)
-    dom.input.addEventListener('input', (e) => {
-      updateSubmitButtonState();
-      if (e.inputType === 'insertText' || !e.inputType) {
-        state.lastInputType = (dom.input.value.length > 2 && !e.inputType) ? 'Barcode' : 'Manual';
-      }
-    });
-    
-    // Form submission processing
-    dom.form.addEventListener('submit', (e) => {
-      e.preventDefault();
-      submitAttendanceUI();
-    });
-
-    if (dom.logoutBtn) {
-      dom.logoutBtn.addEventListener('click', () => {
-        executeTerminalLogout();
+    // Barcode input - track mode
+    if (dom.input) {
+      dom.input.addEventListener('input', (e) => {
+        setSubmitEnabled(dom.input.value.trim().length > 0);
+        state.lastInputType = (dom.input.value.length > 3 && !e.inputType) ? 'Barcode' : 'Manual';
       });
     }
 
-    // Refresh layout action trigger
-    if (dom.refreshBtn) {
-      dom.refreshBtn.addEventListener('click', () => {
-        resetUI();
-        loadBackendTerminalData();
-        showToast('Info', 'Scanned context refreshed.');
-      });
+    // Form submit
+    if (dom.form) {
+      dom.form.addEventListener('submit', (e) => { e.preventDefault(); submitAttendance(); });
     }
 
-    // Sync metrics action trigger
-    if (dom.syncBtn) {
-      dom.syncBtn.addEventListener('click', () => {
-        loadBackendTerminalData();
-        showToast('Success', 'Metrics synchronized with database.');
-      });
-    }
+    // Header buttons
+    if (dom.refreshBtn) dom.refreshBtn.addEventListener('click', () => { resetUI(); loadBackendTerminalData(); });
+    if (dom.syncBtn)    dom.syncBtn.addEventListener('click',    () => loadBackendTerminalData(true));
+    if (dom.logoutBtn)  dom.logoutBtn.addEventListener('click',  () => executeLogout());
 
-    // Spot registration submission listener (Fixed events)
-    if (dom.spotForm) {
-      dom.spotForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        submitSpotRegistrationUI();
-      });
-    }
-
-    // Open event spot confirm listener
-    if (dom.btnConfirmSpotOpen) {
-      dom.btnConfirmSpotOpen.addEventListener('click', () => {
-        submitSpotRegistrationOpenUI();
-      });
-    }
-
-    // Branch selection check (show spec input if 'Others' is selected)
-    if (dom.spotDeptSelect) {
-      dom.spotDeptSelect.addEventListener('change', (e) => {
-        if (e.target.value === 'OTHERS') {
-          if (dom.spotDeptOtherContainer) dom.spotDeptOtherContainer.classList.remove('d-none');
-          if (dom.spotDeptOtherInput) {
-            dom.spotDeptOtherInput.required = true;
-            dom.spotDeptOtherInput.focus();
-          }
-        } else {
-          if (dom.spotDeptOtherContainer) dom.spotDeptOtherContainer.classList.add('d-none');
-          if (dom.spotDeptOtherInput) {
-            dom.spotDeptOtherInput.required = false;
-            dom.spotDeptOtherInput.value = '';
-          }
+    // Camera buttons
+    if (dom.btnToggleCamera) dom.btnToggleCamera.addEventListener('click', toggleCamera);
+    if (dom.btnFlipCamera)   dom.btnFlipCamera.addEventListener('click',   flipCamera);
+    if (dom.cameraDeviceSelect) {
+      dom.cameraDeviceSelect.addEventListener('change', () => {
+        const idx = dom.cameraDeviceSelect.selectedIndex;
+        state.activeCameraIndex = idx;
+        if (state.cameraRunning) {
+          stopCamera().then(() => startCameraWithCurrentDevice());
         }
       });
     }
 
-    // Return focus back on closing modal
+    // Search & filter
+    if (dom.searchInput) {
+      dom.searchInput.addEventListener('input', () => {
+        state.searchQuery = dom.searchInput.value.trim().toLowerCase();
+        renderHistory();
+      });
+    }
+    if (dom.deptFilter) {
+      dom.deptFilter.addEventListener('change', () => {
+        state.deptFilter = dom.deptFilter.value;
+        renderHistory();
+      });
+    }
+
+    // Spot modal - branch select
+    if (dom.spotDeptSelect) {
+      dom.spotDeptSelect.addEventListener('change', (e) => {
+        const showOther = e.target.value === 'OTHERS';
+        dom.spotDeptOtherCont && dom.spotDeptOtherCont.classList.toggle('d-none', !showOther);
+        if (dom.spotDeptOtherInp) {
+          dom.spotDeptOtherInp.required = showOther;
+          if (!showOther) dom.spotDeptOtherInp.value = '';
+        }
+      });
+    }
+
+    // Spot modal submit
+    if (dom.spotForm)          dom.spotForm.addEventListener('submit', (e) => { e.preventDefault(); submitSpotFixed(); });
+    if (dom.btnConfirmSpotOpen) dom.btnConfirmSpotOpen.addEventListener('click', submitSpotOpen);
+
+    // Re-focus input when spot modal closes
     if (dom.spotModalElement) {
-      dom.spotModalElement.addEventListener('hidden.bs.modal', () => {
-        autoFocusInput();
+      dom.spotModalElement.addEventListener('hidden.bs.modal', () => { focusInput(); });
+    }
+
+    // Auto-focus lock on desktop: body clicks redirect to input
+    document.body.addEventListener('click', (e) => {
+      const modalOpen = dom.spotModalElement && dom.spotModalElement.classList.contains('show');
+      if (modalOpen) return;
+      const ignore = [dom.logoutBtn, dom.refreshBtn, dom.syncBtn, dom.btnFlipCamera,
+                      dom.btnToggleCamera, dom.cameraDeviceSelect, dom.searchInput, dom.deptFilter];
+      if (!ignore.includes(e.target) && dom.form && !dom.form.contains(e.target)) {
+        focusInput();
+      }
+    });
+
+    // Re-focus after blur (with guard)
+    if (dom.input) {
+      dom.input.addEventListener('blur', () => {
+        setTimeout(() => {
+          const active = document.activeElement;
+          const modalOpen = dom.spotModalElement && dom.spotModalElement.classList.contains('show');
+          if (!modalOpen && active !== dom.logoutBtn && active !== dom.refreshBtn &&
+              active !== dom.syncBtn && active !== dom.searchInput && active !== dom.deptFilter &&
+              active !== dom.cameraDeviceSelect) {
+            focusInput();
+          }
+        }, 120);
       });
     }
   };
 
+  // ==========================================================================
+  //  SESSION TOKEN
+  // ==========================================================================
   const extractSessionToken = () => {
     try {
-      const urlParams = new URLSearchParams(window.location.search);
-      state.sessionToken = urlParams.get('token') || window.sessionToken || localStorage.getItem('sessionToken') || null;
+      const params = new URLSearchParams(window.location.search);
+      state.sessionToken = params.get('token') || localStorage.getItem('sessionToken') || null;
     } catch (e) {
-      console.error("Session token parse failure:", e);
+      console.error('Session token extraction error:', e);
     }
   };
 
-  // Web Audio API Synthesizer sounds generator
-  const playTerminalSound = (type) => {
-    try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return;
-      const audioCtx = new AudioCtx();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      
-      if (type === 'success') {
-        // High pitch double beep
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(987.77, audioCtx.currentTime); // B5
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-        osc.start();
-        
-        gain.gain.setValueAtTime(0, audioCtx.currentTime + 0.06);
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime + 0.10);
-        osc.frequency.setValueAtTime(1174.66, audioCtx.currentTime + 0.10); // D6
-        osc.stop(audioCtx.currentTime + 0.18);
-      } else {
-        // Low pitch descending warning buzz
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(160, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(70, audioCtx.currentTime + 0.30);
-        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-        osc.start();
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.30);
-        osc.stop(audioCtx.currentTime + 0.35);
-      }
-    } catch (e) {
-      console.warn("AudioContext synthesis failed:", e);
-    }
+  // ==========================================================================
+  //  NETWORK MONITOR
+  // ==========================================================================
+  const monitorConnection = () => {
+    const update = () => {
+      const online = navigator.onLine;
+      if (dom.connectionStatus) dom.connectionStatus.classList.toggle('offline', !online);
+      if (dom.connLabel) dom.connLabel.textContent = online ? 'Online' : 'Offline';
+    };
+    window.addEventListener('online',  update);
+    window.addEventListener('offline', update);
+    update();
   };
 
-  // Active Camera scanner lifecycle hooks
-  const startCameraScanner = () => {
-    try {
-      if (typeof Html5Qrcode === 'undefined') {
-        console.warn("Html5Qrcode library is missing or blocked.");
-        updateScannerStatus('Camera Reader API Unavailable');
+  // ==========================================================================
+  //  CAMERA MANAGEMENT
+  // ==========================================================================
+  const initCamera = () => {
+    if (typeof Html5Qrcode === 'undefined') {
+      setCameraStatus('Scanner API unavailable');
+      return;
+    }
+
+    // Enumerate available cameras
+    Html5Qrcode.getCameras().then(cameras => {
+      if (!cameras || cameras.length === 0) {
+        setCameraStatus('No camera found');
         return;
       }
+      state.availableCameras = cameras;
 
-      html5QrCode = new Html5Qrcode("interactive-camera-scanner");
-      const qrCodeSuccessCallback = (decodedText) => {
+      // Populate device selector if > 1 camera (mainly for desktops)
+      if (cameras.length > 1 && dom.cameraDeviceSelect) {
+        dom.cameraDeviceSelect.innerHTML = cameras.map((c, i) =>
+          `<option value="${i}">${c.label || `Camera ${i + 1}`}</option>`
+        ).join('');
+        dom.cameraDeviceSelect.classList.remove('d-none');
+        // Prefer rear camera by default
+        const envIdx = cameras.findIndex(c => /back|rear|environment/i.test(c.label));
+        state.activeCameraIndex = envIdx >= 0 ? envIdx : 0;
+        dom.cameraDeviceSelect.selectedIndex = state.activeCameraIndex;
+      }
+
+      // Auto-start scanning
+      startCameraWithCurrentDevice();
+    }).catch(err => {
+      console.warn('Camera enumeration failed:', err);
+      setCameraStatus('Camera access denied');
+    });
+  };
+
+  const startCameraWithCurrentDevice = () => {
+    if (typeof Html5Qrcode === 'undefined') return;
+
+    if (!html5QrCode) {
+      html5QrCode = new Html5Qrcode('interactive-camera-scanner');
+    }
+
+    const config = {
+      fps: 12,
+      qrbox: (w, h) => ({ width: Math.min(w * 0.80, 250), height: Math.min(h * 0.55, 120) }),
+      aspectRatio: 1.5,
+      disableFlip: false,
+    };
+
+    let cameraIdOrFacingMode;
+    if (state.availableCameras.length > 1 && state.availableCameras[state.activeCameraIndex]) {
+      cameraIdOrFacingMode = state.availableCameras[state.activeCameraIndex].id;
+    } else {
+      cameraIdOrFacingMode = { facingMode: state.facingMode };
+    }
+
+    html5QrCode.start(
+      cameraIdOrFacingMode,
+      config,
+      (decodedText) => {
+        // Prevent duplicate scans within cooldown
+        const now = Date.now();
+        const lastScan = state.recentRolls[decodedText] || 0;
+        if (now - lastScan < state.DUPLICATE_COOLDOWN_MS) return;
+        state.recentRolls[decodedText] = now;
+
         if (state.isProcessing) return;
-        
-        if (navigator.vibrate) navigator.vibrate(100);
+        if (navigator.vibrate) navigator.vibrate(80);
 
         if (dom.input) {
           dom.input.value = decodedText;
-          submitAttendanceUI();
+          state.lastInputType = 'Barcode';
+          submitAttendance();
         }
-      };
-
-      const config = {
-        fps: 10,
-        qrbox: (width, height) => {
-          return { width: Math.min(width * 0.85, 260), height: Math.min(height * 0.55, 130) };
-        }
-      };
-
-      // Ingest scanning from back camera (environment)
-      html5QrCode.start(
-        { facingMode: "environment" },
-        config,
-        qrCodeSuccessCallback
-      ).then(() => {
-        console.log("Interactive camera scanner initialized successfully.");
-        updateScannerStatus('Camera Scanner Active');
-      }).catch(err => {
-        console.warn("Camera streaming initiation failed:", err);
-        updateScannerStatus('Camera locked. Ready for input.');
-      });
-    } catch (e) {
-      console.error("Camera startup exception:", e);
-    }
-  };
-
-  const stopCameraScanner = () => {
-    if (html5QrCode && html5QrCode.isScanning) {
-      try {
-        html5QrCode.stop().catch(err => console.error("Error stopping camera:", err));
-      } catch (e) {
-        console.error("Camera stop error:", e);
       }
-    }
-  };
-
-  // Aggressive Auto Focus lock loops
-  const autoFocusInput = () => {
-    // Prevent autofocus from pulling focus back while modal popup inputs are actively used
-    const isModalOpen = dom.spotModalElement && dom.spotModalElement.classList.contains('show');
-    if (dom.input && !isModalOpen) {
-      dom.input.focus();
-    }
-  };
-
-  const setupAutoFocusLock = () => {
-    if (!dom.input) return;
-
-    // Retain focus on blur
-    dom.input.addEventListener('blur', () => {
-      setTimeout(() => {
-        if (document.activeElement !== dom.logoutBtn && 
-            document.activeElement !== dom.refreshBtn && 
-            document.activeElement !== dom.syncBtn) {
-          autoFocusInput();
-        }
-      }, 100);
+    ).then(() => {
+      state.cameraRunning = true;
+      setCameraStatus('Active');
+      if (dom.viewportPlaceholder) dom.viewportPlaceholder.classList.add('hidden');
+      if (dom.cameraToggleIcon)   dom.cameraToggleIcon.className = 'bi bi-camera-video-fill';
+    }).catch(err => {
+      state.cameraRunning = false;
+      console.warn('Camera start failed:', err);
+      setCameraStatus('Unavailable');
     });
+  };
 
-    // Body clicks redirect focus back to input
-    document.body.addEventListener('click', (e) => {
-      const isModalOpen = dom.spotModalElement && dom.spotModalElement.classList.contains('show');
-      if (isModalOpen) return; // ignore clicks if spot modal is open
-
-      if (e.target !== dom.input && 
-          e.target !== dom.logoutBtn && 
-          e.target !== dom.refreshBtn && 
-          e.target !== dom.syncBtn &&
-          dom.form && !dom.form.contains(e.target)) {
-        autoFocusInput();
+  const stopCamera = () => {
+    return new Promise((resolve) => {
+      if (html5QrCode && state.cameraRunning) {
+        html5QrCode.stop().then(() => {
+          state.cameraRunning = false;
+          if (dom.cameraToggleIcon)    dom.cameraToggleIcon.className = 'bi bi-camera-video-off-fill';
+          if (dom.viewportPlaceholder) dom.viewportPlaceholder.classList.remove('hidden');
+          setCameraStatus('Stopped');
+          resolve();
+        }).catch(err => {
+          console.error('Camera stop error:', err);
+          resolve();
+        });
+      } else {
+        resolve();
       }
     });
   };
 
+  const toggleCamera = () => {
+    if (state.cameraRunning) {
+      stopCamera();
+    } else {
+      startCameraWithCurrentDevice();
+    }
+  };
+
+  const flipCamera = () => {
+    const cameras = state.availableCameras;
+    if (cameras.length > 1) {
+      // Cycle through known devices
+      state.activeCameraIndex = (state.activeCameraIndex + 1) % cameras.length;
+      if (dom.cameraDeviceSelect) dom.cameraDeviceSelect.selectedIndex = state.activeCameraIndex;
+    } else {
+      // Toggle facingMode
+      state.facingMode = state.facingMode === 'environment' ? 'user' : 'environment';
+    }
+    if (state.cameraRunning) {
+      stopCamera().then(() => startCameraWithCurrentDevice());
+    }
+    showToast('info', 'Switching camera...');
+  };
+
+  const setCameraStatus = (text) => {
+    if (dom.cameraStatusText) dom.cameraStatusText.textContent = text;
+  };
+
   // ==========================================================================
-  // Live Server Network Hydration Systems
+  //  BACKEND HYDRATION
   // ==========================================================================
-  const loadBackendTerminalData = () => {
-    updateScannerStatus('Syncing context...');
+  const loadBackendTerminalData = (showSyncToast = false) => {
+    setScannerStatus('Syncing...', 'status-info');
     if (dom.input) dom.input.disabled = true;
 
     google.script.run
-      .withSuccessHandler((response) => {
+      .withSuccessHandler((res) => {
         if (dom.input) dom.input.disabled = false;
-        
-        if (response && response.success) {
-          hydrateTerminalUI(response.data);
-          updateScannerStatus('Scanner Ready');
-          autoFocusInput();
+        if (res && res.success) {
+          hydrateUI(res.data);
+          setScannerStatus('Ready', '');
+          focusInput();
+          if (showSyncToast) showToast('success', 'Synced with server successfully.');
         } else {
-          showToast('Error', response.message || 'Session verification mismatch.');
-          handleSecurityRedirection();
+          setScannerStatus('Auth error', 'status-error');
+          showToast('error', res && res.message ? res.message : 'Session verification failed.');
+          handleRedirect();
         }
       })
-      .withFailureHandler((error) => {
+      .withFailureHandler((err) => {
         if (dom.input) dom.input.disabled = false;
-        updateScannerStatus('Offline Mode');
-        showToast('Error', 'Failed to synchronize with server database structures.');
-        if (dom.connectionStatus) dom.connectionStatus.innerHTML = '🔴 Offline';
-        autoFocusInput();
-      }).getCoordinatorTerminalData(state.sessionToken);
+        setScannerStatus('Offline – manual entry active', 'status-warn');
+        updateConnectionStatus(false);
+        showToast('error', 'Server unreachable. Manual entry available.');
+        focusInput();
+      })
+      .getCoordinatorTerminalData(state.sessionToken);
   };
 
-  const hydrateTerminalUI = (data) => {
+  const hydrateUI = (data) => {
     if (!data) return;
 
-    // 1. Identity banner binding
-    if (data.event && dom.eventName) dom.eventName.textContent = data.event['Event Name'] || data.event.eventName || 'Event Active';
-    if (data.event && dom.eventDate) dom.eventDate.innerHTML = `<i class="bi bi-calendar3 me-1"></i>${data.event['Start Date'] || data.event.startDate || 'Live'}`;
-    if (data.user && dom.coordName) dom.coordName.innerHTML = `<i class="bi bi-person-badge me-1"></i>${data.user['Student Name'] || data.user['Name'] || data.user.name || 'Coordinator'}`;
-    
-    // Store attendance policy configuration
-    if (data.event) {
-      state.activeEventAttendanceType = data.event['Attendance Type'] || data.event.attendanceType || 'Fixed';
-    }
+    // Event details
+    const ev = data.event || {};
+    const eventName = ev['Event Name'] || ev.eventName || 'Event Active';
+    if (dom.eventTitleDisplay)  dom.eventTitleDisplay.textContent = eventName;
+    if (dom.terminalEventName)  dom.terminalEventName.textContent = eventName;
+    if (dom.eventDate)          dom.eventDate.innerHTML = `<i class="bi bi-calendar3"></i> ${ev['Start Date'] || ev.startDate || 'Live'}`;
 
-    // 2. Metrics indicators alignment
+    // Coordinator name
+    const u = data.user || {};
+    const coordName = u['First Name'] || u['Student Name'] || u['Name'] || u.name || 'Coordinator';
+    if (dom.coordName) dom.coordName.innerHTML = `<i class="bi bi-person-badge"></i> ${coordName}`;
+
+    // Attendance type
+    state.activeEventAttendanceType = ev['Attendance Type'] || ev.attendanceType || 'Fixed';
+
+    // Stats
     if (data.statistics) {
-      state.statistics.present = data.statistics.present || 0;
-      state.statistics.remaining = data.statistics.remaining || 0;
-      state.statistics.total = data.statistics.total || 0;
-      updateStatistics();
+      state.statistics = {
+        present:   data.statistics.present   || 0,
+        remaining: data.statistics.remaining || 0,
+        total:     data.statistics.total     || 0,
+      };
+      renderStats();
     }
 
-    // 3. Activity Feed Logs Buffering
+    // Full scan history
     if (data.recentScans && Array.isArray(data.recentScans)) {
-      state.recentScans = data.recentScans;
-      renderRecentScans();
+      state.allScans = data.recentScans;
+      populateDeptFilter();
+      hideSkeleton();
+      renderHistory();
+    } else {
+      hideSkeleton();
     }
   };
 
   // ==========================================================================
-  // Production Ingestion Engine
+  //  ATTENDANCE SUBMISSION
   // ==========================================================================
-  const submitAttendanceUI = () => {
-    if (state.isProcessing || !dom.input.value.trim()) return;
+  const submitAttendance = () => {
+    if (state.isProcessing || !dom.input || !dom.input.value.trim()) return;
 
     const rawInput = dom.input.value.trim().toUpperCase();
     state.isProcessing = true;
 
-    updateScannerStatus('Saving attendance...');
-    updateSubmitButtonState(true, '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Saving...');
-    dom.input.disabled = true;
+    setScannerStatus('Saving...', '');
+    setSubmitEnabled(false, '<span class="spinner-border spinner-border-sm" role="status"></span>');
+    if (dom.input) dom.input.disabled = true;
 
     google.script.run
-      .withSuccessHandler((response) => {
-        dom.input.disabled = false;
+      .withSuccessHandler((res) => {
+        if (dom.input) dom.input.disabled = false;
         state.isProcessing = false;
-        
-        if (response && response.success) {
-          updateScannerStatus('Success');
-          updateSubmitButtonState(true, '<i class="bi bi-check-circle-fill me-2"></i>Saved');
-          playTerminalSound('success');
-          
-          if (response.data && response.data.statistics) {
-            state.statistics.present = response.data.statistics.present;
-            state.statistics.remaining = response.data.statistics.remaining;
-            state.statistics.total = response.data.statistics.total;
+        clearInput();
+        setSubmitEnabled(false);
+
+        if (res && res.success) {
+          playTone('success');
+          setScannerStatus('✔ Attendance marked!', 'status-success');
+
+          // Update stats
+          if (res.data && res.data.statistics) {
+            state.statistics = {
+              present:   res.data.statistics.present   || 0,
+              remaining: res.data.statistics.remaining || 0,
+              total:     res.data.statistics.total     || 0,
+            };
           } else {
             state.statistics.present++;
             state.statistics.remaining = Math.max(0, state.statistics.remaining - 1);
           }
-          updateStatistics();
+          renderStats();
 
-          if (response.data && response.data.student) {
-            showStudentPreview({
-              name: response.data.student.name || response.data.student['Student Name'],
-              roll: response.data.student.roll || rawInput,
-              dept: response.data.student.dept || response.data.student['Department ID'],
-              year: response.data.student.year || response.data.student['Year']
-            }, 'success');
-            pushRecentScanLocal(response.data.student.name || response.data.student['Student Name'], rawInput, false);
-          } else {
-            queryTargetStudentProfile(rawInput);
-          }
-          
-          showToast('Success', response.message || `Attendance logged successfully.`);
-          clearInput();
+          // Student preview
+          const student = res.data && res.data.student ? res.data.student : {};
+          showStudentPreview({
+            name: student.name || student['Student Name'] || rawInput,
+            roll: student.roll || rawInput,
+            dept: student.dept || student['Department ID'] || '',
+            year: student.year || student['Year'] || '',
+          }, 'success');
 
-          setTimeout(() => {
-            updateScannerStatus('Scanner Ready');
-            updateSubmitButtonState();
-            autoFocusInput();
-          }, 800);
+          // Prepend to local feed
+          prependScanLocally(student.name || student['Student Name'] || 'Student', rawInput, student.dept || '', false);
+          updateLastScanTime();
+          showToast('success', res.message || 'Attendance marked.');
+
+          setTimeout(() => { setScannerStatus('Ready', ''); focusInput(); }, 900);
 
         } else {
-          clearInput();
-          updateSubmitButtonState();
-          
-          if (response && response.message && response.message.indexOf('Already') !== -1) {
+          playTone('error');
+
+          if (res && res.message && /already/i.test(res.message)) {
+            // Duplicate
             state.duplicatesCount++;
-            updateStatistics();
-            playTerminalSound('duplicate');
-            
-            showStudentPreview({
-              name: 'Duplicate Scan Blocked',
-              roll: rawInput,
-              dept: 'Already Logged',
-              year: 'Scan Ignored'
-            }, 'duplicate');
-            
-            pushRecentScanLocal('Already Scanned', rawInput, true);
-            showToast('Warning', response.message);
-            
-            setTimeout(() => {
-              updateScannerStatus('Scanner Ready');
-              autoFocusInput();
-            }, 1200);
+            renderStats();
+            showStudentPreview({ name: 'Already Scanned', roll: rawInput, dept: 'Duplicate', year: '' }, 'duplicate');
+            prependScanLocally('Already Scanned', rawInput, '', true);
+            showToast('warning', res.message);
+            setScannerStatus('Duplicate – ignored', 'status-warn');
+            setTimeout(() => { setScannerStatus('Ready', ''); focusInput(); }, 1200);
           } else {
-            // Student not registered in main database -> Open spot modal depending on active event constraints
-            updateScannerStatus('Ready');
-            playTerminalSound('duplicate');
-            openSpotRegistrationModal(rawInput);
+            // Not registered → spot modal
+            setScannerStatus('Not registered – opening form', 'status-warn');
+            openSpotModal(rawInput);
           }
         }
       })
-      .withFailureHandler((error) => {
-        dom.input.disabled = false;
+      .withFailureHandler((err) => {
+        if (dom.input) dom.input.disabled = false;
         state.isProcessing = false;
         clearInput();
-        updateScannerStatus('Scanner Ready');
-        updateSubmitButtonState();
-        playTerminalSound('duplicate');
-        showToast('Error', 'Communication execution loss encountered during logging.');
-        autoFocusInput();
-      }).markCoordinatorAttendance(state.sessionToken, rawInput, state.lastInputType);
+        setSubmitEnabled(false);
+        playTone('error');
+        setScannerStatus('Server error', 'status-error');
+        showToast('error', 'Connection failed. Check your internet and try again.');
+        focusInput();
+      })
+      .markCoordinatorAttendance(state.sessionToken, rawInput, state.lastInputType);
   };
 
-  const queryTargetStudentProfile = (rollNumber) => {
-    google.script.run.withSuccessHandler((response) => {
-      if (response && response.success && response.data) {
-        showStudentPreview(response.data, 'success');
-      }
-    }).getCoordinatorStudent(state.sessionToken, rollNumber);
-  };
-
-  // Spot registration handling
-  const openSpotRegistrationModal = (rollNumber) => {
+  // ==========================================================================
+  //  SPOT REGISTRATION
+  // ==========================================================================
+  const openSpotModal = (rollNumber) => {
     if (!dom.spotModal) return;
-
     if (dom.spotRollInput) dom.spotRollInput.value = rollNumber;
 
-    // Toggle view components inside modal based on the active event's attendance policy rules
     if (state.activeEventAttendanceType === 'Open') {
-      // Show Open confirmation, Hide Fixed form
-      if (dom.spotOpenEventView) dom.spotOpenEventView.classList.remove('d-none');
-      if (dom.spotFixedEventView) dom.spotFixedEventView.classList.add('d-none');
-      if (dom.spotOpenRollDisplay) dom.spotOpenRollDisplay.textContent = rollNumber;
-      
-      dom.spotModal.show();
+      dom.spotOpenView && dom.spotOpenView.classList.remove('d-none');
+      dom.spotFixedView && dom.spotFixedView.classList.add('d-none');
+      if (dom.spotOpenRollDisp) dom.spotOpenRollDisp.textContent = rollNumber;
     } else {
-      // Show Fixed registration form, Hide Open view
-      if (dom.spotOpenEventView) dom.spotOpenEventView.classList.add('d-none');
-      if (dom.spotFixedEventView) dom.spotFixedEventView.classList.remove('d-none');
-      if (dom.spotFixedRollDisplay) dom.spotFixedRollDisplay.textContent = rollNumber;
-      
-      // Clear form inputs
-      if (dom.spotNameInput) dom.spotNameInput.value = '';
-      if (dom.spotCollegeInput) dom.spotCollegeInput.value = '';
-      if (dom.spotDeptSelect) dom.spotDeptSelect.value = 'CSE';
-      if (dom.spotYearSelect) dom.spotYearSelect.value = '1';
-      if (dom.spotDeptOtherContainer) dom.spotDeptOtherContainer.classList.add('d-none');
-      if (dom.spotDeptOtherInput) {
-        dom.spotDeptOtherInput.value = '';
-        dom.spotDeptOtherInput.required = false;
-      }
-
-      dom.spotModal.show();
-      setTimeout(() => {
-        if (dom.spotNameInput) dom.spotNameInput.focus();
-      }, 450);
+      dom.spotOpenView && dom.spotOpenView.classList.add('d-none');
+      dom.spotFixedView && dom.spotFixedView.classList.remove('d-none');
+      if (dom.spotFixedRollDisp) dom.spotFixedRollDisp.textContent = rollNumber;
+      // Reset form
+      ['spotNameInput', 'spotCollegeInput'].forEach(k => { if (dom[k]) dom[k].value = ''; });
+      if (dom.spotDeptSelect)    dom.spotDeptSelect.value = 'CSE';
+      if (dom.spotYearSelect)    dom.spotYearSelect.value = '1';
+      if (dom.spotDeptOtherCont) dom.spotDeptOtherCont.classList.add('d-none');
+      if (dom.spotDeptOtherInp)  { dom.spotDeptOtherInp.value = ''; dom.spotDeptOtherInp.required = false; }
     }
+
+    dom.spotModal.show();
+    setTimeout(() => { if (dom.spotNameInput) dom.spotNameInput.focus(); }, 450);
   };
 
-  // Spot registration confirm (Open event)
-  const submitSpotRegistrationOpenUI = () => {
-    const roll = dom.spotRollInput.value.trim().toUpperCase();
+  const submitSpotOpen = () => {
+    const roll = dom.spotRollInput && dom.spotRollInput.value.trim().toUpperCase();
     if (!roll) return;
 
-    updateScannerStatus('Registering student...');
-    
-    const confirmBtn = dom.btnConfirmSpotOpen;
-    if (confirmBtn) {
-      confirmBtn.disabled = true;
-      confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Adding...';
-    }
+    const btn = dom.btnConfirmSpotOpen;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Adding...'; }
 
-    // Call API with default parameters for the open guest student
     google.script.run
-      .withSuccessHandler((response) => {
-        if (confirmBtn) {
-          confirmBtn.disabled = false;
-          confirmBtn.innerHTML = 'Add to Attendance';
-        }
-
-        if (response && response.success) {
-          if (dom.spotModal) dom.spotModal.hide();
-          
-          updateScannerStatus('Success');
-          playTerminalSound('success');
-
-          if (response.data && response.data.statistics) {
-            state.statistics.present = response.data.statistics.present;
-            state.statistics.remaining = response.data.statistics.remaining;
-            state.statistics.total = response.data.statistics.total;
-            updateStatistics();
-          }
-
-          showStudentPreview({
-            name: 'Spot Guest Student',
-            roll: roll,
-            dept: 'Open Event',
-            year: 'N/A'
-          }, 'success');
-
-          pushRecentScanLocal('Spot Guest Student', roll, false);
-          showToast('Success', `Student ${roll} added to attendance.`);
+      .withSuccessHandler((res) => {
+        if (btn) { btn.disabled = false; btn.innerHTML = 'Add to Attendance'; }
+        if (res && res.success) {
+          dom.spotModal && dom.spotModal.hide();
+          playTone('success');
+          if (res.data && res.data.statistics) { state.statistics = { present: res.data.statistics.present || 0, remaining: res.data.statistics.remaining || 0, total: res.data.statistics.total || 0 }; renderStats(); }
+          showStudentPreview({ name: 'Spot Guest Student', roll, dept: 'Open Event', year: 'N/A' }, 'success');
+          prependScanLocally('Spot Guest Student', roll, 'Open', false);
+          updateLastScanTime();
+          showToast('success', `Student ${roll} added to attendance.`);
         } else {
-          showToast('Error', response.message || 'Spot registration failed.');
+          showToast('error', res && res.message ? res.message : 'Spot registration failed.');
         }
-        autoFocusInput();
-      })
-      .withFailureHandler((error) => {
-        if (confirmBtn) {
-          confirmBtn.disabled = false;
-          confirmBtn.innerHTML = 'Add to Attendance';
-        }
-        showToast('Error', 'Communication execution loss encountered during spot registration.');
-        autoFocusInput();
-      }).registerSpotStudentAndMark(state.sessionToken, roll, 'Spot Guest Student', 'Spot Group', '1', 'A', 'BVC Engineering College');
-  };
-
-  // Spot registration confirm (Fixed event)
-  const submitSpotRegistrationUI = () => {
-    const roll = dom.spotRollInput.value.trim().toUpperCase();
-    const name = dom.spotNameInput.value.trim();
-    const college = dom.spotCollegeInput.value.trim();
-    let dept = dom.spotDeptSelect.value;
-    const year = dom.spotYearSelect.value;
-
-    // Handle "Others" branch select specification
-    if (dept === 'OTHERS' && dom.spotDeptOtherInput) {
-      dept = dom.spotDeptOtherInput.value.trim().toUpperCase() || 'OTHERS';
-    }
-
-    if (!roll || !name || !college) return;
-
-    updateScannerStatus('Registering student...');
-    
-    // Disable submit button on modal
-    const confirmBtn = document.getElementById('btn-confirm-spot-reg');
-    if (confirmBtn) {
-      confirmBtn.disabled = true;
-      confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Saving...';
-    }
-
-    google.script.run
-      .withSuccessHandler((response) => {
-        if (confirmBtn) {
-          confirmBtn.disabled = false;
-          confirmBtn.innerHTML = 'Register & Mark';
-        }
-
-        if (response && response.success) {
-          if (dom.spotModal) dom.spotModal.hide();
-          
-          updateScannerStatus('Success');
-          playTerminalSound('success');
-
-          if (response.data && response.data.statistics) {
-            state.statistics.present = response.data.statistics.present;
-            state.statistics.remaining = response.data.statistics.remaining;
-            state.statistics.total = response.data.statistics.total;
-            updateStatistics();
-          }
-
-          showStudentPreview({
-            name: name,
-            roll: roll,
-            dept: dept,
-            year: year
-          }, 'success');
-
-          pushRecentScanLocal(name, roll, false);
-          showToast('Success', `Student ${roll} registered and marked present.`);
-        } else {
-          showToast('Error', response.message || 'Spot registration failed.');
-        }
-        autoFocusInput();
-      })
-      .withFailureHandler((error) => {
-        if (confirmBtn) {
-          confirmBtn.disabled = false;
-          confirmBtn.innerHTML = 'Register & Mark';
-        }
-        showToast('Error', 'Communication execution loss encountered during spot registration.');
-        autoFocusInput();
-      }).registerSpotStudentAndMark(state.sessionToken, roll, name, dept, year, 'A', college);
-  };
-
-  // ==========================================================================
-  // Session Redirection & Security Lifecycles
-  // ==========================================================================
-  const executeTerminalLogout = () => {
-    updateScannerStatus('Terminating...');
-    stopCameraScanner();
-    google.script.run
-      .withSuccessHandler(() => {
-        showToast('Info', 'Session closed safely.');
-        handleSecurityRedirection();
+        focusInput();
       })
       .withFailureHandler(() => {
-        handleSecurityRedirection();
-      }).logoutCoordinator(state.sessionToken);
+        if (btn) { btn.disabled = false; btn.innerHTML = 'Add to Attendance'; }
+        showToast('error', 'Connection failed during spot registration.');
+        focusInput();
+      })
+      .registerSpotStudentAndMark(state.sessionToken, roll, 'Spot Guest Student', 'Spot Group', '1', 'A', 'BVC Engineering College');
   };
 
-  const handleSecurityRedirection = () => {
-    try {
-      if (typeof getScriptUrl === 'function') {
-        google.script.run.withSuccessHandler((url) => {
-          window.location.href = url + '?page=Login';
-        }).getScriptUrl();
-      } else {
-        window.location.href = window.location.pathname + '?page=Login';
-      }
-    } catch (e) {
-      window.location.reload();
+  const submitSpotFixed = () => {
+    const roll    = dom.spotRollInput   && dom.spotRollInput.value.trim().toUpperCase();
+    const name    = dom.spotNameInput   && dom.spotNameInput.value.trim();
+    const college = dom.spotCollegeInput && dom.spotCollegeInput.value.trim();
+    let   dept    = dom.spotDeptSelect  && dom.spotDeptSelect.value;
+    const year    = dom.spotYearSelect  && dom.spotYearSelect.value;
+
+    if (dept === 'OTHERS' && dom.spotDeptOtherInp) {
+      dept = dom.spotDeptOtherInp.value.trim().toUpperCase() || 'OTHERS';
     }
+
+    if (!roll || !name || !college) { showToast('warning', 'Please fill all required fields.'); return; }
+
+    const btn = document.getElementById('btn-confirm-spot-reg');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...'; }
+
+    google.script.run
+      .withSuccessHandler((res) => {
+        if (btn) { btn.disabled = false; btn.innerHTML = 'Register &amp; Mark'; }
+        if (res && res.success) {
+          dom.spotModal && dom.spotModal.hide();
+          playTone('success');
+          if (res.data && res.data.statistics) { state.statistics = { present: res.data.statistics.present || 0, remaining: res.data.statistics.remaining || 0, total: res.data.statistics.total || 0 }; renderStats(); }
+          showStudentPreview({ name, roll, dept, year }, 'success');
+          prependScanLocally(name, roll, dept, false);
+          updateLastScanTime();
+          showToast('success', `Student ${roll} registered and marked present.`);
+        } else {
+          showToast('error', res && res.message ? res.message : 'Spot registration failed.');
+        }
+        focusInput();
+      })
+      .withFailureHandler(() => {
+        if (btn) { btn.disabled = false; btn.innerHTML = 'Register &amp; Mark'; }
+        showToast('error', 'Connection failed during spot registration.');
+        focusInput();
+      })
+      .registerSpotStudentAndMark(state.sessionToken, roll, name, dept, year, 'A', college);
   };
 
   // ==========================================================================
-  // UI Rendering State Handlers
+  //  QUERY STUDENT (fallback for when server doesn't return student object)
   // ==========================================================================
-  const updateSubmitButtonState = (forceDisable = false, htmlOverride = null) => {
-    if (!dom.submitBtn || !dom.input) return;
+  const queryStudentProfile = (rollNumber) => {
+    google.script.run
+      .withSuccessHandler((res) => {
+        if (res && res.success && res.data) {
+          const s = res.data.student || res.data;
+          showStudentPreview({ name: s['Student Name'] || s.name, roll: rollNumber, dept: s['Department ID'] || '', year: s['Year'] || '' }, 'success');
+        }
+      })
+      .getCoordinatorStudent(state.sessionToken, rollNumber);
+  };
 
-    const hasValue = dom.input.value.trim().length > 0;
-    dom.submitBtn.disabled = forceDisable || !hasValue || state.isProcessing;
+  // ==========================================================================
+  //  HISTORY RENDERING
+  // ==========================================================================
+  const populateDeptFilter = () => {
+    if (!dom.deptFilter) return;
+    const depts = [...new Set(state.allScans.map(s => s.dept || '').filter(Boolean))].sort();
+    const currentVal = dom.deptFilter.value;
+    dom.deptFilter.innerHTML = '<option value="">All Depts</option>' +
+      depts.map(d => `<option value="${d}">${d}</option>`).join('');
+    dom.deptFilter.value = currentVal;
+  };
 
-    if (htmlOverride) {
-      dom.submitBtn.innerHTML = htmlOverride;
-    } else {
-      dom.submitBtn.innerHTML = '<i class="bi bi-arrow-right-circle-fill me-2"></i> Submit Attendance';
+  const getFilteredScans = () => {
+    return state.allScans.filter(scan => {
+      const matchSearch = !state.searchQuery ||
+        (scan.roll || '').toLowerCase().includes(state.searchQuery) ||
+        (scan.name || '').toLowerCase().includes(state.searchQuery);
+      const matchDept = !state.deptFilter || scan.dept === state.deptFilter;
+      return matchSearch && matchDept;
+    });
+  };
+
+  const renderHistory = () => {
+    if (!dom.historyFeed) return;
+
+    const filtered = getFilteredScans();
+
+    if (dom.historyCountBadge) {
+      dom.historyCountBadge.textContent = filtered.length;
+    }
+
+    if (filtered.length === 0) {
+      dom.historyFeed.classList.add('d-none');
+      dom.historyEmptyState && dom.historyEmptyState.classList.remove('d-none');
+      return;
+    }
+
+    dom.historyEmptyState && dom.historyEmptyState.classList.add('d-none');
+    dom.historyFeed.classList.remove('d-none');
+
+    // Render using DocumentFragment for performance
+    const frag = document.createDocumentFragment();
+    filtered.forEach(scan => {
+      const div = document.createElement('div');
+      div.className = 'coord-feed-row';
+      div.setAttribute('role', 'listitem');
+      const isDup = !!scan.isDuplicate;
+      div.innerHTML = `
+        <div class="coord-feed-avatar ${isDup ? 'feed-av-duplicate' : 'feed-av-success'}">
+          <i class="bi ${isDup ? 'bi-x' : 'bi-check'}"></i>
+        </div>
+        <div class="coord-feed-info">
+          <div class="coord-feed-roll">${escapeHtml(scan.roll || '')}</div>
+          <div class="coord-feed-name">${escapeHtml(scan.name || 'Unknown Student')}</div>
+          ${scan.dept ? `<span class="coord-feed-dept">${escapeHtml(scan.dept)}</span>` : ''}
+        </div>
+        <div class="coord-feed-right">
+          <span class="coord-feed-time">${formatTime(scan.time)}</span>
+          <i class="bi coord-feed-status-icon ${isDup ? 'bi-x-circle-fill dup' : 'bi-check-circle-fill ok'}"></i>
+        </div>
+      `;
+      frag.appendChild(div);
+    });
+
+    dom.historyFeed.innerHTML = '';
+    dom.historyFeed.appendChild(frag);
+  };
+
+  const prependScanLocally = (name, roll, dept, isDuplicate) => {
+    const now = new Date();
+    const timeStr = now.toTimeString().split(' ')[0]; // HH:MM:SS
+    state.allScans.unshift({ name, roll, dept, time: timeStr, isDuplicate });
+    populateDeptFilter();
+    renderHistory();
+    // Briefly highlight top row
+    if (dom.historyFeed && dom.historyFeed.firstChild) {
+      dom.historyFeed.firstChild.classList.add('new-scan');
     }
   };
 
-  const updateScannerStatus = (statusText) => {
-    if (dom.scannerStatus) {
-      dom.scannerStatus.textContent = statusText;
-    }
+  const hideSkeleton = () => {
+    if (dom.historySkeleton) dom.historySkeleton.classList.add('d-none');
   };
 
-  const updateStatistics = () => {
-    if (dom.statsPresent) dom.statsPresent.textContent = state.statistics.present;
+  // ==========================================================================
+  //  STATS RENDERING
+  // ==========================================================================
+  const renderStats = () => {
+    if (dom.statsPresent)   dom.statsPresent.textContent   = state.statistics.present;
     if (dom.statsRemaining) dom.statsRemaining.textContent = state.statistics.remaining;
-    if (dom.statsTotal) dom.statsTotal.textContent = state.statistics.total;
+    if (dom.statsTotal)     dom.statsTotal.textContent     = state.statistics.total;
     if (dom.statsDuplicate) dom.statsDuplicate.textContent = state.duplicatesCount;
+
+    const pct = state.statistics.total > 0
+      ? Math.round((state.statistics.present / state.statistics.total) * 100)
+      : 0;
+    if (dom.statsPct)      dom.statsPct.textContent = `${pct}%`;
+    if (dom.statsProgress) dom.statsProgress.style.width = `${pct}%`;
   };
 
-  const showStudentPreview = (student, status = 'success') => {
-    if (!dom.previewPlaceholder || !dom.previewContent) return;
+  // ==========================================================================
+  //  STUDENT PREVIEW
+  // ==========================================================================
+  const showStudentPreview = (student, mode = 'success') => {
+    if (!dom.previewContent || !dom.previewPlaceholder) return;
+    const isSuccess = mode === 'success';
 
-    dom.previewName.textContent = student.name;
-    dom.previewRoll.textContent = student.roll;
-    dom.previewDept.textContent = student.dept;
-    dom.previewYear.textContent = student.year;
+    if (dom.previewName)   dom.previewName.textContent   = student.name || '';
+    if (dom.previewRoll)   dom.previewRoll.textContent   = student.roll || '';
+    if (dom.previewDept)   dom.previewDept.textContent   = student.dept || '';
+    if (dom.previewYear)   dom.previewYear.textContent   = student.year ? `Year ${student.year}` : '';
 
-    // Apply preview state styling classes
-    if (status === 'success') {
-      dom.previewCard.className = "preview-card-outer state-success";
-      dom.previewStatusStrip.className = "scan-status-strip strip-success";
-      dom.previewStatusStrip.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> Attendance Marked';
-      dom.previewAvatarBadge.className = "student-badge-avatar student-badge-avatar-success";
-      dom.previewAvatarBadge.innerHTML = '<i class="bi bi-check"></i>';
-    } else {
-      dom.previewCard.className = "preview-card-outer state-duplicate";
-      dom.previewStatusStrip.className = "scan-status-strip strip-duplicate";
-      dom.previewStatusStrip.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i> ${student.name === 'Invalid Student ID' ? 'Not Registered' : 'Already Scanned'}`;
-      dom.previewAvatarBadge.className = "student-badge-avatar student-badge-avatar-duplicate";
-      dom.previewAvatarBadge.innerHTML = '<i class="bi bi-x"></i>';
+    if (dom.previewStrip) {
+      dom.previewStrip.className = `coord-preview-strip ${isSuccess ? '' : 'strip-duplicate'}`;
+      dom.previewStrip.innerHTML = isSuccess
+        ? '<i class="bi bi-check-circle-fill me-1"></i> Attendance Marked'
+        : '<i class="bi bi-exclamation-triangle-fill me-1"></i> Duplicate / Not Registered';
+    }
+    if (dom.previewAvatar) {
+      dom.previewAvatar.className = `coord-preview-avatar ${isSuccess ? '' : 'av-duplicate'}`;
+      dom.previewAvatar.innerHTML = `<i class="bi ${isSuccess ? 'bi-check' : 'bi-x'}"></i>`;
     }
 
     dom.previewPlaceholder.classList.add('d-none');
     dom.previewContent.classList.remove('d-none');
   };
 
-  const hideStudentPreview = () => {
-    if (!dom.previewPlaceholder || !dom.previewContent) return;
-    dom.previewCard.className = "preview-card-outer state-ready";
-    dom.previewContent.classList.add('d-none');
-    dom.previewPlaceholder.classList.remove('d-none');
+  // ==========================================================================
+  //  UI HELPERS
+  // ==========================================================================
+  const setScannerStatus = (text, cssClass = '') => {
+    if (!dom.scannerStatus) return;
+    dom.scannerStatus.textContent = text;
+    dom.scannerStatus.className = 'coord-status-text ' + cssClass;
   };
 
-  const pushRecentScanLocal = (name, roll, isDuplicate = false) => {
-    const now = new Date();
-    const timeString = now.toTimeString().split(' ')[0];
-
-    const scanRecord = { name, roll, time: timeString, isDuplicate };
-    state.recentScans.unshift(scanRecord);
-
-    if (state.recentScans.length > 10) {
-      state.recentScans.pop();
+  const setSubmitEnabled = (enabled, htmlOverride = null) => {
+    if (!dom.submitBtn) return;
+    dom.submitBtn.disabled = !enabled;
+    if (htmlOverride) {
+      dom.submitBtn.innerHTML = htmlOverride;
+    } else {
+      dom.submitBtn.innerHTML = '<i class="bi bi-arrow-right-circle-fill"></i>';
     }
-    renderRecentScans();
   };
 
-  const renderRecentScans = () => {
-    if (!dom.recentContainer) return;
-
-    dom.recentContainer.innerHTML = state.recentScans.map(scan => {
-      const isDup = scan.isDuplicate || scan.name === 'Already Scanned';
-      const avatarClass = isDup ? 'feed-item-avatar-duplicate' : 'feed-item-avatar-success';
-      const iconClass = isDup ? 'bi-exclamation-triangle-fill text-danger' : 'bi-check-circle-fill text-success';
-      return `
-        <div class="feed-item-row">
-          <div class="d-flex align-items-center gap-3">
-            <div class="feed-item-avatar ${avatarClass}">
-              <i class="bi ${isDup ? 'bi-x' : 'bi-check'}"></i>
-            </div>
-            <div>
-              <strong class="text-dark d-block font-display small">${scan.roll || ''}</strong>
-              <span class="text-muted extra-small">${scan.name || 'Student'}</span>
-            </div>
-          </div>
-          <div class="d-flex align-items-center gap-2">
-            <i class="bi ${iconClass} small"></i>
-            <span class="badge bg-light text-muted border extra-small font-display">${scan.time || ''}</span>
-          </div>
-        </div>
-      `;
-    }).join('');
+  const focusInput = () => {
+    const modalOpen = dom.spotModalElement && dom.spotModalElement.classList.contains('show');
+    if (dom.input && !modalOpen) dom.input.focus();
   };
 
   const clearInput = () => {
-    if (dom.input) {
-      dom.input.value = '';
-    }
+    if (dom.input) dom.input.value = '';
   };
 
   const resetUI = () => {
     clearInput();
-    hideStudentPreview();
-    updateScannerStatus('Scanner Ready');
-    updateSubmitButtonState();
-    
-    state.statistics.present = 0;
-    state.statistics.remaining = 0;
-    state.statistics.total = 0;
+    state.allScans = [];
+    state.statistics = { present: 0, remaining: 0, total: 0 };
     state.duplicatesCount = 0;
-    state.recentScans = [];
-    if (dom.recentContainer) dom.recentContainer.innerHTML = '';
-    
-    updateStatistics();
-    autoFocusInput();
+    renderStats();
+    hideSkeleton();
+    if (dom.historyFeed) dom.historyFeed.innerHTML = '';
+    if (dom.historySkeleton) dom.historySkeleton.classList.remove('d-none');
+    if (dom.previewContent) dom.previewContent.classList.add('d-none');
+    if (dom.previewPlaceholder) dom.previewPlaceholder.classList.remove('d-none');
+    setScannerStatus('Ready', '');
+    focusInput();
   };
 
-  const showToast = (type, message) => {
-    const toastWrapper = document.createElement('div');
-    toastWrapper.style.position = 'fixed';
-    toastWrapper.style.bottom = '95px';
-    toastWrapper.style.left = '50%';
-    toastWrapper.style.transform = 'translateX(-50%)';
-    toastWrapper.style.zIndex = '9999';
-    toastWrapper.style.width = 'calc(100% - 32px)';
-    toastWrapper.style.maxWidth = '398px';
+  const updateLastScanTime = () => {
+    if (dom.lastScanTime) {
+      const now = new Date();
+      dom.lastScanTime.textContent = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    }
+  };
 
-    let alertClass = 'alert-info';
-    let iconClass = 'bi-info-circle-fill';
-    if (type === 'Success') { alertClass = 'alert-success'; iconClass = 'bi-check-circle-fill'; }
-    if (type === 'Error') { alertClass = 'alert-danger'; iconClass = 'bi-exclamation-triangle-fill'; }
-    if (type === 'Warning') { alertClass = 'alert-warning'; iconClass = 'bi-exclamation-circle-fill'; }
-
-    toastWrapper.innerHTML = `
-      <div class="alert ${alertClass} d-flex align-items-center shadow border-0 m-0 py-2 px-3" role="alert" style="border-radius: 12px;">
-        <i class="bi ${iconClass} me-2"></i>
-        <div class="small fw-semibold text-truncate">${message}</div>
-      </div>
-    `;
-
-    document.body.appendChild(toastWrapper);
-    
-    setTimeout(() => {
-      toastWrapper.style.transition = 'opacity 0.3s ease';
-      toastWrapper.style.opacity = '0';
-      setTimeout(() => toastWrapper.remove(), 300);
-    }, 2500);
+  const updateConnectionStatus = (online) => {
+    if (dom.connectionStatus) dom.connectionStatus.classList.toggle('offline', !online);
+    if (dom.connLabel) dom.connLabel.textContent = online ? 'Online' : 'Offline';
   };
 
   // ==========================================================================
-  // Public Endpoint Interfaces Blueprint Execution
+  //  TOASTS
+  // ==========================================================================
+  const showToast = (type, message) => {
+    if (!dom.toastStack) return;
+
+    const iconMap = {
+      success: 'bi-check-circle-fill',
+      error:   'bi-exclamation-triangle-fill',
+      warning: 'bi-exclamation-circle-fill',
+      info:    'bi-info-circle-fill',
+    };
+
+    const toast = document.createElement('div');
+    toast.className = `coord-toast coord-toast-${type}`;
+    toast.setAttribute('role', 'alert');
+    toast.innerHTML = `
+      <i class="bi ${iconMap[type] || iconMap.info}"></i>
+      <span>${escapeHtml(message)}</span>
+    `;
+    dom.toastStack.appendChild(toast);
+
+    setTimeout(() => {
+      toast.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(8px)';
+      setTimeout(() => toast.remove(), 320);
+    }, 2800);
+  };
+
+  // ==========================================================================
+  //  AUDIO FEEDBACK (Web Audio API)
+  // ==========================================================================
+  const playTone = (type) => {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      if (type === 'success') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(987, ctx.currentTime);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        osc.start();
+        gain.gain.setValueAtTime(0, ctx.currentTime + 0.07);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime + 0.10);
+        osc.frequency.setValueAtTime(1175, ctx.currentTime + 0.10);
+        osc.stop(ctx.currentTime + 0.18);
+      } else {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(160, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(70, ctx.currentTime + 0.28);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        osc.start();
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.28);
+        osc.stop(ctx.currentTime + 0.30);
+      }
+    } catch (e) {/* ignore audio errors */ }
+  };
+
+  // ==========================================================================
+  //  LOGOUT / REDIRECT
+  // ==========================================================================
+  const executeLogout = () => {
+    stopCamera();
+    setScannerStatus('Logging out...', '');
+
+    google.script.run
+      .withSuccessHandler(() => { showToast('info', 'Logged out safely.'); handleRedirect(); })
+      .withFailureHandler(() => handleRedirect())
+      .logoutCoordinator(state.sessionToken);
+  };
+
+  const handleRedirect = () => {
+    try {
+      google.script.run.withSuccessHandler((url) => {
+        window.location.href = url + '?page=Login';
+      }).getScriptUrl();
+    } catch (_) {
+      window.location.href = window.location.pathname + '?page=Login';
+    }
+  };
+
+  // ==========================================================================
+  //  UTILITIES
+  // ==========================================================================
+  const escapeHtml = (str) => {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  };
+
+  const formatTime = (rawTime) => {
+    if (!rawTime) return '--:--';
+    // If already HH:MM:SS or HH:MM, just return as-is
+    if (/^\d{1,2}:\d{2}/.test(String(rawTime))) return String(rawTime).substring(0, 5);
+    // Try parsing as ISO or spreadsheet date
+    try { const d = new Date(rawTime); if (!isNaN(d)) return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }); } catch (_) {}
+    return String(rawTime).substring(0, 8);
+  };
+
+  // ==========================================================================
+  //  PUBLIC API
   // ==========================================================================
   return {
     initializeCoordinatorUI: init,
-    submitAttendanceUI: submitAttendanceUI,
-    showStudentPreview: showStudentPreview,
-    hideStudentPreview: hideStudentPreview,
-    updateStatistics: updateStatistics,
-    updateScannerStatus: updateScannerStatus,
-    updateSubmitButton: updateSubmitButtonState,
-    renderRecentScans: renderRecentScans,
-    showToast: showToast,
-    clearInput: clearInput,
-    resetUI: resetUI
+    showToast,
+    resetUI,
   };
 })();
 
-// Initialize application on global DOM landscape completion safely
+// Boot on DOM ready
 if (document.readyState === 'complete' || document.readyState === 'interactive') {
   CoordinatorUI.initializeCoordinatorUI();
 } else {
-  document.addEventListener('DOMContentLoaded', () => {
-    CoordinatorUI.initializeCoordinatorUI();
-  });
+  document.addEventListener('DOMContentLoaded', () => CoordinatorUI.initializeCoordinatorUI());
 }
 </script>

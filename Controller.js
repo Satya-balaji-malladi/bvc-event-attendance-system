@@ -983,12 +983,21 @@ const Controller = {
         };
 
         const allAttendance = AttendanceService.getAttendanceByEvent(eventId) || [];
-        const recentScans = allAttendance.slice(0, 10).map(record => {
-          const student = StudentService.getStudentByRollNumber(record['Roll Number'] || record.roll_number) || {};
+
+        // Enrich each attendance record with student details (name + department)
+        // StudentService.getStudentByRollNumber returns a response envelope {success, data: {student: {...}}}
+        const allScans = allAttendance.map(record => {
+          const roll = record['Roll Number'] || record.roll_number || '';
+          const studentRes = StudentService.getStudentByRollNumber(roll);
+          const studentData = (studentRes && studentRes.success && studentRes.data && studentRes.data.student)
+            ? studentRes.data.student
+            : {};
           return {
-            roll: record['Roll Number'] || record.roll_number,
-            name: student['Student Name'] || 'Unknown Student',
-            time: record['Time'] || ''
+            roll: roll,
+            name: studentData['Student Name'] || studentData['Full Name'] || studentData['Name'] || 'Unknown Student',
+            dept: studentData['Department ID'] || studentData['Department'] || 'N/A',
+            time: record['Attendance Time'] || record['Time'] || record['Created At'] || '',
+            isDuplicate: false
           };
         });
 
@@ -996,7 +1005,7 @@ const Controller = {
           user: user,
           event: targetEvent,
           statistics: stats,
-          recentScans: recentScans
+          recentScans: allScans
         });
       });
     },
