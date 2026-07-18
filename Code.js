@@ -432,9 +432,9 @@ function getRecentEvents(sessionToken) {
   }
 }
 
-function getAttendanceByEvent(eventId) {
+function getAttendanceByEvent(sessionToken, eventId) {
   try {
-    const res = Controller.Attendance.getAttendanceByEvent(null, eventId);
+    const res = Controller.Attendance.getAttendanceByEvent(sessionToken, eventId);
     return JSON.parse(JSON.stringify(res || []));
   } catch(e) {
     return [];
