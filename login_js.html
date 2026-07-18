@@ -248,33 +248,21 @@
       // Request script URL in advance so it is ready
       google.script.run
         .withSuccessHandler(function(scriptUrl) {
-          btnOpen.addEventListener('click', function() {
-            const coordUrl = scriptUrl + '?page=coordinator&token=' + encodeURIComponent(actualToken);
-            console.log('User gesture triggered redirection to standalone page:', coordUrl);
-            try {
-              window.top.location.href = coordUrl;
-            } catch (e) {
-              window.location.href = coordUrl;
-            }
-          });
+          const coordUrl = scriptUrl + '?page=coordinator&token=' + encodeURIComponent(actualToken);
+          // Turn the button into a direct link targeting _top to escape the iframe sandbox
+          btnOpen.outerHTML = `<a id="btnOpenCoordinator" href="${coordUrl}" target="_top" class="btn btn-success w-100 py-2.5 fw-bold text-uppercase"><i class="bi bi-camera-video me-1"></i> Open Scanner Terminal</a>`;
         })
         .withFailureHandler(function(err) {
           console.error('Failed to pre-fetch script URL:', err);
-          btnOpen.addEventListener('click', function() {
-            const fallbackUrl = window.APP_SCRIPT_URL + '?page=coordinator&token=' + encodeURIComponent(actualToken);
-            try {
-              window.top.location.href = fallbackUrl;
-            } catch (e) {
-              window.location.href = fallbackUrl;
-            }
-          });
+          const fallbackUrl = window.APP_SCRIPT_URL + '?page=coordinator&token=' + encodeURIComponent(actualToken);
+          btnOpen.outerHTML = `<a id="btnOpenCoordinator" href="${fallbackUrl}" target="_top" class="btn btn-success w-100 py-2.5 fw-bold text-uppercase"><i class="bi bi-camera-video me-1"></i> Open Scanner Terminal</a>`;
         })
         .getScriptUrl();
     } else {
       // Fallback if elements are missing
       const fallbackUrl = window.APP_SCRIPT_URL + '?page=coordinator&token=' + encodeURIComponent(actualToken);
       try {
-        window.top.location.href = fallbackUrl;
+        window.open(fallbackUrl, '_top');
       } catch (e) {
         window.location.href = fallbackUrl;
       }
