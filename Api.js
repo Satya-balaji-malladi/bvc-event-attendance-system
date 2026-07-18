@@ -335,5 +335,14 @@ function resetSystem(sessionToken) {
 }
 
 function getEventParticipants(sessionToken, eventId) {
-  try { return JSON.parse(JSON.stringify(Controller.Participant.getEventParticipants(sessionToken, eventId) || [])); } catch (e) { return []; }
+  try {
+    const res = Controller.Participant.getEventParticipants(sessionToken, eventId);
+    if (res && res.success) {
+      return JSON.parse(JSON.stringify(res.data || []));
+    }
+    return [];
+  } catch (e) {
+    Logger.log("Error in global getEventParticipants: " + e.message);
+    return [];
+  }
 }
