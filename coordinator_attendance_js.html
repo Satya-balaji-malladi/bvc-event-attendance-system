@@ -262,78 +262,103 @@ const CoordinatorUI = (() => {
   // ==========================================================================
   const initCamera = () => {
     if (typeof Html5Qrcode === 'undefined') {
-      setCameraStatus('Scanner API unavailable');
+      setCameraStatus('Unavailable');
       return;
     }
 
-    // Enumerate available cameras
+    // Enumerate cameras – populate selector, but do NOT auto-start.
+    // Auto-starting without a user gesture is blocked by most browsers.
     Html5Qrcode.getCameras().then(cameras => {
       if (!cameras || cameras.length === 0) {
         setCameraStatus('No camera found');
         return;
       }
       state.availableCameras = cameras;
+      setCameraStatus('Ready – tap to start');
 
-      // Populate device selector if > 1 camera (mainly for desktops)
+      // Show device selector when multiple cameras exist (desktop/tablet)
       if (cameras.length > 1 && dom.cameraDeviceSelect) {
         dom.cameraDeviceSelect.innerHTML = cameras.map((c, i) =>
           `<option value="${i}">${c.label || `Camera ${i + 1}`}</option>`
         ).join('');
         dom.cameraDeviceSelect.classList.remove('d-none');
-        // Prefer rear camera by default
+        // Default to rear/environment camera
         const envIdx = cameras.findIndex(c => /back|rear|environment/i.test(c.label));
         state.activeCameraIndex = envIdx >= 0 ? envIdx : 0;
         dom.cameraDeviceSelect.selectedIndex = state.activeCameraIndex;
       }
-
-      // Auto-start scanning
-      startCameraWithCurrentDevice();
+      // Do NOT auto-start here – wait for explicit user click on toggle button
     }).catch(err => {
       console.warn('Camera enumeration failed:', err);
-      setCameraStatus('Camera access denied');
+      setCameraStatus('Permission denied');
     });
   };
 
   const startCameraWithCurrentDevice = () => {
-    if (typeof Html5Qrcode === 'undefined') return;
+    if (typeof Html5Qrcode === 'undefined') {
+      showToast('error', 'QR scanner library not loaded. Check internet connection.');
+      return;
+    }
+    if (state.cameraRunning) return; // Already running
 
-    if (!html5QrCode) {
-      html5QrCode = new Html5Qrcode('interactive-camera-scanner');
+    // IMPORTANT: Always destroy old instance and clear the container DOM before
+    // creating a new one. Reusing a stopped Html5Qrcode instance causes blank video.
+    const container = document.getElementById('interactive-camera-scanner');
+    if (container) container.innerHTML = '';
+    html5QrCode = null;
+
+    try {
+      html5QrCode = new Html5Qrcode('interactive-camera-scanner', {
+        verbose: false // suppress debug logs
+      });
+    } catch (e) {
+      console.error('Html5Qrcode instantiation failed:', e);
+      setCameraStatus('Init failed');
+      showToast('error', 'Failed to initialize camera scanner.');
+      return;
+    }
+
+    // Build camera constraint
+    let cameraConstraint;
+    if (state.availableCameras.length > 0 && state.availableCameras[state.activeCameraIndex]) {
+      cameraConstraint = state.availableCameras[state.activeCameraIndex].id;
+    } else {
+      // Fallback: facingMode only (works on mobile when no enumeration done)
+      cameraConstraint = { facingMode: state.facingMode };
     }
 
     const config = {
-      fps: 12,
-      qrbox: (w, h) => ({ width: Math.min(w * 0.80, 250), height: Math.min(h * 0.55, 120) }),
-      aspectRatio: 1.5,
+      fps: 10,
+      qrbox: (w, h) => {
+        const size = Math.min(w, h) * 0.7;
+        return { width: Math.round(size), height: Math.round(size * 0.6) };
+      },
       disableFlip: false,
+      rememberLastUsedCamera: false,
     };
 
-    let cameraIdOrFacingMode;
-    if (state.availableCameras.length > 1 && state.availableCameras[state.activeCameraIndex]) {
-      cameraIdOrFacingMode = state.availableCameras[state.activeCameraIndex].id;
-    } else {
-      cameraIdOrFacingMode = { facingMode: state.facingMode };
-    }
+    setCameraStatus('Starting...');
 
     html5QrCode.start(
-      cameraIdOrFacingMode,
+      cameraConstraint,
       config,
       (decodedText) => {
-        // Prevent duplicate scans within cooldown
+        // Duplicate cooldown: ignore same roll within 5 seconds
         const now = Date.now();
         const lastScan = state.recentRolls[decodedText] || 0;
         if (now - lastScan < state.DUPLICATE_COOLDOWN_MS) return;
         state.recentRolls[decodedText] = now;
 
         if (state.isProcessing) return;
-        if (navigator.vibrate) navigator.vibrate(80);
+        if (navigator.vibrate) navigator.vibrate([80]);
 
         if (dom.input) {
-          dom.input.value = decodedText;
+          dom.input.value = decodedText.trim().toUpperCase();
           state.lastInputType = 'Barcode';
           submitAttendance();
         }
-      }
+      },
+      () => { /* QR frame error – ignore, fires every undetected frame */ }
     ).then(() => {
       state.cameraRunning = true;
       setCameraStatus('Active');
@@ -341,8 +366,19 @@ const CoordinatorUI = (() => {
       if (dom.cameraToggleIcon)   dom.cameraToggleIcon.className = 'bi bi-camera-video-fill';
     }).catch(err => {
       state.cameraRunning = false;
-      console.warn('Camera start failed:', err);
-      setCameraStatus('Unavailable');
+      html5QrCode = null;
+      console.error('Camera start failed:', err);
+      const msg = err && err.message ? err.message : String(err);
+      if (/permission|denied|NotAllowed/i.test(msg)) {
+        setCameraStatus('Permission denied');
+        showToast('error', 'Camera permission denied. Allow camera access in your browser settings.');
+      } else if (/NotFound|no camera/i.test(msg)) {
+        setCameraStatus('No camera found');
+        showToast('warning', 'No camera detected on this device.');
+      } else {
+        setCameraStatus('Failed – use manual input');
+        showToast('error', 'Camera could not start. Use the text input to enter roll numbers.');
+      }
     });
   };
 
@@ -351,15 +387,20 @@ const CoordinatorUI = (() => {
       if (html5QrCode && state.cameraRunning) {
         html5QrCode.stop().then(() => {
           state.cameraRunning = false;
+          html5QrCode = null; // Destroy instance fully so next start is clean
           if (dom.cameraToggleIcon)    dom.cameraToggleIcon.className = 'bi bi-camera-video-off-fill';
           if (dom.viewportPlaceholder) dom.viewportPlaceholder.classList.remove('hidden');
           setCameraStatus('Stopped');
           resolve();
         }).catch(err => {
           console.error('Camera stop error:', err);
+          state.cameraRunning = false;
+          html5QrCode = null;
           resolve();
         });
       } else {
+        state.cameraRunning = false;
+        html5QrCode = null;
         resolve();
       }
     });
@@ -369,24 +410,42 @@ const CoordinatorUI = (() => {
     if (state.cameraRunning) {
       stopCamera();
     } else {
-      startCameraWithCurrentDevice();
+      // If cameras not yet enumerated, try to enumerate first then start
+      if (state.availableCameras.length === 0 && typeof Html5Qrcode !== 'undefined') {
+        Html5Qrcode.getCameras().then(cameras => {
+          if (cameras && cameras.length > 0) {
+            state.availableCameras = cameras;
+            if (cameras.length > 1 && dom.cameraDeviceSelect) {
+              dom.cameraDeviceSelect.innerHTML = cameras.map((c, i) =>
+                `<option value="${i}">${c.label || `Camera ${i + 1}`}</option>`
+              ).join('');
+              dom.cameraDeviceSelect.classList.remove('d-none');
+              const envIdx = cameras.findIndex(c => /back|rear|environment/i.test(c.label));
+              state.activeCameraIndex = envIdx >= 0 ? envIdx : 0;
+              dom.cameraDeviceSelect.selectedIndex = state.activeCameraIndex;
+            }
+          }
+          startCameraWithCurrentDevice();
+        }).catch(() => startCameraWithCurrentDevice());
+      } else {
+        startCameraWithCurrentDevice();
+      }
     }
   };
 
   const flipCamera = () => {
     const cameras = state.availableCameras;
     if (cameras.length > 1) {
-      // Cycle through known devices
       state.activeCameraIndex = (state.activeCameraIndex + 1) % cameras.length;
       if (dom.cameraDeviceSelect) dom.cameraDeviceSelect.selectedIndex = state.activeCameraIndex;
     } else {
-      // Toggle facingMode
       state.facingMode = state.facingMode === 'environment' ? 'user' : 'environment';
     }
     if (state.cameraRunning) {
       stopCamera().then(() => startCameraWithCurrentDevice());
+    } else {
+      showToast('info', 'Camera mode changed. Press the camera button to start.');
     }
-    showToast('info', 'Switching camera...');
   };
 
   const setCameraStatus = (text) => {

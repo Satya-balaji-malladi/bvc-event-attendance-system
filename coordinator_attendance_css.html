@@ -476,13 +476,19 @@ body {
 /* Camera Viewport */
 .coord-viewport {
   position: relative;
-  height: 200px;
+  min-height: 200px;
   background: var(--c-bg-dark);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  /* NOTE: No overflow:hidden here – it clips the html5-qrcode video element */
   margin-bottom: 14px;
   border: 2px solid #1E293B;
   box-shadow: inset 0 0 30px rgba(0,0,0,0.8);
+}
+
+/* Ensure html5-qrcode video fills the viewport cleanly */
+#interactive-camera-scanner video {
+  border-radius: calc(var(--radius-lg) - 2px) !important;
+  display: block;
 }
 
 @media (min-width: 992px) { .coord-viewport { height: 240px; } }
@@ -547,7 +553,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-.coord-viewport-placeholder.hidden { opacity: 0; pointer-events: none; }
+.coord-viewport-placeholder.hidden { display: none; }
 
 /* Input Section */
 .coord-input-label {
