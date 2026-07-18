@@ -395,16 +395,33 @@ window.App = {
       }
 
       // Role Routing
-      if (fromLogin) {
-        if (App.State.currentUser && App.State.currentUser.role === App.Constants.ROLES.COORDINATOR) {
-          // If Coordinator, maybe redirect to events or dashboard
+      const role = App.State.currentUser && String(App.State.currentUser.role || App.State.currentUser.Role || '').trim().toUpperCase();
+
+      if (role === 'COORDINATOR') {
+        // Force redirect to standalone Coordinator terminal page to enable camera access
+        App.LoadingManager.show();
+        google.script.run
+          .withSuccessHandler(function(scriptUrl) {
+            const token = localStorage.getItem('sessionToken');
+            const coordUrl = scriptUrl + '?page=coordinator&token=' + encodeURIComponent(token);
+            try {
+              window.top.location.href = coordUrl;
+            } catch (e) {
+              window.location.href = coordUrl;
+            }
+          })
+          .withFailureHandler(function(err) {
+            console.error('Failed to get script URL during auth transition:', err);
+            App.Router.navigate(App.Constants.MODULES.DASHBOARD);
+          })
+          .getScriptUrl();
+      } else {
+        if (fromLogin) {
           App.Router.navigate(App.Constants.MODULES.DASHBOARD);
         } else {
-          App.Router.navigate(App.Constants.MODULES.DASHBOARD);
+          // If restored from refresh, restore last route or dashboard
+          App.Router.navigate(App.State.activeModule || App.Constants.MODULES.DASHBOARD);
         }
-      } else {
-        // If restored from refresh, restore last route or dashboard
-        App.Router.navigate(App.State.activeModule || App.Constants.MODULES.DASHBOARD);
       }
     },
 
