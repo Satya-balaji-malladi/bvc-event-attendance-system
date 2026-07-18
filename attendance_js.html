@@ -54,7 +54,9 @@ App.Modules.attendance = {
 
   loadStudentsData: function() {
     App.API._call('getAllStudents').then(res => {
-      this.studentsData = res || [];
+      this.studentsData = Array.isArray(res)
+        ? res
+        : (res.students || res.data || []);
     }).catch(console.error);
   },
 
