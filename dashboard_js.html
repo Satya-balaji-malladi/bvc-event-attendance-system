@@ -18,6 +18,17 @@ function initializeDashboard() {
   // Load real data
   loadDashboardData();
   
+  // Bind Quick Actions navigation redirection
+  document.querySelectorAll('.quick-action-card[data-page]').forEach(card => {
+    card.addEventListener('click', function(e) {
+      e.preventDefault();
+      const pageName = this.getAttribute('data-page');
+      if (pageName && typeof window.loadPage === 'function') {
+        window.loadPage(pageName);
+      }
+    });
+  });
+
   // Initialize search input behavior
   const searchInput = document.getElementById('eventSearchInput');
   if (searchInput) {
@@ -66,6 +77,7 @@ function loadDashboardData() {
         updateStatsUI(response.data.stats);
         loadActivitiesUI(response.data.recentActivities);
         loadEventsUI(response.data.activeEvents);
+        renderDashboardChart(sessionToken);
         console.log("DASHBOARD_MODULE | STEP 9 - Render completed");
       } else {
         console.error("Failed to load dashboard stats. Response structure invalid:", response);
@@ -279,5 +291,99 @@ function confirmAction(message, onConfirm) {
     const bsModal = new bootstrap.Modal(modalEl);
     bsModal.show();
   }
+}
+
+/**
+ * Loads trend data and renders it in a Chart.js instance on the dashboard
+ */
+function renderDashboardChart(sessionToken) {
+  const chartContainer = document.getElementById('attendanceChart');
+  if (!chartContainer) return;
+
+  // Statically destroy any pre-existing chart on this canvas to prevent "Canvas in use" error
+  try {
+    if (typeof Chart !== 'undefined' && Chart.getChart) {
+      const activeChart = Chart.getChart("dashboardTrendCanvas");
+      if (activeChart) activeChart.destroy();
+    }
+  } catch(e) {}
+
+  chartContainer.innerHTML = '<canvas id="dashboardTrendCanvas" style="max-height: 250px; width: 100%;"></canvas>';
+  const ctx = document.getElementById('dashboardTrendCanvas')?.getContext('2d');
+  if (!ctx) return;
+
+  google.script.run
+    .withSuccessHandler(function(trendRes) {
+      if (!trendRes || !trendRes.labels) {
+        chartContainer.innerHTML = '<p class="text-center text-muted py-5">No trend data available</p>';
+        return;
+      }
+
+      const labels = trendRes.labels || [];
+      const rates = trendRes.rates || [];
+      const volumes = trendRes.volumes || [];
+
+      // Custom Gradient for Line
+      const rateGradient = ctx.createLinearGradient(0, 0, 0, 200);
+      rateGradient.addColorStop(0, 'rgba(23, 162, 184, 0.4)');
+      rateGradient.addColorStop(1, 'rgba(23, 162, 184, 0.0)');
+
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Attendance Rate (%)',
+              data: rates,
+              borderColor: '#17a2b8',
+              borderWidth: 3,
+              backgroundColor: rateGradient,
+              fill: true,
+              tension: 0.4,
+              yAxisID: 'yRate'
+            },
+            {
+              label: 'Check-Ins Volume',
+              data: volumes,
+              borderColor: '#1e3d59',
+              backgroundColor: '#1e3d59',
+              type: 'bar',
+              borderRadius: 6,
+              barThickness: 16,
+              yAxisID: 'yVol'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'top', labels: { boxWidth: 10 } }
+          },
+          scales: {
+            yRate: {
+              type: 'linear',
+              position: 'left',
+              min: 0,
+              max: 100,
+              ticks: { callback: v => v + '%' },
+              grid: { drawOnChartArea: true }
+            },
+            yVol: {
+              type: 'linear',
+              position: 'right',
+              grid: { drawOnChartArea: false },
+              ticks: { precision: 0 }
+            }
+          }
+        }
+      });
+    })
+    .withFailureHandler(function(err) {
+      console.error("Failed to load dashboard trend data", err);
+      chartContainer.innerHTML = '<p class="text-center text-danger py-5">Failed to load analytics</p>';
+    })
+    .getTrendData(sessionToken);
 }
 </script>

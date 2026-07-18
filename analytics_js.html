@@ -117,8 +117,20 @@
 
       destroyCharts: function (names) {
         names.forEach(name => {
+          try {
+            if (typeof Chart !== 'undefined' && Chart.getChart) {
+              const activeChart = Chart.getChart(name);
+              if (activeChart) {
+                activeChart.destroy();
+              }
+            }
+          } catch (e) {
+            console.warn("Failed static chart destruction for " + name, e);
+          }
           if (this.charts[name]) {
-            this.charts[name].destroy();
+            try {
+              this.charts[name].destroy();
+            } catch (e) {}
             delete this.charts[name];
           }
         });

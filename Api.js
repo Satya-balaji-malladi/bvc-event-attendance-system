@@ -313,3 +313,23 @@ function getDefaulterDistribution(sessionToken) {
 function getLeaderboard(sessionToken) {
   try { return JSON.parse(JSON.stringify(Controller.Analytics.getLeaderboard(sessionToken) || {})); } catch (e) { return {}; }
 }
+
+// ==========================================
+// Settings API
+// ==========================================
+
+function getSettings(sessionToken) {
+  try { return JSON.parse(JSON.stringify(Controller.Settings.getSettings(sessionToken) || {})); } catch (e) { return { success: false, message: e.message }; }
+}
+
+function saveSettings(sessionToken, payload) {
+  try { return JSON.parse(JSON.stringify(Controller.Settings.saveSettings(sessionToken, payload) || {})); } catch (e) { return { success: false, message: e.message }; }
+}
+
+function clearAttendanceLogs(sessionToken) {
+  try { return JSON.parse(JSON.stringify(Controller.Settings.clearAttendanceLogs(sessionToken) || {})); } catch (e) { return { success: false, message: e.message }; }
+}
+
+function resetSystem(sessionToken) {
+  try { return JSON.parse(JSON.stringify(Controller.Settings.resetSystem(sessionToken) || {})); } catch (e) { return { success: false, message: e.message }; }
+}

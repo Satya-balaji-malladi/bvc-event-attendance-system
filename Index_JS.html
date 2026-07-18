@@ -78,6 +78,14 @@
     function loadPage(pageName) {
       console.log(`Page layout swap requested for destination component: ${pageName}.html`);
       
+      // Auto-close sidebar on mobile/tablet viewports
+      if (sidebar && sidebar.classList.contains('mobile-open')) {
+        sidebar.classList.remove('mobile-open');
+      }
+      if (sidebarOverlay && !sidebarOverlay.classList.contains('d-none')) {
+        sidebarOverlay.classList.add('d-none');
+      }
+
       // Cleanup previous module first
       if (App.State.activeModule && App.Modules[App.State.activeModule] && typeof App.Modules[App.State.activeModule].destroy === 'function') {
         try {
@@ -210,21 +218,7 @@
       }, 1000);
     }
 
-    // Intercept navigation loops inside side panel elements
-    navLinks.forEach(link => {
-      link.addEventListener('click', function (event) {
-        event.preventDefault();
-        const pageName = this.getAttribute('data-page');
-        
-        if (pageName) {
-          loadPage(pageName);
-          
-          if (window.innerWidth <= 991.98 && sidebar.classList.contains('mobile-open')) {
-            toggleSidebar();
-          }
-        }
-      });
-    });
+    // Redundant navigation event listeners removed because common_js.html handles global navigation delegation
 
     // Wire exit execution handles to dialog modal intercept layers
     const handleLogoutAction = (event) => {
