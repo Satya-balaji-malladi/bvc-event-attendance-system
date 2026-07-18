@@ -1,0 +1,853 @@
+<script>
+/**
+ * BVC Event Attendance Management System
+ * Frontend UI Behavioral Controller (Premium Redesigned Mobile-First Edition)
+ */
+const CoordinatorUI = (() => {
+  // ==========================================================================
+  // Private System State Configuration (Live Backend Mirror States)
+  // ==========================================================================
+  const state = {
+    statistics: {
+      present: 0,
+      remaining: 0,
+      total: 0
+    },
+    duplicatesCount: 0, // Local track count for UI display
+    recentScans: [],
+    isProcessing: false,
+    sessionToken: null,
+    lastInputType: 'Barcode',
+    activeEventAttendanceType: 'Fixed' // Track attendance policy: Fixed or Open
+  };
+
+  // Cache elements securely
+  let dom = {};
+  let html5QrCode = null;
+
+  // ==========================================================================
+  // Core Initialization Module
+  // ==========================================================================
+  const init = () => {
+    cacheDOM();
+    bindEvents();
+    extractSessionToken();
+    setupAutoFocusLock();
+    loadBackendTerminalData();
+    startCameraScanner();
+  };
+
+  const cacheDOM = () => {
+    dom = {
+      form: document.getElementById('attendance-input-form'),
+      input: document.getElementById('barcode-roll-input'),
+      submitBtn: document.getElementById('btn-submit-attendance'),
+      scannerStatus: document.getElementById('scanner-status'),
+      previewCard: document.getElementById('student-preview-card'),
+      previewPlaceholder: document.getElementById('student-preview-placeholder'),
+      previewContent: document.getElementById('student-preview-content'),
+      previewName: document.getElementById('preview-student-name'),
+      previewRoll: document.getElementById('preview-student-roll'),
+      previewDept: document.getElementById('preview-student-dept'),
+      previewYear: document.getElementById('preview-student-year'),
+      previewAvatarBadge: document.getElementById('preview-avatar-badge'),
+      previewStatusStrip: document.getElementById('preview-status-strip'),
+      statsPresent: document.getElementById('stat-present-count'),
+      statsRemaining: document.getElementById('stat-remaining-count'),
+      statsTotal: document.getElementById('stat-total-count'),
+      statsDuplicate: document.getElementById('stat-duplicate-count'),
+      recentContainer: document.getElementById('recent-scans-container'),
+      logoutBtn: document.getElementById('btn-terminal-logout'),
+      refreshBtn: document.getElementById('btn-terminal-refresh'),
+      syncBtn: document.getElementById('btn-terminal-sync'),
+      eventName: document.getElementById('terminal-event-name'),
+      eventDate: document.getElementById('terminal-event-date'),
+      coordName: document.getElementById('terminal-coordinator-name'),
+      connectionStatus: document.getElementById('connection-status'),
+      
+      // Spot enrollment DOM elements
+      spotModalElement: document.getElementById('spotRegistrationModal'),
+      spotForm: document.getElementById('spot-registration-form'),
+      spotRollInput: document.getElementById('spot-roll-input'),
+      spotNameInput: document.getElementById('spot-name-input'),
+      spotCollegeInput: document.getElementById('spot-college-input'),
+      spotDeptSelect: document.getElementById('spot-dept-select'),
+      spotYearSelect: document.getElementById('spot-year-select'),
+      
+      spotOpenEventView: document.getElementById('spot-open-event-view'),
+      spotFixedEventView: document.getElementById('spot-fixed-event-view'),
+      spotOpenRollDisplay: document.getElementById('spot-open-roll-display'),
+      spotFixedRollDisplay: document.getElementById('spot-fixed-roll-display'),
+      spotDeptOtherContainer: document.getElementById('spot-dept-other-container'),
+      spotDeptOtherInput: document.getElementById('spot-dept-other-input'),
+      btnConfirmSpotOpen: document.getElementById('btn-confirm-spot-open')
+    };
+
+    if (dom.spotModalElement && typeof bootstrap !== 'undefined') {
+      dom.spotModal = new bootstrap.Modal(dom.spotModalElement);
+    }
+  };
+
+  const bindEvents = () => {
+    if (!dom.form || !dom.input) return;
+
+    // Track input type mutations (fast character streaming implies physical scan engine)
+    dom.input.addEventListener('input', (e) => {
+      updateSubmitButtonState();
+      if (e.inputType === 'insertText' || !e.inputType) {
+        state.lastInputType = (dom.input.value.length > 2 && !e.inputType) ? 'Barcode' : 'Manual';
+      }
+    });
+    
+    // Form submission processing
+    dom.form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      submitAttendanceUI();
+    });
+
+    if (dom.logoutBtn) {
+      dom.logoutBtn.addEventListener('click', () => {
+        executeTerminalLogout();
+      });
+    }
+
+    // Refresh layout action trigger
+    if (dom.refreshBtn) {
+      dom.refreshBtn.addEventListener('click', () => {
+        resetUI();
+        loadBackendTerminalData();
+        showToast('Info', 'Scanned context refreshed.');
+      });
+    }
+
+    // Sync metrics action trigger
+    if (dom.syncBtn) {
+      dom.syncBtn.addEventListener('click', () => {
+        loadBackendTerminalData();
+        showToast('Success', 'Metrics synchronized with database.');
+      });
+    }
+
+    // Spot registration submission listener (Fixed events)
+    if (dom.spotForm) {
+      dom.spotForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        submitSpotRegistrationUI();
+      });
+    }
+
+    // Open event spot confirm listener
+    if (dom.btnConfirmSpotOpen) {
+      dom.btnConfirmSpotOpen.addEventListener('click', () => {
+        submitSpotRegistrationOpenUI();
+      });
+    }
+
+    // Branch selection check (show spec input if 'Others' is selected)
+    if (dom.spotDeptSelect) {
+      dom.spotDeptSelect.addEventListener('change', (e) => {
+        if (e.target.value === 'OTHERS') {
+          if (dom.spotDeptOtherContainer) dom.spotDeptOtherContainer.classList.remove('d-none');
+          if (dom.spotDeptOtherInput) {
+            dom.spotDeptOtherInput.required = true;
+            dom.spotDeptOtherInput.focus();
+          }
+        } else {
+          if (dom.spotDeptOtherContainer) dom.spotDeptOtherContainer.classList.add('d-none');
+          if (dom.spotDeptOtherInput) {
+            dom.spotDeptOtherInput.required = false;
+            dom.spotDeptOtherInput.value = '';
+          }
+        }
+      });
+    }
+
+    // Return focus back on closing modal
+    if (dom.spotModalElement) {
+      dom.spotModalElement.addEventListener('hidden.bs.modal', () => {
+        autoFocusInput();
+      });
+    }
+  };
+
+  const extractSessionToken = () => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      state.sessionToken = urlParams.get('token') || window.sessionToken || localStorage.getItem('sessionToken') || null;
+    } catch (e) {
+      console.error("Session token parse failure:", e);
+    }
+  };
+
+  // Web Audio API Synthesizer sounds generator
+  const playTerminalSound = (type) => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const audioCtx = new AudioCtx();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      
+      if (type === 'success') {
+        // High pitch double beep
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(987.77, audioCtx.currentTime); // B5
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        osc.start();
+        
+        gain.gain.setValueAtTime(0, audioCtx.currentTime + 0.06);
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime + 0.10);
+        osc.frequency.setValueAtTime(1174.66, audioCtx.currentTime + 0.10); // D6
+        osc.stop(audioCtx.currentTime + 0.18);
+      } else {
+        // Low pitch descending warning buzz
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(160, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(70, audioCtx.currentTime + 0.30);
+        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+        osc.start();
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.30);
+        osc.stop(audioCtx.currentTime + 0.35);
+      }
+    } catch (e) {
+      console.warn("AudioContext synthesis failed:", e);
+    }
+  };
+
+  // Active Camera scanner lifecycle hooks
+  const startCameraScanner = () => {
+    try {
+      if (typeof Html5Qrcode === 'undefined') {
+        console.warn("Html5Qrcode library is missing or blocked.");
+        updateScannerStatus('Camera Reader API Unavailable');
+        return;
+      }
+
+      html5QrCode = new Html5Qrcode("interactive-camera-scanner");
+      const qrCodeSuccessCallback = (decodedText) => {
+        if (state.isProcessing) return;
+        
+        if (navigator.vibrate) navigator.vibrate(100);
+
+        if (dom.input) {
+          dom.input.value = decodedText;
+          submitAttendanceUI();
+        }
+      };
+
+      const config = {
+        fps: 10,
+        qrbox: (width, height) => {
+          return { width: Math.min(width * 0.85, 260), height: Math.min(height * 0.55, 130) };
+        }
+      };
+
+      // Ingest scanning from back camera (environment)
+      html5QrCode.start(
+        { facingMode: "environment" },
+        config,
+        qrCodeSuccessCallback
+      ).then(() => {
+        console.log("Interactive camera scanner initialized successfully.");
+        updateScannerStatus('Camera Scanner Active');
+      }).catch(err => {
+        console.warn("Camera streaming initiation failed:", err);
+        updateScannerStatus('Camera locked. Ready for input.');
+      });
+    } catch (e) {
+      console.error("Camera startup exception:", e);
+    }
+  };
+
+  const stopCameraScanner = () => {
+    if (html5QrCode && html5QrCode.isScanning) {
+      try {
+        html5QrCode.stop().catch(err => console.error("Error stopping camera:", err));
+      } catch (e) {
+        console.error("Camera stop error:", e);
+      }
+    }
+  };
+
+  // Aggressive Auto Focus lock loops
+  const autoFocusInput = () => {
+    // Prevent autofocus from pulling focus back while modal popup inputs are actively used
+    const isModalOpen = dom.spotModalElement && dom.spotModalElement.classList.contains('show');
+    if (dom.input && !isModalOpen) {
+      dom.input.focus();
+    }
+  };
+
+  const setupAutoFocusLock = () => {
+    if (!dom.input) return;
+
+    // Retain focus on blur
+    dom.input.addEventListener('blur', () => {
+      setTimeout(() => {
+        if (document.activeElement !== dom.logoutBtn && 
+            document.activeElement !== dom.refreshBtn && 
+            document.activeElement !== dom.syncBtn) {
+          autoFocusInput();
+        }
+      }, 100);
+    });
+
+    // Body clicks redirect focus back to input
+    document.body.addEventListener('click', (e) => {
+      const isModalOpen = dom.spotModalElement && dom.spotModalElement.classList.contains('show');
+      if (isModalOpen) return; // ignore clicks if spot modal is open
+
+      if (e.target !== dom.input && 
+          e.target !== dom.logoutBtn && 
+          e.target !== dom.refreshBtn && 
+          e.target !== dom.syncBtn &&
+          dom.form && !dom.form.contains(e.target)) {
+        autoFocusInput();
+      }
+    });
+  };
+
+  // ==========================================================================
+  // Live Server Network Hydration Systems
+  // ==========================================================================
+  const loadBackendTerminalData = () => {
+    updateScannerStatus('Syncing context...');
+    if (dom.input) dom.input.disabled = true;
+
+    google.script.run
+      .withSuccessHandler((response) => {
+        if (dom.input) dom.input.disabled = false;
+        
+        if (response && response.success) {
+          hydrateTerminalUI(response.data);
+          updateScannerStatus('Scanner Ready');
+          autoFocusInput();
+        } else {
+          showToast('Error', response.message || 'Session verification mismatch.');
+          handleSecurityRedirection();
+        }
+      })
+      .withFailureHandler((error) => {
+        if (dom.input) dom.input.disabled = false;
+        updateScannerStatus('Offline Mode');
+        showToast('Error', 'Failed to synchronize with server database structures.');
+        if (dom.connectionStatus) dom.connectionStatus.innerHTML = '🔴 Offline';
+        autoFocusInput();
+      }).getCoordinatorTerminalData(state.sessionToken);
+  };
+
+  const hydrateTerminalUI = (data) => {
+    if (!data) return;
+
+    // 1. Identity banner binding
+    if (data.event && dom.eventName) dom.eventName.textContent = data.event['Event Name'] || data.event.eventName || 'Event Active';
+    if (data.event && dom.eventDate) dom.eventDate.innerHTML = `<i class="bi bi-calendar3 me-1"></i>${data.event['Start Date'] || data.event.startDate || 'Live'}`;
+    if (data.user && dom.coordName) dom.coordName.innerHTML = `<i class="bi bi-person-badge me-1"></i>${data.user['Student Name'] || data.user['Name'] || data.user.name || 'Coordinator'}`;
+    
+    // Store attendance policy configuration
+    if (data.event) {
+      state.activeEventAttendanceType = data.event['Attendance Type'] || data.event.attendanceType || 'Fixed';
+    }
+
+    // 2. Metrics indicators alignment
+    if (data.statistics) {
+      state.statistics.present = data.statistics.present || 0;
+      state.statistics.remaining = data.statistics.remaining || 0;
+      state.statistics.total = data.statistics.total || 0;
+      updateStatistics();
+    }
+
+    // 3. Activity Feed Logs Buffering
+    if (data.recentScans && Array.isArray(data.recentScans)) {
+      state.recentScans = data.recentScans;
+      renderRecentScans();
+    }
+  };
+
+  // ==========================================================================
+  // Production Ingestion Engine
+  // ==========================================================================
+  const submitAttendanceUI = () => {
+    if (state.isProcessing || !dom.input.value.trim()) return;
+
+    const rawInput = dom.input.value.trim().toUpperCase();
+    state.isProcessing = true;
+
+    updateScannerStatus('Saving attendance...');
+    updateSubmitButtonState(true, '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Saving...');
+    dom.input.disabled = true;
+
+    google.script.run
+      .withSuccessHandler((response) => {
+        dom.input.disabled = false;
+        state.isProcessing = false;
+        
+        if (response && response.success) {
+          updateScannerStatus('Success');
+          updateSubmitButtonState(true, '<i class="bi bi-check-circle-fill me-2"></i>Saved');
+          playTerminalSound('success');
+          
+          if (response.data && response.data.statistics) {
+            state.statistics.present = response.data.statistics.present;
+            state.statistics.remaining = response.data.statistics.remaining;
+            state.statistics.total = response.data.statistics.total;
+          } else {
+            state.statistics.present++;
+            state.statistics.remaining = Math.max(0, state.statistics.remaining - 1);
+          }
+          updateStatistics();
+
+          if (response.data && response.data.student) {
+            showStudentPreview({
+              name: response.data.student.name || response.data.student['Student Name'],
+              roll: response.data.student.roll || rawInput,
+              dept: response.data.student.dept || response.data.student['Department ID'],
+              year: response.data.student.year || response.data.student['Year']
+            }, 'success');
+            pushRecentScanLocal(response.data.student.name || response.data.student['Student Name'], rawInput, false);
+          } else {
+            queryTargetStudentProfile(rawInput);
+          }
+          
+          showToast('Success', response.message || `Attendance logged successfully.`);
+          clearInput();
+
+          setTimeout(() => {
+            updateScannerStatus('Scanner Ready');
+            updateSubmitButtonState();
+            autoFocusInput();
+          }, 800);
+
+        } else {
+          clearInput();
+          updateSubmitButtonState();
+          
+          if (response && response.message && response.message.indexOf('Already') !== -1) {
+            state.duplicatesCount++;
+            updateStatistics();
+            playTerminalSound('duplicate');
+            
+            showStudentPreview({
+              name: 'Duplicate Scan Blocked',
+              roll: rawInput,
+              dept: 'Already Logged',
+              year: 'Scan Ignored'
+            }, 'duplicate');
+            
+            pushRecentScanLocal('Already Scanned', rawInput, true);
+            showToast('Warning', response.message);
+            
+            setTimeout(() => {
+              updateScannerStatus('Scanner Ready');
+              autoFocusInput();
+            }, 1200);
+          } else {
+            // Student not registered in main database -> Open spot modal depending on active event constraints
+            updateScannerStatus('Ready');
+            playTerminalSound('duplicate');
+            openSpotRegistrationModal(rawInput);
+          }
+        }
+      })
+      .withFailureHandler((error) => {
+        dom.input.disabled = false;
+        state.isProcessing = false;
+        clearInput();
+        updateScannerStatus('Scanner Ready');
+        updateSubmitButtonState();
+        playTerminalSound('duplicate');
+        showToast('Error', 'Communication execution loss encountered during logging.');
+        autoFocusInput();
+      }).markCoordinatorAttendance(state.sessionToken, rawInput, state.lastInputType);
+  };
+
+  const queryTargetStudentProfile = (rollNumber) => {
+    google.script.run.withSuccessHandler((response) => {
+      if (response && response.success && response.data) {
+        showStudentPreview(response.data, 'success');
+      }
+    }).getCoordinatorStudent(state.sessionToken, rollNumber);
+  };
+
+  // Spot registration handling
+  const openSpotRegistrationModal = (rollNumber) => {
+    if (!dom.spotModal) return;
+
+    if (dom.spotRollInput) dom.spotRollInput.value = rollNumber;
+
+    // Toggle view components inside modal based on the active event's attendance policy rules
+    if (state.activeEventAttendanceType === 'Open') {
+      // Show Open confirmation, Hide Fixed form
+      if (dom.spotOpenEventView) dom.spotOpenEventView.classList.remove('d-none');
+      if (dom.spotFixedEventView) dom.spotFixedEventView.classList.add('d-none');
+      if (dom.spotOpenRollDisplay) dom.spotOpenRollDisplay.textContent = rollNumber;
+      
+      dom.spotModal.show();
+    } else {
+      // Show Fixed registration form, Hide Open view
+      if (dom.spotOpenEventView) dom.spotOpenEventView.classList.add('d-none');
+      if (dom.spotFixedEventView) dom.spotFixedEventView.classList.remove('d-none');
+      if (dom.spotFixedRollDisplay) dom.spotFixedRollDisplay.textContent = rollNumber;
+      
+      // Clear form inputs
+      if (dom.spotNameInput) dom.spotNameInput.value = '';
+      if (dom.spotCollegeInput) dom.spotCollegeInput.value = '';
+      if (dom.spotDeptSelect) dom.spotDeptSelect.value = 'CSE';
+      if (dom.spotYearSelect) dom.spotYearSelect.value = '1';
+      if (dom.spotDeptOtherContainer) dom.spotDeptOtherContainer.classList.add('d-none');
+      if (dom.spotDeptOtherInput) {
+        dom.spotDeptOtherInput.value = '';
+        dom.spotDeptOtherInput.required = false;
+      }
+
+      dom.spotModal.show();
+      setTimeout(() => {
+        if (dom.spotNameInput) dom.spotNameInput.focus();
+      }, 450);
+    }
+  };
+
+  // Spot registration confirm (Open event)
+  const submitSpotRegistrationOpenUI = () => {
+    const roll = dom.spotRollInput.value.trim().toUpperCase();
+    if (!roll) return;
+
+    updateScannerStatus('Registering student...');
+    
+    const confirmBtn = dom.btnConfirmSpotOpen;
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+      confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Adding...';
+    }
+
+    // Call API with default parameters for the open guest student
+    google.script.run
+      .withSuccessHandler((response) => {
+        if (confirmBtn) {
+          confirmBtn.disabled = false;
+          confirmBtn.innerHTML = 'Add to Attendance';
+        }
+
+        if (response && response.success) {
+          if (dom.spotModal) dom.spotModal.hide();
+          
+          updateScannerStatus('Success');
+          playTerminalSound('success');
+
+          if (response.data && response.data.statistics) {
+            state.statistics.present = response.data.statistics.present;
+            state.statistics.remaining = response.data.statistics.remaining;
+            state.statistics.total = response.data.statistics.total;
+            updateStatistics();
+          }
+
+          showStudentPreview({
+            name: 'Spot Guest Student',
+            roll: roll,
+            dept: 'Open Event',
+            year: 'N/A'
+          }, 'success');
+
+          pushRecentScanLocal('Spot Guest Student', roll, false);
+          showToast('Success', `Student ${roll} added to attendance.`);
+        } else {
+          showToast('Error', response.message || 'Spot registration failed.');
+        }
+        autoFocusInput();
+      })
+      .withFailureHandler((error) => {
+        if (confirmBtn) {
+          confirmBtn.disabled = false;
+          confirmBtn.innerHTML = 'Add to Attendance';
+        }
+        showToast('Error', 'Communication execution loss encountered during spot registration.');
+        autoFocusInput();
+      }).registerSpotStudentAndMark(state.sessionToken, roll, 'Spot Guest Student', 'Spot Group', '1', 'A', 'BVC Engineering College');
+  };
+
+  // Spot registration confirm (Fixed event)
+  const submitSpotRegistrationUI = () => {
+    const roll = dom.spotRollInput.value.trim().toUpperCase();
+    const name = dom.spotNameInput.value.trim();
+    const college = dom.spotCollegeInput.value.trim();
+    let dept = dom.spotDeptSelect.value;
+    const year = dom.spotYearSelect.value;
+
+    // Handle "Others" branch select specification
+    if (dept === 'OTHERS' && dom.spotDeptOtherInput) {
+      dept = dom.spotDeptOtherInput.value.trim().toUpperCase() || 'OTHERS';
+    }
+
+    if (!roll || !name || !college) return;
+
+    updateScannerStatus('Registering student...');
+    
+    // Disable submit button on modal
+    const confirmBtn = document.getElementById('btn-confirm-spot-reg');
+    if (confirmBtn) {
+      confirmBtn.disabled = true;
+      confirmBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Saving...';
+    }
+
+    google.script.run
+      .withSuccessHandler((response) => {
+        if (confirmBtn) {
+          confirmBtn.disabled = false;
+          confirmBtn.innerHTML = 'Register & Mark';
+        }
+
+        if (response && response.success) {
+          if (dom.spotModal) dom.spotModal.hide();
+          
+          updateScannerStatus('Success');
+          playTerminalSound('success');
+
+          if (response.data && response.data.statistics) {
+            state.statistics.present = response.data.statistics.present;
+            state.statistics.remaining = response.data.statistics.remaining;
+            state.statistics.total = response.data.statistics.total;
+            updateStatistics();
+          }
+
+          showStudentPreview({
+            name: name,
+            roll: roll,
+            dept: dept,
+            year: year
+          }, 'success');
+
+          pushRecentScanLocal(name, roll, false);
+          showToast('Success', `Student ${roll} registered and marked present.`);
+        } else {
+          showToast('Error', response.message || 'Spot registration failed.');
+        }
+        autoFocusInput();
+      })
+      .withFailureHandler((error) => {
+        if (confirmBtn) {
+          confirmBtn.disabled = false;
+          confirmBtn.innerHTML = 'Register & Mark';
+        }
+        showToast('Error', 'Communication execution loss encountered during spot registration.');
+        autoFocusInput();
+      }).registerSpotStudentAndMark(state.sessionToken, roll, name, dept, year, 'A', college);
+  };
+
+  // ==========================================================================
+  // Session Redirection & Security Lifecycles
+  // ==========================================================================
+  const executeTerminalLogout = () => {
+    updateScannerStatus('Terminating...');
+    stopCameraScanner();
+    google.script.run
+      .withSuccessHandler(() => {
+        showToast('Info', 'Session closed safely.');
+        handleSecurityRedirection();
+      })
+      .withFailureHandler(() => {
+        handleSecurityRedirection();
+      }).logoutCoordinator(state.sessionToken);
+  };
+
+  const handleSecurityRedirection = () => {
+    try {
+      if (typeof getScriptUrl === 'function') {
+        google.script.run.withSuccessHandler((url) => {
+          window.location.href = url + '?page=Login';
+        }).getScriptUrl();
+      } else {
+        window.location.href = window.location.pathname + '?page=Login';
+      }
+    } catch (e) {
+      window.location.reload();
+    }
+  };
+
+  // ==========================================================================
+  // UI Rendering State Handlers
+  // ==========================================================================
+  const updateSubmitButtonState = (forceDisable = false, htmlOverride = null) => {
+    if (!dom.submitBtn || !dom.input) return;
+
+    const hasValue = dom.input.value.trim().length > 0;
+    dom.submitBtn.disabled = forceDisable || !hasValue || state.isProcessing;
+
+    if (htmlOverride) {
+      dom.submitBtn.innerHTML = htmlOverride;
+    } else {
+      dom.submitBtn.innerHTML = '<i class="bi bi-arrow-right-circle-fill me-2"></i> Submit Attendance';
+    }
+  };
+
+  const updateScannerStatus = (statusText) => {
+    if (dom.scannerStatus) {
+      dom.scannerStatus.textContent = statusText;
+    }
+  };
+
+  const updateStatistics = () => {
+    if (dom.statsPresent) dom.statsPresent.textContent = state.statistics.present;
+    if (dom.statsRemaining) dom.statsRemaining.textContent = state.statistics.remaining;
+    if (dom.statsTotal) dom.statsTotal.textContent = state.statistics.total;
+    if (dom.statsDuplicate) dom.statsDuplicate.textContent = state.duplicatesCount;
+  };
+
+  const showStudentPreview = (student, status = 'success') => {
+    if (!dom.previewPlaceholder || !dom.previewContent) return;
+
+    dom.previewName.textContent = student.name;
+    dom.previewRoll.textContent = student.roll;
+    dom.previewDept.textContent = student.dept;
+    dom.previewYear.textContent = student.year;
+
+    // Apply preview state styling classes
+    if (status === 'success') {
+      dom.previewCard.className = "preview-card-outer state-success";
+      dom.previewStatusStrip.className = "scan-status-strip strip-success";
+      dom.previewStatusStrip.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> Attendance Marked';
+      dom.previewAvatarBadge.className = "student-badge-avatar student-badge-avatar-success";
+      dom.previewAvatarBadge.innerHTML = '<i class="bi bi-check"></i>';
+    } else {
+      dom.previewCard.className = "preview-card-outer state-duplicate";
+      dom.previewStatusStrip.className = "scan-status-strip strip-duplicate";
+      dom.previewStatusStrip.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i> ${student.name === 'Invalid Student ID' ? 'Not Registered' : 'Already Scanned'}`;
+      dom.previewAvatarBadge.className = "student-badge-avatar student-badge-avatar-duplicate";
+      dom.previewAvatarBadge.innerHTML = '<i class="bi bi-x"></i>';
+    }
+
+    dom.previewPlaceholder.classList.add('d-none');
+    dom.previewContent.classList.remove('d-none');
+  };
+
+  const hideStudentPreview = () => {
+    if (!dom.previewPlaceholder || !dom.previewContent) return;
+    dom.previewCard.className = "preview-card-outer state-ready";
+    dom.previewContent.classList.add('d-none');
+    dom.previewPlaceholder.classList.remove('d-none');
+  };
+
+  const pushRecentScanLocal = (name, roll, isDuplicate = false) => {
+    const now = new Date();
+    const timeString = now.toTimeString().split(' ')[0];
+
+    const scanRecord = { name, roll, time: timeString, isDuplicate };
+    state.recentScans.unshift(scanRecord);
+
+    if (state.recentScans.length > 10) {
+      state.recentScans.pop();
+    }
+    renderRecentScans();
+  };
+
+  const renderRecentScans = () => {
+    if (!dom.recentContainer) return;
+
+    dom.recentContainer.innerHTML = state.recentScans.map(scan => {
+      const isDup = scan.isDuplicate || scan.name === 'Already Scanned';
+      const avatarClass = isDup ? 'feed-item-avatar-duplicate' : 'feed-item-avatar-success';
+      const iconClass = isDup ? 'bi-exclamation-triangle-fill text-danger' : 'bi-check-circle-fill text-success';
+      return `
+        <div class="feed-item-row">
+          <div class="d-flex align-items-center gap-3">
+            <div class="feed-item-avatar ${avatarClass}">
+              <i class="bi ${isDup ? 'bi-x' : 'bi-check'}"></i>
+            </div>
+            <div>
+              <strong class="text-dark d-block font-display small">${scan.roll || ''}</strong>
+              <span class="text-muted extra-small">${scan.name || 'Student'}</span>
+            </div>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <i class="bi ${iconClass} small"></i>
+            <span class="badge bg-light text-muted border extra-small font-display">${scan.time || ''}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+  };
+
+  const clearInput = () => {
+    if (dom.input) {
+      dom.input.value = '';
+    }
+  };
+
+  const resetUI = () => {
+    clearInput();
+    hideStudentPreview();
+    updateScannerStatus('Scanner Ready');
+    updateSubmitButtonState();
+    
+    state.statistics.present = 0;
+    state.statistics.remaining = 0;
+    state.statistics.total = 0;
+    state.duplicatesCount = 0;
+    state.recentScans = [];
+    if (dom.recentContainer) dom.recentContainer.innerHTML = '';
+    
+    updateStatistics();
+    autoFocusInput();
+  };
+
+  const showToast = (type, message) => {
+    const toastWrapper = document.createElement('div');
+    toastWrapper.style.position = 'fixed';
+    toastWrapper.style.bottom = '95px';
+    toastWrapper.style.left = '50%';
+    toastWrapper.style.transform = 'translateX(-50%)';
+    toastWrapper.style.zIndex = '9999';
+    toastWrapper.style.width = 'calc(100% - 32px)';
+    toastWrapper.style.maxWidth = '398px';
+
+    let alertClass = 'alert-info';
+    let iconClass = 'bi-info-circle-fill';
+    if (type === 'Success') { alertClass = 'alert-success'; iconClass = 'bi-check-circle-fill'; }
+    if (type === 'Error') { alertClass = 'alert-danger'; iconClass = 'bi-exclamation-triangle-fill'; }
+    if (type === 'Warning') { alertClass = 'alert-warning'; iconClass = 'bi-exclamation-circle-fill'; }
+
+    toastWrapper.innerHTML = `
+      <div class="alert ${alertClass} d-flex align-items-center shadow border-0 m-0 py-2 px-3" role="alert" style="border-radius: 12px;">
+        <i class="bi ${iconClass} me-2"></i>
+        <div class="small fw-semibold text-truncate">${message}</div>
+      </div>
+    `;
+
+    document.body.appendChild(toastWrapper);
+    
+    setTimeout(() => {
+      toastWrapper.style.transition = 'opacity 0.3s ease';
+      toastWrapper.style.opacity = '0';
+      setTimeout(() => toastWrapper.remove(), 300);
+    }, 2500);
+  };
+
+  // ==========================================================================
+  // Public Endpoint Interfaces Blueprint Execution
+  // ==========================================================================
+  return {
+    initializeCoordinatorUI: init,
+    submitAttendanceUI: submitAttendanceUI,
+    showStudentPreview: showStudentPreview,
+    hideStudentPreview: hideStudentPreview,
+    updateStatistics: updateStatistics,
+    updateScannerStatus: updateScannerStatus,
+    updateSubmitButton: updateSubmitButtonState,
+    renderRecentScans: renderRecentScans,
+    showToast: showToast,
+    clearInput: clearInput,
+    resetUI: resetUI
+  };
+})();
+
+// Initialize application on global DOM landscape completion safely
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  CoordinatorUI.initializeCoordinatorUI();
+} else {
+  document.addEventListener('DOMContentLoaded', () => {
+    CoordinatorUI.initializeCoordinatorUI();
+  });
+}
+</script>

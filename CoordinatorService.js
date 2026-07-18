@@ -258,5 +258,237 @@ const CoordinatorService = {
 
   deleteCoordinator: function(assignmentId, userId) {
     return this.removeCoordinator(assignmentId, userId);
+  },
+
+  // ==========================================
+  // NEW AUTHORIZATION & SINGLE SOURCE OF TRUTH METHODS
+  // ==========================================
+
+  canManageEvent: function(userId, eventId) {
+    const startTime = Date.now();
+    Logger.log('[START] CoordinatorService.canManageEvent | Input - User ID: ' + userId + ', Event ID: ' + eventId);
+    
+    try {
+      if (!userId || !eventId) {
+        Logger.log('[OUTPUT] CoordinatorService.canManageEvent -> false (Missing inputs) | Execution Time: ' + (Date.now() - startTime) + 'ms');
+        Logger.log('[END] CoordinatorService.canManageEvent');
+        return false;
+      }
+
+      Logger.log('[DATABASE QUERY] Reading rows from Event Coordinators sheet.');
+      const allRows = DatabaseService.readAllRows(CONFIG.SHEETS.EVENT_COORDINATORS) || [];
+      Logger.log('[DATABASE RESULT] Fetched ' + allRows.length + ' rows.');
+
+      const hasAccess = allRows.some(row => 
+        String(row['User ID']).trim() === String(userId).trim() &&
+        String(row['Event ID']).trim() === String(eventId).trim() &&
+        String(row['Assignment Status']).trim() === 'Active'
+      );
+
+      Logger.log('[OUTPUT] CoordinatorService.canManageEvent -> ' + hasAccess + ' | Execution Time: ' + (Date.now() - startTime) + 'ms');
+      Logger.log('[END] CoordinatorService.canManageEvent');
+      return hasAccess;
+    } catch (error) {
+      Logger.log('[ERROR] CoordinatorService.canManageEvent: ' + error.message);
+      return false;
+    }
+  },
+
+  getActiveAssignment: function(userId, eventId) {
+    const startTime = Date.now();
+    Logger.log('[START] CoordinatorService.getActiveAssignment | Input - User ID: ' + userId + ', Event ID: ' + eventId);
+    
+    try {
+      if (!userId || !eventId) {
+        Logger.log('[OUTPUT] CoordinatorService.getActiveAssignment -> null | Execution Time: ' + (Date.now() - startTime) + 'ms');
+        Logger.log('[END] CoordinatorService.getActiveAssignment');
+        return null;
+      }
+
+      Logger.log('[DATABASE QUERY] Reading rows from Event Coordinators sheet.');
+      const allRows = DatabaseService.readAllRows(CONFIG.SHEETS.EVENT_COORDINATORS) || [];
+      Logger.log('[DATABASE RESULT] Fetched ' + allRows.length + ' rows.');
+
+      const assignment = allRows.find(row => 
+        String(row['User ID']).trim() === String(userId).trim() &&
+        String(row['Event ID']).trim() === String(eventId).trim() &&
+        String(row['Assignment Status']).trim() === 'Active'
+      ) || null;
+
+      Logger.log('[OUTPUT] CoordinatorService.getActiveAssignment -> ' + (assignment ? 'Record Found' : 'null') + ' | Execution Time: ' + (Date.now() - startTime) + 'ms');
+      Logger.log('[END] CoordinatorService.getActiveAssignment');
+      return assignment;
+    } catch (error) {
+      Logger.log('[ERROR] CoordinatorService.getActiveAssignment: ' + error.message);
+      return null;
+    }
+  },
+
+  getPrimaryCoordinator: function(eventId) {
+    const startTime = Date.now();
+    Logger.log('[START] CoordinatorService.getPrimaryCoordinator | Input - Event ID: ' + eventId);
+    
+    try {
+      if (!eventId) {
+        Logger.log('[OUTPUT] CoordinatorService.getPrimaryCoordinator -> null | Execution Time: ' + (Date.now() - startTime) + 'ms');
+        Logger.log('[END] CoordinatorService.getPrimaryCoordinator');
+        return null;
+      }
+
+      Logger.log('[DATABASE QUERY] Reading rows from Event Coordinators sheet.');
+      const allRows = DatabaseService.readAllRows(CONFIG.SHEETS.EVENT_COORDINATORS) || [];
+      Logger.log('[DATABASE RESULT] Fetched ' + allRows.length + ' rows.');
+
+      const primary = allRows.find(row => 
+        String(row['Event ID']).trim() === String(eventId).trim() &&
+        String(row['Assignment Status']).trim() === 'Active' &&
+        (String(row['Assignment Role']).trim() === 'Primary Coordinator' || String(row['Assignment Role']).trim() === 'Lead Coordinator')
+      ) || null;
+
+      Logger.log('[OUTPUT] CoordinatorService.getPrimaryCoordinator -> ' + (primary ? 'Primary Coordinator Found' : 'null') + ' | Execution Time: ' + (Date.now() - startTime) + 'ms');
+      Logger.log('[END] CoordinatorService.getPrimaryCoordinator');
+      return primary;
+    } catch (error) {
+      Logger.log('[ERROR] CoordinatorService.getPrimaryCoordinator: ' + error.message);
+      return null;
+    }
+  },
+
+  getAssignedEventIds: function(userId) {
+    const startTime = Date.now();
+    Logger.log('[START] CoordinatorService.getAssignedEventIds | Input - User ID: ' + userId);
+    
+    try {
+      if (!userId) {
+        Logger.log('[OUTPUT] CoordinatorService.getAssignedEventIds -> [] | Execution Time: ' + (Date.now() - startTime) + 'ms');
+        Logger.log('[END] CoordinatorService.getAssignedEventIds');
+        return [];
+      }
+
+      Logger.log('[DATABASE QUERY] Reading rows from Event Coordinators sheet.');
+      const allRows = DatabaseService.readAllRows(CONFIG.SHEETS.EVENT_COORDINATORS) || [];
+      Logger.log('[DATABASE RESULT] Fetched ' + allRows.length + ' rows.');
+
+      const eventIds = allRows
+        .filter(row => String(row['User ID']).trim() === String(userId).trim() && String(row['Assignment Status']).trim() === 'Active')
+        .map(row => String(row['Event ID']).trim());
+
+      Logger.log('[OUTPUT] CoordinatorService.getAssignedEventIds -> Count: ' + eventIds.length + ' | Execution Time: ' + (Date.now() - startTime) + 'ms');
+      Logger.log('[END] CoordinatorService.getAssignedEventIds');
+      return eventIds;
+    } catch (error) {
+      Logger.log('[ERROR] CoordinatorService.getAssignedEventIds: ' + error.message);
+      return [];
+    }
+  },
+
+  getAssignedEvents: function(userId) {
+    const startTime = Date.now();
+    Logger.log('[START] CoordinatorService.getAssignedEvents | Input - User ID: ' + userId);
+    
+    try {
+      if (!userId) {
+        Logger.log('[OUTPUT] CoordinatorService.getAssignedEvents -> [] | Execution Time: ' + (Date.now() - startTime) + 'ms');
+        Logger.log('[END] CoordinatorService.getAssignedEvents');
+        return [];
+      }
+
+      const eventIds = this.getAssignedEventIds(userId);
+      const events = [];
+
+      Logger.log('[DATABASE QUERY] Fetching full event objects through EventService.');
+      eventIds.forEach(id => {
+        const event = EventService.getEventById(id);
+        if (event) events.push(event);
+      });
+      Logger.log('[DATABASE RESULT] Successfully compiled full event entities.');
+
+      Logger.log('[OUTPUT] CoordinatorService.getAssignedEvents -> Compiled: ' + events.length + ' events | Execution Time: ' + (Date.now() - startTime) + 'ms');
+      Logger.log('[END] CoordinatorService.getAssignedEvents');
+      return events;
+    } catch (error) {
+      Logger.log('[ERROR] CoordinatorService.getAssignedEvents: ' + error.message);
+      return [];
+    }
+  },
+
+  isCoordinatorAssigned: function(userId) {
+    const startTime = Date.now();
+    Logger.log('[START] CoordinatorService.isCoordinatorAssigned | Input - User ID: ' + userId);
+    
+    try {
+      if (!userId) {
+        Logger.log('[OUTPUT] CoordinatorService.isCoordinatorAssigned -> false | Execution Time: ' + (Date.now() - startTime) + 'ms');
+        Logger.log('[END] CoordinatorService.isCoordinatorAssigned');
+        return false;
+      }
+
+      Logger.log('[DATABASE QUERY] Reading rows from Event Coordinators sheet.');
+      const allRows = DatabaseService.readAllRows(CONFIG.SHEETS.EVENT_COORDINATORS) || [];
+      Logger.log('[DATABASE RESULT] Fetched ' + allRows.length + ' rows.');
+
+      const hasAssignment = allRows.some(row => 
+        String(row['User ID']).trim() === String(userId).trim() && 
+        String(row['Assignment Status']).trim() === 'Active'
+      );
+
+      Logger.log('[OUTPUT] CoordinatorService.isCoordinatorAssigned -> ' + hasAssignment + ' | Execution Time: ' + (Date.now() - startTime) + 'ms');
+      Logger.log('[END] CoordinatorService.isCoordinatorAssigned');
+      return hasAssignment;
+    } catch (error) {
+      Logger.log('[ERROR] CoordinatorService.isCoordinatorAssigned: ' + error.message);
+      return false;
+    }
+  },
+
+  validateCoordinatorSession: function(sessionUser) {
+    return this._tryWrap('validateCoordinatorSession', 'Session validation failed.', () => {
+      const startTime = Date.now();
+      Logger.log('[START] CoordinatorService.validateCoordinatorSession | Input: ' + (sessionUser ? JSON.stringify(sessionUser) : 'null'));
+
+      // 1. Check if Session Exists
+      if (!sessionUser) {
+        Logger.log('[OUTPUT] CoordinatorService.validateCoordinatorSession -> Session does not exist.');
+        return Utils.buildResponse(false, 'Session does not exist.');
+      }
+
+      const userId = sessionUser.userId || sessionUser.id || sessionUser['User ID'];
+
+      // 2. Check if User Exists
+      Logger.log('[DATABASE QUERY] Finding user by ID: ' + userId);
+      const user = UserService.getUserById(userId);
+      Logger.log('[DATABASE RESULT] User retrieval complete.');
+      
+      if (!user) {
+        Logger.log('[OUTPUT] CoordinatorService.validateCoordinatorSession -> User record not found.');
+        return Utils.buildResponse(false, 'User not found.');
+      }
+
+      // 3. Check if Role == COORDINATOR
+      const userRole = user.Role || user.role || user['Role'];
+      if (String(userRole).toUpperCase() !== 'COORDINATOR') {
+        Logger.log('[OUTPUT] CoordinatorService.validateCoordinatorSession -> User is not authorized as a coordinator.');
+        return Utils.buildResponse(false, 'User is not authorized as a coordinator.');
+      }
+
+      // 4. Check if Assignment Exists & 5. Assignment is Active
+      Logger.log('[DATABASE QUERY] Querying Event Coordinators sheet for active assignments.');
+      const allAssignments = DatabaseService.readAllRows(CONFIG.SHEETS.EVENT_COORDINATORS) || [];
+      Logger.log('[DATABASE RESULT] Assignment rows gathered.');
+
+      const hasActiveAssignment = allAssignments.some(row => 
+        String(row['User ID']).trim() === String(userId).trim() &&
+        String(row['Assignment Status']).trim() === 'Active'
+      );
+
+      if (!hasActiveAssignment) {
+        Logger.log('[OUTPUT] CoordinatorService.validateCoordinatorSession -> No active event assignment found.');
+        return Utils.buildResponse(false, 'No active event assignment found for this coordinator.');
+      }
+
+      Logger.log('[OUTPUT] CoordinatorService.validateCoordinatorSession -> Success | Execution Time: ' + (Date.now() - startTime) + 'ms');
+      Logger.log('[END] CoordinatorService.validateCoordinatorSession');
+      return Utils.buildResponse(true, 'Coordinator session is valid and active.', { user: user });
+    });
   }
 };

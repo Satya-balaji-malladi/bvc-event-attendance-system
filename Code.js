@@ -8,6 +8,7 @@ function doGet(e) {
     return HtmlService.createTemplateFromFile('ForgotPassword')
         .evaluate()
         .setTitle('Forgot Password - BVC System')
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1')
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
   
@@ -15,20 +16,23 @@ function doGet(e) {
     return HtmlService.createTemplateFromFile('Index')
         .evaluate()
         .setTitle('Dashboard - Admin')
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1')
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
 
   if (page.toLowerCase() === 'coordinator') {
     try {
-      return HtmlService.createTemplateFromFile('CoordinatorIndex')
+      return HtmlService.createTemplateFromFile('Coordinator')
           .evaluate()
           .setTitle('Dashboard - Coordinator')
+          .addMetaTag('viewport', 'width=device-width, initial-scale=1')
           .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
     } catch (e) {
       // Fallback if CoordinatorIndex doesn't exist yet
       return HtmlService.createTemplateFromFile('Index')
           .evaluate()
           .setTitle('Dashboard - Coordinator (Fallback)')
+          .addMetaTag('viewport', 'width=device-width, initial-scale=1')
           .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
     }
   }
@@ -37,6 +41,7 @@ function doGet(e) {
     return HtmlService.createTemplateFromFile('Login')
         .evaluate()
         .setTitle('Login - BVC System')
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1')
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
   
@@ -44,6 +49,7 @@ function doGet(e) {
   return HtmlService.createTemplateFromFile('Login')
       .evaluate()
       .setTitle('Login - BVC System')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
@@ -58,7 +64,7 @@ function getPageContent(page) {
     if (p === 'dashboard') return HtmlService.createTemplateFromFile('Index').evaluate().getContent();
     if (p === 'coordinator') {
       try {
-        return HtmlService.createTemplateFromFile('CoordinatorIndex').evaluate().getContent();
+        return HtmlService.createTemplateFromFile('Coordinator').evaluate().getContent();
       } catch (e) {
         return HtmlService.createTemplateFromFile('Index').evaluate().getContent();
       }
@@ -75,9 +81,9 @@ function getPageContent(page) {
  */
 function getComponentHtml(component) {
   try {
-    // Basic mapping, assume the component name matches the HTML filename
-    // e.g., "Dashboard" -> "Dashboard.html"
-    return HtmlService.createTemplateFromFile(component).evaluate().getContent();
+    if (!component) return '';
+    var name = component.charAt(0).toUpperCase() + component.slice(1);
+    return HtmlService.createTemplateFromFile(name).evaluate().getContent();
   } catch (e) {
     // Return empty state or error if component not found
     return `<div class="alert alert-danger m-4"><i class="bi bi-exclamation-triangle-fill me-2"></i> Failed to load component: ${component}</div>`;
@@ -104,15 +110,47 @@ function include(filename) {
 // Global API Wrappers (callable by google.script.run)
 // ==========================================
 
-function getAllEvents() {
+function getAllEvents(sessionToken) {
   try {
-    const res = Controller.Event.getAllEvents();
+    // Pass sessionToken so Controller can validate session via SessionService.withSession
+    const res = Controller.Event.getAllEvents(sessionToken);
     // Force serialization to strip any Google Apps Script internal types (like Dates) that might break google.script.run
     const serialized = JSON.parse(JSON.stringify(res || []));
     Logger.log("Global getAllEvents() returning array of length: " + serialized.length);
     return serialized;
   } catch (e) {
     Logger.log("Error in global getAllEvents: " + e.message);
+    return [];
+  }
+}
+
+// Global wrapper: getActiveDepartments (was missing — caused "Method not found" in Students and Participants pages)
+function getActiveDepartments(sessionToken) {
+  try {
+    const res = Controller.Department.getActiveDepartments(sessionToken);
+    return JSON.parse(JSON.stringify(res || []));
+  } catch (e) {
+    Logger.log('Error in global getActiveDepartments: ' + e.message);
+    return [];
+  }
+}
+
+// Global wrapper: getAllEnrichedParticipants
+function getAllEnrichedParticipants(sessionToken) {
+  try {
+    const res = Controller.Participant.getAllEnrichedParticipants(sessionToken);
+    // ParticipantService returns buildResponse(true, msg, array)
+    // buildResponse spreads array into object keys {0:{}, 1:{}, success:true} — extract array safely
+    if (Array.isArray(res)) return JSON.parse(JSON.stringify(res));
+    if (res && res.success === false) return [];
+    // Convert object with numeric keys back to array
+    const arr = [];
+    for (var k in res) {
+      if (!isNaN(parseInt(k, 10)) && res.hasOwnProperty(k)) arr.push(res[k]);
+    }
+    return JSON.parse(JSON.stringify(arr.length > 0 ? arr : (res.data || [])));
+  } catch (e) {
+    Logger.log('Error in global getAllEnrichedParticipants: ' + e.message);
     return [];
   }
 }
@@ -402,3 +440,92 @@ function getAttendanceByEvent(eventId) {
     return [];
   }
 }
+
+// ==========================================
+// Report API Global Wrappers
+// ==========================================
+
+function _serializeReport(res) {
+  try { return JSON.parse(JSON.stringify(res || {})); } catch(e) { return { success: false, message: e.message }; }
+}
+
+function getReportsDashboardSummary(sessionToken) {
+  try { return _serializeReport(Controller.Report.getReportsDashboardSummary(sessionToken)); }
+  catch(e) { return { success: false, message: e.message }; }
+}
+
+function getEventReport(sessionToken, filters) {
+  try { return _serializeReport(Controller.Report.getEventReport(sessionToken, filters)); }
+  catch(e) { return { success: false, message: e.message }; }
+}
+
+function getStudentReport(sessionToken, rollNumber) {
+  try { return _serializeReport(Controller.Report.getStudentReport(sessionToken, rollNumber)); }
+  catch(e) { return { success: false, message: e.message }; }
+}
+
+function getStudentEventHistory(sessionToken, rollNumber) {
+  try { return _serializeReport(Controller.Report.getStudentEventHistory(sessionToken, rollNumber)); }
+  catch(e) { return { success: false, message: e.message }; }
+}
+
+function getDepartmentReport(sessionToken, department) {
+  try { return _serializeReport(Controller.Report.getDepartmentReport(sessionToken, department)); }
+  catch(e) { return { success: false, message: e.message }; }
+}
+
+function getDepartmentComparison(sessionToken) {
+  try { return _serializeReport(Controller.Report.getDepartmentComparison(sessionToken)); }
+  catch(e) { return { success: false, message: e.message }; }
+}
+
+function getCoordinatorReport(sessionToken, coordinatorId) {
+  try { return _serializeReport(Controller.Report.getCoordinatorReport(sessionToken, coordinatorId)); }
+  catch(e) { return { success: false, message: e.message }; }
+}
+
+function getCoordinatorPerformance(sessionToken, coordinatorId) {
+  try { return _serializeReport(Controller.Report.getCoordinatorPerformance(sessionToken, coordinatorId)); }
+  catch(e) { return { success: false, message: e.message }; }
+}
+
+function getDateRangeReport(sessionToken, fromDate, toDate) {
+  try { return _serializeReport(Controller.Report.getDateRangeReport(sessionToken, fromDate, toDate)); }
+  catch(e) { return { success: false, message: e.message }; }
+}
+
+function getMonthlyReport(sessionToken, filters) {
+  try { return _serializeReport(Controller.Report.getMonthlyReport(sessionToken, filters)); }
+  catch(e) { return { success: false, message: e.message }; }
+}
+
+function getEventTrendReport(sessionToken, filters) {
+  try { return _serializeReport(Controller.Report.getEventTrendReport(sessionToken, filters)); }
+  catch(e) { return { success: false, message: e.message }; }
+}
+
+function getYearWiseReport(sessionToken, year) {
+  try { return _serializeReport(Controller.Report.getYearWiseReport(sessionToken, year)); }
+  catch(e) { return { success: false, message: e.message }; }
+}
+
+function getAttendanceDefaulters(sessionToken, filters) {
+  try { return _serializeReport(Controller.Report.getAttendanceDefaulters(sessionToken, filters)); }
+  catch(e) { return { success: false, message: e.message }; }
+}
+
+function getTopParticipants(sessionToken, filters) {
+  try { return _serializeReport(Controller.Report.getTopParticipants(sessionToken, filters)); }
+  catch(e) { return { success: false, message: e.message }; }
+}
+
+function getAbsentStudents(sessionToken, filters) {
+  try { return _serializeReport(Controller.Report.getAbsentStudents(sessionToken, filters)); }
+  catch(e) { return { success: false, message: e.message }; }
+}
+
+function getCancelledEvents(sessionToken, filters) {
+  try { return _serializeReport(Controller.Report.getCancelledEvents(sessionToken, filters)); }
+  catch(e) { return { success: false, message: e.message }; }
+}
+

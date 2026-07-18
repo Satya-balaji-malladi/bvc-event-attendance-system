@@ -248,6 +248,7 @@ window.App = {
     importUsers: function(usersDataArray) { return this._call('importUsers', usersDataArray); },
     getAllStudents: function() { return this._call('getAllStudents'); },
     getActiveDepartments: function() { return this._call('getActiveDepartments'); },
+    getStudentAttendanceCount: function(rollNumber) { return this._call('getStudentAttendanceCount', rollNumber); },
     createStudent: function(studentData) { return this._call('createStudent', studentData); },
     updateStudent: function(rollNumber, studentData) { return this._call('updateStudent', rollNumber, studentData); },
     deleteStudent: function(rollNumber) { return this._call('deleteStudent', rollNumber); },

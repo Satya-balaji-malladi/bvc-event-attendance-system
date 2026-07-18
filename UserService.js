@@ -241,7 +241,7 @@ const UserService = {
       var passCols = this._getPasswordColumns();
       if (!passCols.hashCol) throw new Error('Missing CONFIG.COLUMNS.USER_PASSWORD_HASH');
 
-      var rawPassword = Utils.generateRandomPassword ? Utils.generateRandomPassword() : String(new Date().getTime());
+      var rawPassword = userData.password || userData.Password || (Utils.generateRandomPassword ? Utils.generateRandomPassword() : String(new Date().getTime()));
       var salt = passCols.saltCol && Utils.generateSalt ? Utils.generateSalt() : null;
       var hashedPassword = salt ? Utils.hashString(String(rawPassword) + ':' + String(salt)) : Utils.hashString(String(rawPassword));
 

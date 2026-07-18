@@ -129,33 +129,17 @@ const AttendanceService = {
     return user.user_id || user.userId || (CONFIG.COLUMNS && CONFIG.COLUMNS.USER_ID ? user[CONFIG.COLUMNS.USER_ID] : null);
   },
 
-  _validateCoordinatorAccess: function(event, user) {
-    // Admin → full access.
-    // Coordinator → only assigned events.
-    // Everyone else → deny.
-    if (!event || !user) return false;
-
-    const role = user[CONFIG.COLUMNS.ROLE || 'Role'] || user.role || user.Role;
-    if (role === CONFIG.ROLES.ADMIN) return true;
-
-    if (role !== CONFIG.ROLES.COORDINATOR) return false;
-
-    const assignedCoordinatorId = event.coordinator_id || event.coordinatorId || event[CONFIG.COLUMNS.COORDINATOR_ID || 'Organizer'];
-    const actionUserId = this._getUserIdFromUser(user);
-
-    // If we can't establish IDs, deny.
-    if (!assignedCoordinatorId || !actionUserId) return false;
-
-    return String(assignedCoordinatorId).trim() === String(actionUserId).trim();
+  _validateCoordinatorAccess: function(userId, eventId) {
+    // Delegate authorization directly to CoordinatorService as the single source of truth
+    if (!userId || !eventId) return false;
+    return CoordinatorService.canManageEvent(userId, eventId);
   },
 
   _validateAttendanceWindow: function(eventId) {
-    // TODO: Enforce attendance window when EventService provides isAttendanceOpen/canScanAttendance.
     try {
       if (typeof EventService.isAttendanceOpen === 'function') {
         const open = EventService.isAttendanceOpen(eventId);
         if (!open) {
-          // Standardize message via CONFIG if present.
           if (CONFIG.MESSAGES && CONFIG.MESSAGES.ATTENDANCE_WINDOW_CLOSED) {
             return Utils.buildResponse(false, CONFIG.MESSAGES.ATTENDANCE_WINDOW_CLOSED);
           }
@@ -230,6 +214,9 @@ const AttendanceService = {
       'markAttendance',
       CONFIG.MESSAGES && CONFIG.MESSAGES.ATTENDANCE_MARK_FAILED ? CONFIG.MESSAGES.ATTENDANCE_MARK_FAILED : 'Attendance marking failed.',
       () => {
+        const startTime = Date.now();
+        Logger.log('[START] AttendanceService.markAttendance | User: ' + userId);
+
         const normalized = this._normalizeAttendancePayload(attendanceData);
 
         // ValidationService expects camelCase based on current file.
@@ -240,12 +227,28 @@ const AttendanceService = {
         });
 
         if (!validationResult.valid) {
+          Logger.log('[END] AttendanceService.markAttendance | Validation failed');
           return Utils.buildResponse(false, validationResult.errors.join(' '));
         }
 
         const eventId = normalized.event_id;
         const rollNumber = String(normalized.roll_number).trim().toUpperCase();
 
+        // 1. Authorization Check (Performance improvement: read once and reuse)
+        Logger.log('[START] Authorization Check');
+        const isAuthorized = this._validateCoordinatorAccess(userId, eventId);
+        Logger.log('[END] Authorization Check | Result: ' + isAuthorized);
+
+        if (!isAuthorized) {
+          if (CONFIG.MESSAGES && CONFIG.MESSAGES.UNAUTHORIZED) {
+            return Utils.buildResponse(false, CONFIG.MESSAGES.UNAUTHORIZED);
+          }
+          return Utils.buildResponse(false, 'Unauthorized access.');
+        }
+
+        // 2. Attendance Validation
+        Logger.log('[START] Attendance Validation');
+        
         // Verify event exists
         const event = EventService.getEventById(eventId);
         if (!event) {
@@ -258,17 +261,7 @@ const AttendanceService = {
           return Utils.buildResponse(false, CONFIG.MESSAGES.STUDENT_NOT_FOUND);
         }
 
-        // Coordinator/Admin authorization
-        const actionUser = this._getActionUser(userId);
-        if (!actionUser || !this._validateCoordinatorAccess(event, actionUser)) {
-          // Prefer CONFIG message when present.
-          if (CONFIG.MESSAGES && CONFIG.MESSAGES.UNAUTHORIZED) {
-            return Utils.buildResponse(false, CONFIG.MESSAGES.UNAUTHORIZED);
-          }
-          return Utils.buildResponse(false, 'Unauthorized access');
-        }
-
-        // Attendance window validation (optional based on EventService availability)
+        // Attendance window validation
         const windowResult = this._validateAttendanceWindow(eventId);
         if (windowResult) return windowResult;
 
@@ -283,7 +276,7 @@ const AttendanceService = {
           return Utils.buildResponse(false, 'Attendance cannot be recorded for cancelled events.');
         }
 
-        // Reject inactive student (if status exists)
+        // Reject inactive student
         if (student.status && student.status !== CONFIG.USER_STATUS.ACTIVE) {
           if (CONFIG.MESSAGES && CONFIG.MESSAGES.STUDENT_INACTIVE) {
             return Utils.buildResponse(false, CONFIG.MESSAGES.STUDENT_INACTIVE);
@@ -306,7 +299,6 @@ const AttendanceService = {
             return Utils.buildResponse(false, 'Student is not an active participant for this Fixed event.');
           }
         } else {
-          // Open Event - Use ParticipantService.checkEligibility if available
           if (typeof ParticipantService !== 'undefined' && ParticipantService && typeof ParticipantService.checkEligibility === 'function') {
             const eligibility = ParticipantService.checkEligibility(eventId, rollNumber, userId);
             if (!eligibility.eligible && eligibility.reason && eligibility.reason.indexOf('Already Added') === -1) {
@@ -314,13 +306,16 @@ const AttendanceService = {
             }
           }
         }
+        Logger.log('[END] Attendance Validation');
 
-        // Prevent duplicate attendance (active only)
+        // 3. Duplicate Check
+        Logger.log('[START] Duplicate Check');
         const { idx } = this._getActiveAttendanceIndex();
         const duplicateKey = String(eventId).trim() + '|' + String(rollNumber).trim().toUpperCase();
         if (idx[duplicateKey]) {
           return Utils.buildResponse(false, CONFIG.MESSAGES.ATTENDANCE_ALREADY_EXISTS);
         }
+        Logger.log('[END] Duplicate Check');
 
         // Determine status
         let status = normalized.status || CONFIG.ATTENDANCE_STATUS.PRESENT;
@@ -328,6 +323,8 @@ const AttendanceService = {
           return Utils.buildResponse(false, CONFIG.MESSAGES.INVALID_ATTENDANCE_STATUS);
         }
 
+        // 4. Attendance Save
+        Logger.log('[START] Attendance Save');
         const attendanceId = IdService.generateAttendanceId();
         const now = new Date();
 
@@ -346,6 +343,8 @@ const AttendanceService = {
         };
 
         const success = DatabaseService.insertRow(CONFIG.SHEETS.ATTENDANCE, newAttendance);
+        Logger.log('[END] Attendance Save | Success: ' + success);
+
         if (success) {
           const resp = Utils.buildResponse(true, CONFIG.MESSAGES.ATTENDANCE_MARKED, { attendance: newAttendance });
           try {
@@ -361,7 +360,7 @@ const AttendanceService = {
               userId
             );
           } catch (error) {
-            Logger.log(error);
+            Logger.log('Audit Log Error: ' + error.message);
           }
           try {
             NotificationService.createNotification({
@@ -372,11 +371,13 @@ const AttendanceService = {
               related_event_id: eventId
             });
           } catch (error) {
-            Logger.log(error);
+            Logger.log('Notification Error: ' + error.message);
           }
+          Logger.log('[END] AttendanceService.markAttendance | Execution Time: ' + (Date.now() - startTime) + 'ms');
           return resp;
         }
 
+        Logger.log('[END] AttendanceService.markAttendance | Execution Time: ' + (Date.now() - startTime) + 'ms');
         return Utils.buildResponse(false, CONFIG.MESSAGES.ATTENDANCE_MARK_FAILED);
       }
     );
@@ -393,6 +394,9 @@ const AttendanceService = {
       'deleteAttendance',
       CONFIG.MESSAGES && CONFIG.MESSAGES.ATTENDANCE_DELETE_FAILED ? CONFIG.MESSAGES.ATTENDANCE_DELETE_FAILED : 'Attendance deletion failed.',
       () => {
+        const startTime = Date.now();
+        Logger.log('[START] AttendanceService.deleteAttendance | Attendance ID: ' + attendanceId);
+
         const sheetName = CONFIG.SHEETS.ATTENDANCE;
 
         const attendanceRecord = this.getAttendanceById(attendanceId);
@@ -401,16 +405,20 @@ const AttendanceService = {
         }
 
         const attendanceEventId = attendanceRecord[this._getAttendanceColumn('EVENT_ID', 'event_id')] || attendanceRecord.event_id;
-        const event = EventService.getEventById(attendanceEventId);
+        
+        // Authorization Check via central service
+        Logger.log('[START] Authorization Check');
+        const isAuthorized = this._validateCoordinatorAccess(userId, attendanceEventId);
+        Logger.log('[END] Authorization Check | Result: ' + isAuthorized);
 
-        const actionUser = this._getActionUser(userId);
-        if (!actionUser || !this._validateCoordinatorAccess(event, actionUser)) {
+        if (!isAuthorized) {
           if (CONFIG.MESSAGES && CONFIG.MESSAGES.UNAUTHORIZED) {
             return Utils.buildResponse(false, CONFIG.MESSAGES.UNAUTHORIZED);
           }
-          return Utils.buildResponse(false, 'Unauthorized access');
+          return Utils.buildResponse(false, 'Unauthorized access.');
         }
 
+        const event = EventService.getEventById(attendanceEventId);
         if (event && event.status === CONFIG.EVENT_STATUS.COMPLETED) {
           return Utils.buildResponse(false, CONFIG.MESSAGES.EVENT_ALREADY_COMPLETED);
         }
@@ -421,16 +429,11 @@ const AttendanceService = {
           return Utils.buildResponse(false, 'Cannot delete attendance for cancelled events.');
         }
 
-        // Soft delete only
+        // Soft delete updates
         const deletionKey = this._getDeletionFlagKey();
         const updatedByKey = this._getUpdatedByKey();
         const updatedAtKey = this._getUpdatedAtKey();
         const lastKeys = this._getLastActionKeys();
-
-        // Timestamp consistency: prefer an existing helper. If sheets store ISO strings,
-        // the backend previously used ISO; however this file already uses Date objects for attendance_time.
-        // The safest project-consistent choice is to store a numeric timestamp if that’s the standard.
-        // TODO: If your Attendance sheet expects ISO strings in Updated At/Last Action At, switch back to ISO.
         const ts = Utils.getCurrentTimestamp();
 
         const updateData = {
@@ -442,9 +445,12 @@ const AttendanceService = {
           [lastKeys.lastActionAt]: ts
         };
 
-        // Prefer updateRow to preserve sheet structure and avoid hard delete.
         const attendanceIdKey = this._getAttendanceColumn('ATTENDANCE_ID', 'attendance_id');
+        
+        Logger.log('[START] Attendance Save (Soft Delete Update)');
         const success = DatabaseService.updateRow(sheetName, attendanceIdKey, attendanceId, updateData);
+        Logger.log('[END] Attendance Save (Soft Delete Update) | Success: ' + success);
+
         if (success) {
           const resp = Utils.buildResponse(true, CONFIG.MESSAGES.ATTENDANCE_DELETED);
           try {
@@ -460,10 +466,13 @@ const AttendanceService = {
               userId
             );
           } catch (error) {
-            Logger.log(error);
+            Logger.log('Audit Log Error: ' + error.message);
           }
+          Logger.log('[END] AttendanceService.deleteAttendance | Execution Time: ' + (Date.now() - startTime) + 'ms');
           return resp;
         }
+
+        Logger.log('[END] AttendanceService.deleteAttendance | Execution Time: ' + (Date.now() - startTime) + 'ms');
         return Utils.buildResponse(false, CONFIG.MESSAGES.ATTENDANCE_DELETE_FAILED);
       }
     );
@@ -660,4 +669,3 @@ const AttendanceService = {
   }
 
 };
-

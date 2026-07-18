@@ -346,6 +346,12 @@ const EventService = {
         [CONFIG.COLUMNS.LAST_ACTION_BY]: eventData[CONFIG.COLUMNS.CREATED_BY] || 'Unknown'
       };
 
+      for (var k in eventData) {
+        if (newEvent[k] === undefined && eventData[k] !== undefined) {
+          newEvent[k] = eventData[k];
+        }
+      }
+
       const success = DatabaseService.insertRow(CONFIG.SHEETS.EVENTS, newEvent);
       if (success) {
         this._invalidateCaches_();

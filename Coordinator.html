@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Coordinator Terminal - BVC Event Attendance Management System</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.min.css">
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <?!= include('common_css'); ?>
+  <?!= include('coordinator_attendance_css'); ?>
+</head>
+<body>
+
+<main class="terminal-container d-flex flex-column justify-content-between">
+  
+  <div>
+    <!-- Top premium gradient header -->
+    <header class="premium-header" aria-label="Terminal Header">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <div class="d-flex align-items-center gap-2">
+          <!-- College emblem vector replacement -->
+          <svg class="college-logo-img" width="30" height="30" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="20" cy="20" r="20" fill="rgba(255,255,255,0.2)"/>
+            <path d="M12 11H28V15L20 22L12 15V11Z" fill="#ffffff"/>
+            <path d="M12 25H28V28H12V25Z" fill="#ffffff"/>
+          </svg>
+          <span class="header-title-text text-white">BVC Event Scanner</span>
+        </div>
+        <span id="connection-status" class="status-pulse-badge">
+          <span class="status-pulse-dot"></span> Online
+        </span>
+      </div>
+      
+      <div class="event-banner-card">
+        <h2 id="terminal-event-name" class="h6 fw-bold text-white mb-1">Loading Event Context...</h2>
+        <div class="d-flex justify-content-between text-white-50 extra-small">
+          <span id="terminal-event-date"><i class="bi bi-calendar3 me-1"></i>--/--/----</span>
+          <span id="terminal-coordinator-name"><i class="bi-person-badge me-1"></i>Coordinator</span>
+        </div>
+        <div class="mt-2 text-start">
+          <span id="event-status-badge" class="badge bg-success text-white extra-small fw-semibold">🟢 Event Active</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Live Counters grid -->
+    <section class="live-counters-grid" aria-label="Live Statistics">
+      <div class="row g-2">
+        <div class="col-3">
+          <div class="counter-card">
+            <span class="counter-card-title">Present</span>
+            <span id="stat-present-count" class="counter-card-value counter-present">0</span>
+          </div>
+        </div>
+        <div class="col-3">
+          <div class="counter-card">
+            <span class="counter-card-title">Remaining</span>
+            <span id="stat-remaining-count" class="counter-card-value counter-remaining">0</span>
+          </div>
+        </div>
+        <div class="col-3">
+          <div class="counter-card">
+            <span class="counter-card-title">Total</span>
+            <span id="stat-total-count" class="counter-card-value counter-total">0</span>
+          </div>
+        </div>
+        <div class="col-3">
+          <div class="counter-card">
+            <span class="counter-card-title">Duplicate</span>
+            <span id="stat-duplicate-count" class="counter-card-value counter-duplicates">0</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Scanner view card -->
+    <section class="scanner-card" aria-label="Attendance Intake">
+      <form id="attendance-input-form" onsubmit="return false;" novalidate>
+        
+        <!-- Laser sweeping animation view with live camera scanner overlay container -->
+        <div class="scanner-viewport">
+          <div id="interactive-camera-scanner" style="width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1;"></div>
+          <div class="scanner-viewport-glowing-corners" style="z-index: 5;">
+            <div class="scanner-corner-br scanner-corner-bl"></div>
+          </div>
+          <div class="scanner-laser-line" style="z-index: 6;"></div>
+          <i class="bi bi-qr-code-scan scanner-icon" style="z-index: 2;" aria-hidden="true"></i>
+        </div>
+
+        <div class="mb-3">
+          <label for="barcode-roll-input" class="form-label fw-bold text-secondary extra-small text-uppercase mb-1">Scan Student Barcode / Enter Roll Number</label>
+          <div class="input-group">
+            <input 
+              type="text" 
+              id="barcode-roll-input" 
+              class="form-control barcode-scanner-input-field text-uppercase fw-bold" 
+              placeholder="SCAN OR TYPE HERE" 
+              autocomplete="off"
+              autofocus
+              aria-required="true"
+            >
+          </div>
+          <div id="scanner-status" class="form-text extra-small fw-semibold text-muted text-center mt-2">Ready to ingest scans</div>
+        </div>
+        <button type="submit" id="btn-submit-attendance" class="btn btn-primary w-100 manual-submit-button-field d-flex align-items-center justify-content-center">
+          <i class="bi-arrow-right-circle-fill me-2"></i> Submit Attendance
+        </button>
+      </form>
+    </section>
+
+    <!-- Student profile preview card -->
+    <section class="preview-card-container" aria-label="Current Scanning Status & Preview">
+      <div id="student-preview-card" class="preview-card-outer state-ready" aria-live="polite">
+        
+        <div class="card-body p-4 text-center text-muted" id="student-preview-placeholder">
+          <i class="bi bi-person-bounding-box display-6 d-block mb-2 text-primary opacity-25" aria-hidden="true"></i>
+          <strong class="d-block text-dark small fw-bold">Scan Station Idle</strong>
+          <span class="extra-small text-muted">Awaiting physical ID scans or manual entry...</span>
+        </div>
+        
+        <div class="card-body p-0 d-none" id="student-preview-content">
+          <div id="preview-status-strip" class="scan-status-strip strip-success">
+            <i class="bi bi-check-circle-fill me-1" aria-hidden="true"></i> Attendance Marked
+          </div>
+
+          <div class="p-3">
+            <div class="d-flex align-items-center mb-3">
+              <div id="preview-avatar-badge" class="student-badge-avatar me-3">
+                <i class="bi bi-person-fill" aria-hidden="true"></i>
+              </div>
+              <div class="text-start">
+                <h3 id="preview-student-name" class="h6 fw-bold text-dark mb-0"></h3>
+                <span id="preview-student-roll" class="badge bg-primary font-display extra-small mt-1"></span>
+              </div>
+            </div>
+            
+            <div class="row g-2 text-start extra-small bg-light rounded-3 p-3 border">
+              <div class="col-6 mb-1">
+                <span class="text-muted d-block uppercase fw-bold">Department</span>
+                <strong id="preview-student-dept" class="text-dark font-display"></strong>
+              </div>
+              <div class="col-6 mb-1">
+                <span class="text-muted d-block uppercase fw-bold">Year of Study</span>
+                <strong id="preview-student-year" class="text-dark font-display"></strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Recent Scans feed card -->
+    <section class="recently-scanned-card" aria-label="Recent Scans Auditing Feed">
+      <h4 class="h6 fw-bold text-secondary mb-3 d-flex justify-content-between align-items-center">
+        <span class="text-uppercase extra-small tracking-wider">Recently Scanned Feed</span>
+        <span class="badge bg-light text-muted border font-display">Latest 10</span>
+      </h4>
+      <div id="recent-scans-container" class="recent-feed-scroller list-group list-group-flush" aria-live="polite">
+      </div>
+    </section>
+  </div>
+
+  <!-- Sticky Bottom Tab actions bar -->
+  <footer class="action-tab-bar" role="contentinfo">
+    <button type="button" id="btn-terminal-refresh" class="action-btn-pill btn-pill-refresh">
+      <i class="bi bi-arrow-clockwise"></i> Refresh
+    </button>
+    <button type="button" id="btn-terminal-sync" class="action-btn-pill btn-pill-sync">
+      <i class="bi bi-cloud-arrow-up"></i> Sync
+    </button>
+    <button type="button" id="btn-terminal-logout" class="action-btn-pill btn-pill-logout" aria-label="Close Terminal and Logout">
+      <i class="bi bi-box-arrow-right"></i> Logout
+    </button>
+  </footer>
+
+  <!-- Premium Spot Registration Modal -->
+  <div class="modal fade" id="spotRegistrationModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="spotRegistrationModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered px-3">
+      <div class="modal-content border-0" style="border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.25);">
+        <div class="modal-header bg-primary text-white border-0 py-3" style="border-radius: 20px 20px 0 0;">
+          <h5 class="modal-title fw-bold" id="spotRegistrationModalLabel">
+            <i class="bi bi-person-plus-fill me-2"></i> Spot Enrollment
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close" id="btn-close-spot-modal"></button>
+        </div>
+        <div class="modal-body p-4 text-start">
+          
+          <!-- View 1: Open Event Confirmation View -->
+          <div id="spot-open-event-view" class="d-none">
+            <div class="alert alert-info border-0 small mb-3 text-start" style="border-radius: 12px; background-color: rgba(37, 99, 235, 0.08); color: #1D4ED8;">
+              <i class="bi bi-info-circle-fill me-2"></i> <strong>Open Event Check-in</strong>: Add student to attendance?
+            </div>
+            <p class="small text-muted mb-4">
+              ID <strong id="spot-open-roll-display" class="text-dark"></strong> is not registered. Click <strong>Add to Attendance</strong> to quick-register them and mark their attendance.
+            </p>
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-light w-50 fw-bold" data-bs-dismiss="modal" style="border-radius: 12px; padding: 12px;">Cancel</button>
+              <button type="button" id="btn-confirm-spot-open" class="btn btn-primary w-50 fw-bold" style="border-radius: 12px; padding: 12px;">Add to Attendance</button>
+            </div>
+          </div>
+
+          <!-- View 2: Fixed Event Registration Form View -->
+          <div id="spot-fixed-event-view" class="d-none">
+            <div class="alert alert-warning border-0 small mb-3" style="border-radius: 12px; background-color: rgba(245, 158, 11, 0.1); color: #B45309;">
+              <i class="bi bi-exclamation-triangle-fill me-2"></i> ID <strong id="spot-fixed-roll-display"></strong> is not registered. Complete registration form below to add them:
+            </div>
+            <form id="spot-registration-form" onsubmit="return false;">
+              <input type="hidden" id="spot-roll-input">
+              
+              <div class="mb-3">
+                <label for="spot-name-input" class="form-label small fw-bold text-secondary">Student Full Name</label>
+                <input type="text" class="form-control" id="spot-name-input" placeholder="e.g. Satya Balaji" required style="border-radius: 10px; padding: 10px;">
+              </div>
+              
+              <div class="mb-3">
+                <label for="spot-college-input" class="form-label small fw-bold text-secondary">College Name</label>
+                <input class="form-control" list="college-datalist" id="spot-college-input" placeholder="Type to search college..." required style="border-radius: 10px; padding: 10px;">
+                <datalist id="college-datalist">
+                  <option value="ABR College of Engineering and Technology">
+                  <option value="Adarsh College of Engineering">
+                  <option value="Aditya College of Engineering">
+                  <option value="Aditya College of Engineering and Technology">
+                  <option value="Aditya Engineering College">
+                  <option value="Aditya Engineering College for Women">
+                  <option value="Anil Neerukonda Institute of Technology and Sciences">
+                  <option value="Andhra University College of Engineering">
+                  <option value="ANU College of Engineering and Technology">
+                  <option value="Annamacharya Institute of Technology and Sciences, Rajampet">
+                  <option value="Annamacharya Institute of Technology and Sciences, Tirupati">
+                  <option value="A.K.R.G. College of Engineering and Technology">
+                  <option value="Bapatla Engineering College">
+                  <option value="BITS Vizag">
+                  <option value="Bonam Venkata Chalamayya Engineering College">
+                  <option value="BVC Institute of Technology and Science">
+                  <option value="Chadalawada Ramanamma Engineering College">
+                  <option value="Chalapathi Institute of Engineering and Technology">
+                  <option value="Chaitanya Institute of Engineering and Technology">
+                  <option value="Dadi Institute of Engineering and Technology">
+                  <option value="Dr. K.V. Subba Reddy Institute of Technology">
+                  <option value="Dhanekula Institute of Engineering and Technology">
+                  <option value="D.M.S.S.V.H. College of Engineering">
+                  <option value="Dr. K.V. Subba Reddy College of Engineering">
+                  <option value="DNR College of Engineering and Technology">
+                  <option value="DVR & Dr. HS MIC College of Technology">
+                  <option value="Eluru College of Engineering and Technology">
+                  <option value="Guntur Engineering College">
+                  <option value="Godavari Global University (Engineering)">
+                  <option value="Godavari Institute of Engineering and Technology">
+                  <option value="GMR Institute of Technology">
+                  <option value="Gokula Krishna College of Engineering">
+                  <option value="G. Pulla Reddy Engineering College">
+                  <option value="G. Pullaiah College of Engineering and Technology">
+                  <option value="Gayatri Vidya Parishad College of Engineering">
+                  <option value="Gayatri Vidya Parishad College of Engineering for Women">
+                  <option value="Helapuri Institute of Technology and Science">
+                  <option value="International Institute of Technology and Science">
+                  <option value="JNTUA College of Engineering, Anantapur">
+                  <option value="JNTUK University College of Engineering, Kakinada">
+                  <option value="JNTUK University College of Engineering, Narasaraopet">
+                  <option value="JNTUA College of Engineering, Pulivendula">
+                  <option value="JNTUK University College of Engineering, Vizianagaram">
+                  <option value="Kakinada College of Engineering">
+                  <option value="Kakinada Institute of Engineering and Technology">
+                  <option value="Kakinada Institute of Technological Sciences">
+                  <option value="Kakinada Institute of Technological Sciences for Women">
+                  <option value="KL College of Engineering">
+                  <option value="Lakireddy Bali Reddy College of Engineering">
+                  <option value="Lendi Institute of Engineering and Technology">
+                  <option value="Madanapalle Institute of Technology and Science">
+                  <option value="Maharaj Vijayaram Gajapathi Raj College of Engineering">
+                  <option value="NBKR Institute of Science and Technology">
+                  <option value="NRI Institute of Technology">
+                  <option value="PACE Institute of Technology and Sciences">
+                  <option value="Priyadarshini Institute of Engineering and Technology">
+                  <option value="Pragati Engineering College">
+                  <option value="Prasad V. Potluri Siddhartha Institute of Technology">
+                  <option value="Rajeev Gandhi Memorial College of Engineering and Technology">
+                  <option value="RVR & JC College of Engineering">
+                  <option value="Sasi Institute of Technology and Engineering">
+                  <option value="Sree Vidyanikethan Engineering College">
+                  <option value="Sri Devi Engineering College">
+                  <option value="Siddharth Institute of Engineering and Technology">
+                  <option value="Sri Kalahasteeswara Institute of Technology">
+                  <option value="St. Mary's College of Engineering">
+                  <option value="Sagi Rama Krishnam Raju (SRKR) Engineering College">
+                  <option value="Srinivasa Ramanujan Institute of Technology">
+                  <option value="SRM University AP">
+                  <option value="Sri Venkateswara College of Engineering">
+                  <option value="Sri Venkateswara Engineering College">
+                  <option value="Sri Vasavi Engineering College">
+                  <option value="Tirumala Engineering College">
+                  <option value="Visakha Institute of Engineering and Technology">
+                  <option value="Vemu Institute of Technology">
+                  <option value="Vignan's Institute of Information Technology">
+                  <option value="Vignan's Lara Institute of Technology and Science">
+                  <option value="Vignan Institute of Technology">
+                  <option value="Velagapudi Ramakrishna Siddhartha Engineering College">
+                  <option value="Vasireddy Venkatadri Institute of Technology">
+                  <option value="Yogananda Institute of Technology and Science">
+                  <option value="YSR Engineering College of Yogi Vemana University">
+                </datalist>
+              </div>
+              
+              <div class="row g-2 mb-3">
+                <div class="col-6">
+                  <label for="spot-dept-select" class="form-label small fw-bold text-secondary">Branch</label>
+                  <select class="form-select" id="spot-dept-select" style="border-radius: 10px; padding: 10px;">
+                    <option value="CSE" selected>CSE</option>
+                    <option value="ECE">ECE</option>
+                    <option value="EEE">EEE</option>
+                    <option value="MECH">MECH</option>
+                    <option value="CIVIL">CIVIL</option>
+                    <option value="IT">IT</option>
+                    <option value="OTHERS">Others</option>
+                  </select>
+                </div>
+                <div class="col-6">
+                  <label for="spot-year-select" class="form-label small fw-bold text-secondary">Year of Study</label>
+                  <select class="form-select" id="spot-year-select" style="border-radius: 10px; padding: 10px;">
+                    <option value="1" selected>1st Year</option>
+                    <option value="2">2nd Year</option>
+                    <option value="3">3rd Year</option>
+                    <option value="4">4th Year</option>
+                  </select>
+                </div>
+              </div>
+              
+              <!-- Branch Other Specify Input -->
+              <div class="mb-3 d-none" id="spot-dept-other-container">
+                <label for="spot-dept-other-input" class="form-label small fw-bold text-secondary">Specify Branch</label>
+                <input type="text" class="form-control" id="spot-dept-other-input" placeholder="e.g. Artificial Intelligence" style="border-radius: 10px; padding: 10px;">
+              </div>
+              
+              <div class="d-flex gap-2 mt-4">
+                <button type="button" class="btn btn-light w-50 fw-bold" data-bs-dismiss="modal" style="border-radius: 12px; padding: 12px;">Cancel</button>
+                <button type="submit" id="btn-confirm-spot-reg" class="btn btn-primary w-50 fw-bold" style="border-radius: 12px; padding: 12px;">Register & Mark</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+<?!= include('coordinator_attendance_js'); ?>
+</body>
+</html>

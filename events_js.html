@@ -18,9 +18,14 @@ App.Modules.events = {
   init: function() {
     App.Logger.info('Events init');
     this.bindEvents();
-    this.loadDependencies().then(() => {
-      this.load();
-    });
+    this.loadDependencies()
+      .then(() => {
+        this.load();
+      })
+      .catch(err => {
+        App.Logger.error("Failed to load dependencies: " + err.message);
+        this.load(); // try to load events anyway
+      });
   },
 
   loadDependencies: function() {
@@ -28,16 +33,30 @@ App.Modules.events = {
       App.API.getAllUsers().catch(() => []),
       App.API.getAllStudents().catch(() => [])
     ]).then(([users, students]) => {
-      const uData = users.data || users;
-      this.coordinatorsData = (Array.isArray(uData) ? uData : []).filter(u => u.role === App.Constants.ROLES.COORDINATOR || u.role === 'Coordinator');
+      const uData = (users && (users.users || users.data || (Array.isArray(users) ? users : []))) || [];
+      // Users from sheet have 'Role' key (Config.COLUMNS.USER_ROLE = 'Role'), not lowercase 'role'
+      this.coordinatorsData = (Array.isArray(uData) ? uData : []).filter(u => {
+        if (!u) return false;
+        const role = u.role || u['Role'] || u['User Role'] || '';
+        return role === App.Constants.ROLES.COORDINATOR || role === 'Coordinator';
+      });
+      // Also include Admins and Super Admins as event coordinators
+      if (this.coordinatorsData.length === 0) {
+        // Fallback: show all active users if no coordinator role found
+        this.coordinatorsData = (Array.isArray(uData) ? uData : []).filter(u => {
+          if (!u) return false;
+          const status = u.status || u['Status'] || u['User Status'] || '';
+          return status !== 'Inactive' && status !== 'Deleted';
+        });
+      }
       
       const defaultDepts = ['CSE', 'CSE (AI & ML)', 'CSE (Data Science)', 'Information Technology (IT)', 'Electronics & Communication Engineering (ECE)', 'Electrical & Electronics Engineering (EEE)', 'Mechanical Engineering', 'Civil Engineering'];
       defaultDepts.forEach(d => this.departmentsData.add(d));
 
-      const sData = students.data || students;
+      const sData = (students && (students.students || students.data || (Array.isArray(students) ? students : []))) || [];
       const studList = Array.isArray(sData) ? sData : [];
       studList.forEach(s => {
-        if (s.department && s.department !== 'N/A') this.departmentsData.add(s.department);
+        if (s && s.department && s.department !== 'N/A') this.departmentsData.add(s.department);
       });
 
       this.populateDependencyDropdowns();
@@ -51,9 +70,15 @@ App.Modules.events = {
     let coordHtml = '<option value="">Select Coordinator</option>';
     let coordFilterHtml = '<option value="">All Coordinators</option>';
     this.coordinatorsData.forEach(c => {
-      coordHtml += `<option value="${App.Utils.escapeHtml(c.user_id)}">${App.Utils.escapeHtml(c.full_name)}</option>`;
-      coordFilterHtml += `<option value="${App.Utils.escapeHtml(c.user_id)}">${App.Utils.escapeHtml(c.full_name)}</option>`;
+      // Support both sheet column keys ('User ID','First Name') and sanitized camelCase keys
+      const uid = c.user_id || c['User ID'] || c.userId || c.id || '';
+      const firstName = c.full_name || c['First Name'] || c.firstName || '';
+      const lastName = c['Last Name'] || c.lastName || '';
+      const displayName = firstName + (lastName ? ' ' + lastName : '') || uid || 'Unknown';
+      coordHtml += `<option value="${App.Utils.escapeHtml(uid)}">${App.Utils.escapeHtml(displayName.trim())}</option>`;
+      coordFilterHtml += `<option value="${App.Utils.escapeHtml(uid)}">${App.Utils.escapeHtml(displayName.trim())}</option>`;
     });
+    coordHtml += `<option value="NEW_COORDINATOR" style="font-weight: bold; color: var(--bs-primary);">+ -- Create New Coordinator --</option>`;
     if (coordFilter) coordFilter.innerHTML = coordFilterHtml;
     if (coordSelect) coordSelect.innerHTML = coordHtml;
 
@@ -195,6 +220,7 @@ App.Modules.events = {
     if (btnCancel) btnCancel.addEventListener('click', () => this.handleLifecycleClick('Cancel'));
 
     this.setupCustomDropdowns();
+    this.setupCreateEventFormToggles();
     
     // Dirty form checking
     if (eventForm) {
@@ -219,6 +245,67 @@ App.Modules.events = {
         } else {
           this.editingEventId = null;
         }
+      });
+    }
+  },
+
+  setupCreateEventFormToggles: function() {
+    const attendanceType = document.getElementById('eventAttendanceType');
+    const fixedOptions = document.getElementById('fixed-event-options');
+    if (attendanceType && fixedOptions) {
+      attendanceType.addEventListener('change', (e) => {
+        if (e.target.value === 'Fixed') {
+          fixedOptions.classList.remove('d-none');
+        } else {
+          fixedOptions.classList.add('d-none');
+        }
+      });
+    }
+
+    const radAllColleges = document.getElementById('groupAllColleges');
+    const radBvc = document.getElementById('groupBVC');
+    const infoAllColleges = document.getElementById('info-fields-all-colleges');
+    const infoBvc = document.getElementById('info-fields-bvc-only');
+
+    const toggleFixedFields = () => {
+      if (radAllColleges && radAllColleges.checked) {
+        if (infoAllColleges) {
+          infoAllColleges.classList.remove('d-none');
+          infoAllColleges.classList.add('d-flex');
+        }
+        if (infoBvc) {
+          infoBvc.classList.remove('d-flex');
+          infoBvc.classList.add('d-none');
+        }
+      } else if (radBvc && radBvc.checked) {
+        if (infoAllColleges) {
+          infoAllColleges.classList.remove('d-flex');
+          infoAllColleges.classList.add('d-none');
+        }
+        if (infoBvc) {
+          infoBvc.classList.remove('d-none');
+          infoBvc.classList.add('d-flex');
+        }
+      }
+    };
+
+    if (radAllColleges) radAllColleges.addEventListener('change', toggleFixedFields);
+    if (radBvc) radBvc.addEventListener('change', toggleFixedFields);
+
+    const coordSelect = document.getElementById('eventCoordinator');
+    const newCoordFields = document.getElementById('new-coordinator-fields');
+    if (coordSelect && newCoordFields) {
+      coordSelect.addEventListener('change', (e) => {
+        const req = (e.target.value === 'NEW_COORDINATOR');
+        if (req) {
+          newCoordFields.classList.remove('d-none');
+        } else {
+          newCoordFields.classList.add('d-none');
+        }
+        ['newCoordFirstName', 'newCoordLastName', 'newCoordEmail', 'newCoordUsername', 'newCoordPassword'].forEach(id => {
+          const input = document.getElementById(id);
+          if (input) input.required = req;
+        });
       });
     }
   },
@@ -454,6 +541,33 @@ App.Modules.events = {
       }
     }
     
+    // Reset custom form options
+    const fixedOptions = document.getElementById('fixed-event-options');
+    if (fixedOptions) fixedOptions.classList.remove('d-none');
+
+    const radAll = document.getElementById('groupAllColleges');
+    if (radAll) radAll.checked = true;
+
+    const infoAll = document.getElementById('info-fields-all-colleges');
+    if (infoAll) {
+      infoAll.classList.remove('d-none');
+      infoAll.classList.add('d-flex');
+    }
+
+    const infoBvc = document.getElementById('info-fields-bvc-only');
+    if (infoBvc) {
+      infoBvc.classList.remove('d-flex');
+      infoBvc.classList.add('d-none');
+    }
+
+    const newCoordFields = document.getElementById('new-coordinator-fields');
+    if (newCoordFields) newCoordFields.classList.add('d-none');
+
+    ['newCoordFirstName', 'newCoordLastName', 'newCoordEmail', 'newCoordUsername', 'newCoordPassword'].forEach(id => {
+      const input = document.getElementById(id);
+      if (input) input.required = false;
+    });
+
     document.getElementById('eventOriginalId').value = '';
     document.getElementById('eventOriginalStatus').value = 'Draft';
     document.getElementById('eventModalLabel').textContent = 'Create Event';
@@ -476,11 +590,11 @@ App.Modules.events = {
     const errorAlert = document.getElementById('eventModalError');
     if (errorAlert) errorAlert.classList.add('d-none');
     
-    if (!this.eventModalInstance) {
-      const modalEl = document.getElementById('eventModal');
-      if (modalEl) this.eventModalInstance = new bootstrap.Modal(modalEl);
+    const modalEl = document.getElementById('eventModal');
+    if (modalEl) {
+      const modal = new bootstrap.Modal(modalEl);
+      modal.show();
     }
-    if (this.eventModalInstance) this.eventModalInstance.show();
   },
 
   openViewEventModal: function(id) {
@@ -525,6 +639,47 @@ App.Modules.events = {
     updateText(document.querySelectorAll('.event-year-check'), 'eventYearsDropdownText', 'Select Years');
     
     document.getElementById('eventCapacity').value = evt.capacity || '';
+
+    // Show/hide fixed options
+    const attType = evt['Attendance Type'] || evt.attendance_type || 'Fixed';
+    document.getElementById('eventAttendanceType').value = attType;
+    const fixedOptions = document.getElementById('fixed-event-options');
+    if (attType === 'Fixed') {
+      if (fixedOptions) fixedOptions.classList.remove('d-none');
+      const subgroup = evt['Fixed Subgroup'] || evt.fixedSubgroup || 'ALL';
+      const radAll = document.getElementById('groupAllColleges');
+      const radBvc = document.getElementById('groupBVC');
+      if (subgroup === 'ALL') {
+        if (radAll) radAll.checked = true;
+      } else {
+        if (radBvc) radBvc.checked = true;
+      }
+
+      // Update checkboxes visibility
+      const infoAll = document.getElementById('info-fields-all-colleges');
+      const infoBvc = document.getElementById('info-fields-bvc-only');
+      if (subgroup === 'ALL') {
+        if (infoAll) { infoAll.classList.remove('d-none'); infoAll.classList.add('d-flex'); }
+        if (infoBvc) { infoBvc.classList.remove('d-flex'); infoBvc.classList.add('d-none'); }
+      } else {
+        if (infoAll) { infoAll.classList.remove('d-flex'); infoAll.classList.add('d-none'); }
+        if (infoBvc) { infoBvc.classList.remove('d-none'); infoBvc.classList.add('d-flex'); }
+      }
+
+      // Check required checkboxes
+      const gatherFields = (evt['Required Info Fields'] || evt.gatherFields || '').split(',').map(s => s.trim());
+      document.querySelectorAll('.info-field-chk').forEach(cb => {
+        if (cb.value !== 'Name' && cb.value !== 'Roll Number') {
+          cb.checked = gatherFields.includes(cb.value);
+        }
+      });
+    } else {
+      if (fixedOptions) fixedOptions.classList.add('d-none');
+    }
+
+    // Hide new coordinator fields
+    const newCoordFields = document.getElementById('new-coordinator-fields');
+    if (newCoordFields) newCoordFields.classList.add('d-none');
     
     // Status Badge
     const badgeMap = {
@@ -607,11 +762,11 @@ App.Modules.events = {
       }
     });
     
-    if (!this.eventModalInstance) {
-      const modalEl = document.getElementById('eventModal');
-      if (modalEl) this.eventModalInstance = new bootstrap.Modal(modalEl);
+    const modalEl = document.getElementById('eventModal');
+    if (modalEl) {
+      const modal = new bootstrap.Modal(modalEl);
+      modal.show();
     }
-    if (this.eventModalInstance) this.eventModalInstance.show();
   },
 
   openEditEventModal: function(id) {
@@ -687,6 +842,52 @@ App.Modules.events = {
         updateText(document.querySelectorAll('.event-year-check'), 'eventYearsDropdownText', 'Select Years');
         
         document.getElementById('eventCapacity').value = evt.capacity || '';
+
+        // Show/hide fixed options
+        const attType = evt['Attendance Type'] || evt.attendance_type || 'Fixed';
+        document.getElementById('eventAttendanceType').value = attType;
+        const fixedOptions = document.getElementById('fixed-event-options');
+        if (attType === 'Fixed') {
+          if (fixedOptions) fixedOptions.classList.remove('d-none');
+          const subgroup = evt['Fixed Subgroup'] || evt.fixedSubgroup || 'ALL';
+          const radAll = document.getElementById('groupAllColleges');
+          const radBvc = document.getElementById('groupBVC');
+          if (subgroup === 'ALL') {
+            if (radAll) radAll.checked = true;
+          } else {
+            if (radBvc) radBvc.checked = true;
+          }
+
+          // Update checkboxes visibility
+          const infoAll = document.getElementById('info-fields-all-colleges');
+          const infoBvc = document.getElementById('info-fields-bvc-only');
+          if (subgroup === 'ALL') {
+            if (infoAll) { infoAll.classList.remove('d-none'); infoAll.classList.add('d-flex'); }
+            if (infoBvc) { infoBvc.classList.remove('d-flex'); infoBvc.classList.add('d-none'); }
+          } else {
+            if (infoAll) { infoAll.classList.remove('d-flex'); infoAll.classList.add('d-none'); }
+            if (infoBvc) { infoBvc.classList.remove('d-none'); infoBvc.classList.add('d-flex'); }
+          }
+
+          // Check required checkboxes
+          const gatherFields = (evt['Required Info Fields'] || evt.gatherFields || '').split(',').map(s => s.trim());
+          document.querySelectorAll('.info-field-chk').forEach(cb => {
+            if (cb.value !== 'Name' && cb.value !== 'Roll Number') {
+              cb.checked = gatherFields.includes(cb.value);
+            }
+          });
+        } else {
+          if (fixedOptions) fixedOptions.classList.add('d-none');
+        }
+
+        // Hide new coordinator fields
+        const newCoordFields = document.getElementById('new-coordinator-fields');
+        if (newCoordFields) newCoordFields.classList.add('d-none');
+        ['newCoordFirstName', 'newCoordLastName', 'newCoordEmail', 'newCoordUsername', 'newCoordPassword'].forEach(id => {
+          const input = document.getElementById(id);
+          if (input) input.required = false;
+        });
+
         document.getElementById('eventOriginalStatus').value = evt.status || 'Draft';
         
         document.getElementById('eventCreationActionGroup').classList.add('d-none');
@@ -737,11 +938,11 @@ App.Modules.events = {
         const errorAlert = document.getElementById('eventModalError');
         if (errorAlert) errorAlert.classList.add('d-none');
         
-        if (!this.eventModalInstance) {
-          const modalEl = document.getElementById('eventModal');
-          if (modalEl) this.eventModalInstance = new bootstrap.Modal(modalEl);
+        const modalEl = document.getElementById('eventModal');
+        if (modalEl) {
+          const modal = new bootstrap.Modal(modalEl);
+          modal.show();
         }
-        if (this.eventModalInstance) this.eventModalInstance.show();
       })
       .catch(err => {
         this.setModalLoading(false);
@@ -848,6 +1049,16 @@ App.Modules.events = {
       else currentTargetStatus = origStatus;
     }
     
+    const attType = document.getElementById('eventAttendanceType') ? document.getElementById('eventAttendanceType').value : 'Fixed';
+    let subgroup = '';
+    let requiredFields = '';
+
+    if (attType === 'Fixed') {
+      subgroup = document.querySelector('input[name="fixedSubgroup"]:checked') ? document.querySelector('input[name="fixedSubgroup"]:checked').value : 'ALL';
+      const infoFieldsGroup = (subgroup === 'ALL') ? '#info-fields-all-colleges' : '#info-fields-bvc-only';
+      requiredFields = Array.from(document.querySelectorAll(infoFieldsGroup + ' .info-field-chk:checked')).map(cb => cb.value).join(',');
+    }
+
     const eventData = {
       event_name: document.getElementById('eventName').value.trim(),
       description: document.getElementById('eventDescription').value.trim(),
@@ -861,7 +1072,11 @@ App.Modules.events = {
       years: years,
       capacity: document.getElementById('eventCapacity').value,
       status: currentTargetStatus,
-      attendance_type: document.getElementById('eventAttendanceType') ? document.getElementById('eventAttendanceType').value : 'Fixed',
+      
+      attendance_type: attType,
+      'Attendance Type': attType,
+      'Fixed Subgroup': subgroup,
+      'Required Info Fields': requiredFields,
       
       created_by: App.State && App.State.currentUser ? App.State.currentUser.user_id : 'Unknown',
       action_by: App.State && App.State.currentUser ? App.State.currentUser.user_id : 'Unknown',
@@ -870,63 +1085,114 @@ App.Modules.events = {
       cancel_reason: document.getElementById('cancelReason') ? document.getElementById('cancelReason').value : ''
     };
     
-    if (isEdit) {
-      App.Logger.info("FRONTEND: Update Submitted");
-      App.API.updateEvent(originalId, eventData)
-        .then(res => {
-          App.Logger.info("FRONTEND: Update Success");
-          this.setModalLoading(false);
-          this.isFormDirty = false;
-          this.editingEventId = null;
-          if (this.eventModalInstance) this.eventModalInstance.hide();
-          
-          if (App.Modules.dashboard) {
-            App.Modules.dashboard.load(true);
-          }
-          
-          App.UI.showSuccess("Event updated successfully!");
-          
-          // Inline array update for snappy UI
-          const updatedIndex = this.eventsData.findIndex(e => String(e.event_id) === String(originalId));
-          if (updatedIndex > -1) {
-            if (res.data && res.data.event) {
-              this.eventsData[updatedIndex] = { ...this.eventsData[updatedIndex], ...res.data.event };
-            } else {
-              this.eventsData[updatedIndex] = { ...this.eventsData[updatedIndex], ...eventData };
+    const saveEventFunc = (finalEventData) => {
+      if (isEdit) {
+        App.Logger.info("FRONTEND: Update Submitted");
+        App.API.updateEvent(originalId, finalEventData)
+          .then(res => {
+            App.Logger.info("FRONTEND: Update Success");
+            this.setModalLoading(false);
+            this.isFormDirty = false;
+            this.editingEventId = null;
+            
+            const modalEl = document.getElementById('eventModal');
+            if (modalEl) {
+              const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+              modal.hide();
             }
+            
+            if (App.Modules.dashboard) {
+              App.Modules.dashboard.load(true);
+            }
+            
+            App.UI.showSuccess("Event updated successfully!");
+            
+            // Inline array update for snappy UI
+            const updatedIndex = this.eventsData.findIndex(e => String(e.event_id) === String(originalId));
+            if (updatedIndex > -1) {
+              if (res.data && res.data.event) {
+                this.eventsData[updatedIndex] = { ...this.eventsData[updatedIndex], ...res.data.event };
+              } else {
+                this.eventsData[updatedIndex] = { ...this.eventsData[updatedIndex], ...finalEventData };
+              }
+            }
+            this.applyFilters();
+          })
+          .catch(err => {
+            App.Logger.info("FRONTEND: Update Failed");
+            this.setModalLoading(false);
+            if (errorAlert) {
+              errorAlert.textContent = err.message || "Failed to update event.";
+              errorAlert.classList.remove('d-none');
+            }
+            App.UI.showError(err.message || "Failed to update event.");
+          });
+      } else {
+        App.API.createEvent(finalEventData)
+          .then(res => {
+            this.setModalLoading(false);
+            const modalEl = document.getElementById('eventModal');
+            if (modalEl) {
+              const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+              modal.hide();
+            }
+            
+            if (App.Modules.dashboard) {
+              App.Modules.dashboard.load(true);
+            }
+            
+            App.UI.showSuccess("Event created successfully!");
+            this.load();
+          })
+          .catch(err => {
+            this.setModalLoading(false);
+            if (errorAlert) {
+              errorAlert.textContent = err.message || "Failed to create event.";
+              errorAlert.classList.remove('d-none');
+            }
+            App.UI.showError(err.message || "Failed to create event.");
+          });
+      }
+    };
+
+    // If new coordinator is selected, register them first!
+    if (!isEdit && document.getElementById('eventCoordinator').value === 'NEW_COORDINATOR') {
+      const newCoordPayload = {
+        first_name: document.getElementById('newCoordFirstName').value.trim().toUpperCase(),
+        last_name: document.getElementById('newCoordLastName').value.trim().toUpperCase(),
+        email: document.getElementById('newCoordEmail').value.trim(),
+        username: document.getElementById('newCoordUsername').value.trim().toLowerCase(),
+        password: document.getElementById('newCoordPassword').value,
+        role: 'Coordinator',
+        status: 'Active'
+      };
+
+      App.API.createUser(newCoordPayload)
+        .then(res => {
+          if (res && res.success && res.data && res.data.user) {
+            const newCoordId = res.data.user.user_id;
+            eventData.coordinator_id = newCoordId;
+            saveEventFunc(eventData);
+          } else {
+            this.setModalLoading(false);
+            const msg = (res && res.message) ? res.message : "Failed to create inline coordinator account.";
+            if (errorAlert) {
+              errorAlert.textContent = msg;
+              errorAlert.classList.remove('d-none');
+            }
+            App.UI.showError(msg);
           }
-          this.applyFilters();
         })
         .catch(err => {
-          App.Logger.info("FRONTEND: Update Failed");
           this.setModalLoading(false);
           if (errorAlert) {
-            errorAlert.textContent = err.message || "Failed to update event.";
+            errorAlert.textContent = err.message || "Failed to create coordinator account.";
             errorAlert.classList.remove('d-none');
           }
-          App.UI.showError(err.message || "Failed to update event.");
+          App.UI.showError(err.message || "Failed to create coordinator account.");
         });
     } else {
-      App.API.createEvent(eventData)
-        .then(res => {
-          this.setModalLoading(false);
-          if (this.eventModalInstance) this.eventModalInstance.hide();
-          
-          if (App.Modules.dashboard) {
-            App.Modules.dashboard.load(true);
-          }
-          
-          App.UI.showSuccess("Event created successfully!");
-          this.load();
-        })
-        .catch(err => {
-          this.setModalLoading(false);
-          if (errorAlert) {
-            errorAlert.textContent = err.message || "Failed to create event.";
-            errorAlert.classList.remove('d-none');
-          }
-          App.UI.showError(err.message || "Failed to create event.");
-        });
+      saveEventFunc(eventData);
     }
   },
 
@@ -1204,4 +1470,10 @@ App.Modules.events = {
     });
   }
 };
+
+// Auto-initialize module on direct injection trigger (guard against double-init from SPA double-load)
+if (typeof App !== 'undefined' && App.Modules && App.Modules.events && !App.Modules.events._initialized) {
+  App.Modules.events._initialized = true;
+  App.Modules.events.init();
+}
 </script>

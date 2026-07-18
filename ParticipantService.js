@@ -10,78 +10,103 @@ const ParticipantService = {
 
   // Fetch all participants for a specific event
   getEventParticipants: function(eventId, userId) {
-    // 1. Verify coordinator ownership (if not Admin)
-    const user = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, CONFIG.COLUMNS.USER_ID || 'User ID', userId)[0];
-    if (user && user[CONFIG.COLUMNS.ROLE || 'Role'] === CONFIG.ROLES.COORDINATOR) {
-      const event = DatabaseService.findByColumn(CONFIG.SHEETS.EVENTS, CONFIG.COLUMNS.EVENT_ID || 'Event ID', eventId)[0];
-      if (!event || event[CONFIG.COLUMNS.COORDINATOR_ID || 'Organizer'] !== userId) {
-        throw new Error('Unauthorized: You can only manage participants for your assigned events.');
-      }
-    } else if (!user) {
-      throw new Error('Unauthorized: User not found.');
-    }
-
-    // 2. Fetch participants
-    const participants = DatabaseService.findByColumn(CONFIG.SHEETS.EVENT_PARTICIPANTS, 'Event ID', eventId);
-
-    // 3. Join with Students data
-    const allStudents = DatabaseService.readAllRows(CONFIG.SHEETS.STUDENTS);
-    const enriched = (participants || []).map(p => {
-      const student = (allStudents || []).find(s => s['Roll Number'] === p['Roll Number']) || {};
-      return {
-        ...p,
-        student_name: student['Student Name'] || 'Unknown',
-        department: student['Department ID'] || 'Unknown',
-        year: student['Year'] || 'Unknown',
-        section: student['Section'] || 'Unknown'
-      };
-    });
+    const startTime = Date.now();
+    Logger.log('[START] ParticipantService.getEventParticipants | Event ID: ' + eventId + ', User ID: ' + userId);
     
-    return { success: true, data: enriched };
+    try {
+      // 1. Centralized Authorization via CoordinatorService
+      Logger.log('[START] Authorization');
+      const user = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, CONFIG.COLUMNS.USER_ID || 'User ID', userId)[0];
+      if (!user) {
+        Logger.log('[END] ParticipantService.getEventParticipants | User not found');
+        return Utils.buildResponse(false, 'Unauthorized: User not found.');
+      }
+
+      const role = user[CONFIG.COLUMNS.ROLE || 'Role'] || user.role || user.Role;
+      if (role === CONFIG.ROLES.COORDINATOR) {
+        const isAuthorized = CoordinatorService.canManageEvent(userId, eventId);
+        if (!isAuthorized) {
+          Logger.log('[END] ParticipantService.getEventParticipants | Coordinator Unauthorized');
+          return Utils.buildResponse(false, 'Unauthorized: You can only manage participants for your assigned events.');
+        }
+      }
+      Logger.log('[END] Authorization');
+
+      // 2. Fetch participants
+      Logger.log('[START] Participant Lookup');
+      const participants = DatabaseService.findByColumn(CONFIG.SHEETS.EVENT_PARTICIPANTS, 'Event ID', eventId) || [];
+      
+      // 3. Join with Students data
+      const allStudents = DatabaseService.readAllRows(CONFIG.SHEETS.STUDENTS) || [];
+      const enriched = participants.map(p => {
+        const student = allStudents.find(s => s['Roll Number'] === p['Roll Number']) || {};
+        return {
+          ...p,
+          student_name: student['Student Name'] || 'Unknown',
+          department: student['Department ID'] || 'Unknown',
+          year: student['Year'] || 'Unknown',
+          section: student['Section'] || 'Unknown'
+        };
+      });
+      Logger.log('[END] Participant Lookup');
+      
+      Logger.log('[END] ParticipantService.getEventParticipants | Execution Time: ' + (Date.now() - startTime) + 'ms');
+      return Utils.buildResponse(true, 'Participants retrieved successfully.', enriched);
+    } catch (error) {
+      Logger.log('[ERROR] ParticipantService.getEventParticipants: ' + error.message);
+      return Utils.buildResponse(false, 'Failed to retrieve event participants.');
+    }
   },
 
   // Check if a student is eligible for an event
   checkEligibility: function(eventId, rollNumber, userId) {
-    const studentRecords = DatabaseService.findByColumn(CONFIG.SHEETS.STUDENTS, 'Roll Number', rollNumber);
-    if (studentRecords.length === 0) {
-      return { eligible: false, reason: `Student Not Found: Roll Number ${rollNumber} does not exist.` };
-    }
-    const student = studentRecords[0];
+    const startTime = Date.now();
+    Logger.log('[START] ParticipantService.checkEligibility | Roll: ' + rollNumber);
 
-    const eventRecords = DatabaseService.findByColumn(CONFIG.SHEETS.EVENTS, 'Event ID', eventId);
-    if (eventRecords.length === 0) {
-      return { eligible: false, reason: 'Event Not Found.' };
-    }
-    const event = eventRecords[0];
-
-    // Check if already an active participant
-    const partsAll = DatabaseService.readAllRows(CONFIG.SHEETS.EVENT_PARTICIPANTS);
-    const existing = (partsAll || []).filter(p => p['Event ID'] === eventId && p['Roll Number'] === rollNumber);
-    
-    // Physical sheet validation restricts Status to 'Confirmed', 'Waitlisted', 'Cancelled'.
-    // We treat 'Confirmed' as the active registration status.
-    const activeStatus = 'Confirmed';
-    if (existing.length > 0 && existing[0]['Registration Status'] === activeStatus) {
-      return { eligible: false, reason: 'Already Added: This student is already an active participant.' };
-    }
-
-    // Check Department Mismatch
-    if (event['Departments']) {
-      const allowedDepts = event['Departments'].split(',').map(d => d.trim());
-      if (allowedDepts.length > 0 && !allowedDepts.includes(student['Department ID'])) {
-        return { eligible: false, reason: `Department mismatch: Allowed Departments: ${allowedDepts.join(', ')} | Student Department: ${student['Department ID']}` };
+    try {
+      const studentRecords = DatabaseService.findByColumn(CONFIG.SHEETS.STUDENTS, 'Roll Number', rollNumber);
+      if (studentRecords.length === 0) {
+        return { eligible: false, reason: `Student Not Found: Roll Number ${rollNumber} does not exist.` };
       }
-    }
+      const student = studentRecords[0];
 
-    // Check Year Mismatch
-    if (event['Years']) {
-      const allowedYears = event['Years'].split(',').map(y => y.trim());
-      if (allowedYears.length > 0 && !allowedYears.includes(String(student['Year']))) {
-        return { eligible: false, reason: `Year mismatch: Allowed Years: ${allowedYears.join(', ')} | Student Year: ${student['Year']}` };
+      const eventRecords = DatabaseService.findByColumn(CONFIG.SHEETS.EVENTS, 'Event ID', eventId);
+      if (eventRecords.length === 0) {
+        return { eligible: false, reason: 'Event Not Found.' };
       }
-    }
+      const event = eventRecords[0];
 
-    return { eligible: true, reason: 'Eligible' };
+      // Check if already an active participant
+      const partsAll = DatabaseService.readAllRows(CONFIG.SHEETS.EVENT_PARTICIPANTS) || [];
+      const existing = partsAll.filter(p => p['Event ID'] === eventId && p['Roll Number'] === rollNumber);
+      
+      const activeStatus = 'Confirmed';
+      if (existing.length > 0 && existing[0]['Registration Status'] === activeStatus) {
+        return { eligible: false, reason: 'Already Added: This student is already an active participant.' };
+      }
+
+      // Check Department Mismatch
+      if (event['Departments']) {
+        const allowedDepts = event['Departments'].split(',').map(d => d.trim());
+        if (allowedDepts.length > 0 && !allowedDepts.includes(student['Department ID'])) {
+          return { eligible: false, reason: `Department mismatch: Allowed Departments: ${allowedDepts.join(', ')} | Student Department: ${student['Department ID']}` };
+        }
+      }
+
+      // Check Year Mismatch
+      if (event['Years']) {
+        const allowedYears = event['Years'].split(',').map(y => y.trim());
+        if (allowedYears.length > 0 && !allowedYears.includes(String(student['Year']))) {
+          return { eligible: false, reason: `Year mismatch: Allowed Years: ${allowedYears.join(', ')} | Student Year: ${student['Year']}` };
+        }
+      }
+
+      Logger.log('[END] ParticipantService.checkEligibility | Execution Time: ' + (Date.now() - startTime) + 'ms');
+      return { eligible: true, reason: 'Eligible' };
+    } catch (error) {
+      Logger.log('[ERROR] ParticipantService.checkEligibility: ' + error.message);
+      return { eligible: false, reason: 'Eligibility calculation crash.' };
+    }
   },
 
   // Private helper: composite key fields used for best-effort updates/search.
@@ -90,43 +115,152 @@ const ParticipantService = {
   },
 
   addParticipant: function(eventId, rollNumber, userId) {
-    const user = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, CONFIG.COLUMNS.USER_ID || 'User ID', userId)[0];
-    if (user && user[CONFIG.COLUMNS.ROLE || 'Role'] === CONFIG.ROLES.COORDINATOR) {
-      const event = DatabaseService.findByColumn(CONFIG.SHEETS.EVENTS, CONFIG.COLUMNS.EVENT_ID || 'Event ID', eventId)[0];
-      if (!event || event[CONFIG.COLUMNS.COORDINATOR_ID || 'Organizer'] !== userId) {
-        throw new Error('Unauthorized: You can only manage participants for your assigned events.');
+    const startTime = Date.now();
+    Logger.log('[START] ParticipantService.addParticipant | Event ID: ' + eventId + ', Roll: ' + rollNumber);
+
+    try {
+      // 1. Centralized Authorization via CoordinatorService
+      Logger.log('[START] Authorization');
+      const user = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, CONFIG.COLUMNS.USER_ID || 'User ID', userId)[0];
+      if (!user) {
+        return Utils.buildResponse(false, 'Unauthorized: User not found.');
       }
+      const role = user[CONFIG.COLUMNS.ROLE || 'Role'] || user.role || user.Role;
+      if (role === CONFIG.ROLES.COORDINATOR) {
+        const isAuthorized = CoordinatorService.canManageEvent(userId, eventId);
+        if (!isAuthorized) {
+          return Utils.buildResponse(false, 'Unauthorized: You can only manage participants for your assigned events.');
+        }
+      }
+      Logger.log('[END] Authorization');
+
+      // 2. Eligibility Checking
+      Logger.log('[START] Eligibility');
+      const eligibility = this.checkEligibility(eventId, rollNumber, userId);
+      if (!eligibility.eligible) {
+        return Utils.buildResponse(false, eligibility.reason);
+      }
+      Logger.log('[END] Eligibility');
+
+      // 3. Duplicate and Restoration Logic
+      Logger.log('[START] Participant Lookup');
+      const keyFields = this._participantKeyFields();
+      const partsAll = DatabaseService.readAllRows(CONFIG.SHEETS.EVENT_PARTICIPANTS) || [];
+      const existing = partsAll.filter(p => p[keyFields.eventIdField] === eventId && p[keyFields.rollNumberField] === rollNumber);
+      Logger.log('[END] Participant Lookup');
+
+      const activeStatus = 'Confirmed';
+
+      if (existing.length > 0) {
+        Logger.log('[START] Update');
+        const updates = {
+          'Registration Status': activeStatus,
+          'Registration Timestamp': new Date().toISOString(),
+          'Created By': userId,
+          'Updated At': new Date().toISOString()
+        };
+
+        DatabaseService.updateRow(CONFIG.SHEETS.EVENT_PARTICIPANTS, 'Roll Number', rollNumber, updates);
+        Logger.log('[END] Update');
+
+        try {
+          NotificationService.createNotification({
+            user_id: userId,
+            title: 'Participant Added',
+            message: 'Participant (Roll ' + rollNumber + ') added/restored to event ' + eventId + '.',
+            type: 'Participant',
+            related_event_id: eventId
+          });
+        } catch (error) {
+          Logger.log(error);
+        }
+        try {
+          AuditService.logAction(userId, 'ParticipantService', 'ADD_PARTICIPANT', eventId, 'Participant', 'Participant restored/added', '', 'SUCCESS', rollNumber);
+        } catch (error) {
+          Logger.log(error);
+        }
+
+        Logger.log('[END] ParticipantService.addParticipant | Execution Time: ' + (Date.now() - startTime) + 'ms');
+        return Utils.buildResponse(true, 'Participant restored successfully.');
+      } else {
+        Logger.log('[START] Insert');
+        const newParticipant = {
+          'Event ID': eventId,
+          'Roll Number': rollNumber,
+          'Registration Timestamp': new Date().toISOString(),
+          'Created By': userId,
+          'Registration Status': activeStatus,
+          'Registration Type': 'Pre-Registered',
+          'Attendance Status': 'Absent',
+          'Approval Status': 'Approved',
+          'Created At': new Date().toISOString(),
+          'Updated At': new Date().toISOString(),
+          'Deletion Flag': false
+        };
+        DatabaseService.insertRow(CONFIG.SHEETS.EVENT_PARTICIPANTS, newParticipant);
+        Logger.log('[END] Insert');
+
+        try {
+          AuditService.logAction(userId, 'ParticipantService', 'ADD_PARTICIPANT', eventId, 'Participant', 'Participant added', '', 'SUCCESS', rollNumber);
+        } catch (error) {
+          Logger.log(error);
+        }
+
+        Logger.log('[END] ParticipantService.addParticipant | Execution Time: ' + (Date.now() - startTime) + 'ms');
+        return Utils.buildResponse(true, 'Participant added successfully.');
+      }
+    } catch (error) {
+      Logger.log('[ERROR] ParticipantService.addParticipant: ' + error.message);
+      return Utils.buildResponse(false, 'Failed to add participant.');
     }
+  },
 
-    const eligibility = this.checkEligibility(eventId, rollNumber, userId);
-    if (!eligibility.eligible) {
-      throw new Error(eligibility.reason);
-    }
+  removeParticipant: function(eventId, rollNumber, userId) {
+    const startTime = Date.now();
+    Logger.log('[START] ParticipantService.removeParticipant | Event ID: ' + eventId + ', Roll: ' + rollNumber);
 
-    // Check if they were previously removed
-    const keyFields = this._participantKeyFields();
-    const partsAll = DatabaseService.readAllRows(CONFIG.SHEETS.EVENT_PARTICIPANTS);
-    const existing = (partsAll || []).filter(p => p[keyFields.eventIdField] === eventId && p[keyFields.rollNumberField] === rollNumber);
+    try {
+      // 1. Centralized Authorization via CoordinatorService
+      Logger.log('[START] Authorization');
+      const user = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, CONFIG.COLUMNS.USER_ID || 'User ID', userId)[0];
+      if (!user) {
+        return Utils.buildResponse(false, 'Unauthorized: User not found.');
+      }
+      const role = user[CONFIG.COLUMNS.ROLE || 'Role'] || user.role || user.Role;
+      if (role === CONFIG.ROLES.COORDINATOR) {
+        const isAuthorized = CoordinatorService.canManageEvent(userId, eventId);
+        if (!isAuthorized) {
+          return Utils.buildResponse(false, 'Unauthorized: You can only manage participants for your assigned events.');
+        }
+      }
+      Logger.log('[END] Authorization');
 
-    const activeStatus = 'Confirmed';
+      // 2. Lookup existing row
+      Logger.log('[START] Participant Lookup');
+      const keyFields = this._participantKeyFields();
+      const allParts = DatabaseService.readAllRows(CONFIG.SHEETS.EVENT_PARTICIPANTS) || [];
+      const idx = allParts.findIndex(p => p[keyFields.eventIdField] === eventId && p[keyFields.rollNumberField] === rollNumber);
+      if (idx === -1) {
+        return Utils.buildResponse(false, 'Participant not found.');
+      }
+      Logger.log('[END] Participant Lookup');
 
-    if (existing.length > 0) {
-      const existingRec = existing[0];
-      const updates = {
-        'Registration Status': activeStatus,
-        'Registration Timestamp': new Date().toISOString(),
-        'Created By': userId,
-        'Updated At': new Date().toISOString()
-      };
+      // 3. Perform cancellation update
+      Logger.log('[START] Update');
+      const removedStatus = 'Cancelled';
+      var removedRec = allParts[idx];
 
-      DatabaseService.updateRow(CONFIG.SHEETS.EVENT_PARTICIPANTS, 'Roll Number', rollNumber, updates);
+      DatabaseService.updateRow(CONFIG.SHEETS.EVENT_PARTICIPANTS, 'Roll Number', removedRec['Roll Number'], { 
+        'Registration Status': removedStatus, 
+        'Updated At': new Date().toISOString() 
+      });
+      Logger.log('[END] Update');
 
-      var resp = { success: true, message: 'Participant restored successfully.' };
       try {
         NotificationService.createNotification({
           user_id: userId,
-          title: 'Participant Added',
-          message: 'Participant (Roll ' + rollNumber + ') added/restored to event ' + eventId + '.',
+          title: 'Participant Removed',
+          message: 'Participant (Roll ' + rollNumber + ') removed from event ' + eventId + '.',
           type: 'Participant',
           related_event_id: eventId
         });
@@ -134,201 +268,153 @@ const ParticipantService = {
         Logger.log(error);
       }
       try {
-        AuditService.logAction(
-          userId,
-          'ParticipantService',
-          'ADD_PARTICIPANT',
-          eventId,
-          'Participant',
-          'Participant restored/added',
-          '',
-          'SUCCESS',
-          rollNumber
-        );
+        AuditService.logAction(userId, 'ParticipantService', 'REMOVE_PARTICIPANT', eventId, 'Participant', 'Participant removed', '', 'SUCCESS', rollNumber);
       } catch (error) {
         Logger.log(error);
       }
 
-      return resp;
-    } else {
-      // New insert matching cell validations: type must be 'Pre-Registered', status must be 'Confirmed'
-      const newParticipant = {
-        'Event ID': eventId,
-        'Roll Number': rollNumber,
-        'Registration Timestamp': new Date().toISOString(),
-        'Created By': userId,
-        'Registration Status': activeStatus,
-        'Registration Type': 'Pre-Registered',
-        'Attendance Status': 'Absent',
-        'Approval Status': 'Approved',
-        'Created At': new Date().toISOString(),
-        'Updated At': new Date().toISOString(),
-        'Deletion Flag': false
-      };
-      DatabaseService.insertRow(CONFIG.SHEETS.EVENT_PARTICIPANTS, newParticipant);
-
-      var resp = { success: true, message: 'Participant added successfully.' };
-      try {
-        AuditService.logAction(
-          userId,
-          'ParticipantService',
-          'ADD_PARTICIPANT',
-          eventId,
-          'Participant',
-          'Participant added',
-          '',
-          'SUCCESS',
-          rollNumber
-        );
-      } catch (error) {
-        Logger.log(error);
-      }
-
-      return resp;
-    }
-  },
-
-  removeParticipant: function(eventId, rollNumber, userId) {
-    const user = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, CONFIG.COLUMNS.USER_ID || 'User ID', userId)[0];
-    if (user && user[CONFIG.COLUMNS.ROLE || 'Role'] === CONFIG.ROLES.COORDINATOR) {
-      const event = DatabaseService.findByColumn(CONFIG.SHEETS.EVENTS, CONFIG.COLUMNS.EVENT_ID || 'Event ID', eventId)[0];
-      if (!event || event[CONFIG.COLUMNS.COORDINATOR_ID || 'Organizer'] !== userId) {
-        throw new Error('Unauthorized: You can only manage participants for your assigned events.');
-      }
-    }
-
-    const keyFields = this._participantKeyFields();
-    const allParts = DatabaseService.readAllRows(CONFIG.SHEETS.EVENT_PARTICIPANTS);
-    const idx = (allParts || []).findIndex(p => p[keyFields.eventIdField] === eventId && p[keyFields.rollNumberField] === rollNumber);
-    if (idx === -1) {
-      throw new Error('Participant not found.');
-    }
-
-    const removedStatus = 'Cancelled';
-    var removedRec = allParts[idx];
-
-    DatabaseService.updateRow(CONFIG.SHEETS.EVENT_PARTICIPANTS, 'Roll Number', removedRec['Roll Number'], { 'Registration Status': removedStatus, 'Updated At': new Date().toISOString() });
-
-    var resp = { success: true, message: 'Participant removed successfully.' };
-    try {
-      NotificationService.createNotification({
-        user_id: userId,
-        title: 'Participant Removed',
-        message: 'Participant (Roll ' + rollNumber + ') removed from event ' + eventId + '.',
-        type: 'Participant',
-        related_event_id: eventId
-      });
+      Logger.log('[END] ParticipantService.removeParticipant | Execution Time: ' + (Date.now() - startTime) + 'ms');
+      return Utils.buildResponse(true, 'Participant removed successfully.');
     } catch (error) {
-      Logger.log(error);
+      Logger.log('[ERROR] ParticipantService.removeParticipant: ' + error.message);
+      return Utils.buildResponse(false, 'Failed to remove participant.');
     }
-    try {
-      AuditService.logAction(
-        userId,
-        'ParticipantService',
-        'REMOVE_PARTICIPANT',
-        eventId,
-        'Participant',
-        'Participant removed',
-        '',
-        'SUCCESS',
-        rollNumber
-      );
-    } catch (error) {
-      Logger.log(error);
-    }
-
-    return resp;
   },
 
   restoreParticipant: function(eventId, rollNumber, userId) {
-    return this.addParticipant(eventId, rollNumber, userId); // Add logic already handles restore
+    // Shared validation wrapper around addParticipant
+    return this.addParticipant(eventId, rollNumber, userId);
   },
 
   getAllEnrichedParticipants: function(userId) {
-    // 1. Check user authorization
-    const user = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, CONFIG.COLUMNS.ROLE || 'Role', '') ? DatabaseService.findByColumn(CONFIG.SHEETS.USERS, CONFIG.COLUMNS.USER_ID || 'User ID', userId)[0] : null;
-    if (!user) {
-      // Direct lookup fallback if findByColumn fails or config column is missing
+    const startTime = Date.now();
+    Logger.log('[START] ParticipantService.getAllEnrichedParticipants | User: ' + userId);
+
+    try {
+      // 1. Centralized Authorization Check
+      Logger.log('[START] Authorization');
       const allUsers = DatabaseService.readAllRows(CONFIG.SHEETS.USERS) || [];
-      const found = allUsers.find(u => String(u[CONFIG.COLUMNS.USER_ID || 'User ID']) === String(userId));
-      if (!found) throw new Error('Unauthorized: User not found.');
-    }
-    const trueUser = user || DatabaseService.readAllRows(CONFIG.SHEETS.USERS).find(u => String(u[CONFIG.COLUMNS.USER_ID || 'User ID']) === String(userId));
+      const trueUser = allUsers.find(u => String(u[CONFIG.COLUMNS.USER_ID || 'User ID']) === String(userId));
+      if (!trueUser) {
+        return Utils.buildResponse(false, 'Unauthorized: User not found.');
+      }
+      Logger.log('[END] Authorization');
 
-    // 2. Read all participant rows
-    let participants = DatabaseService.readAllRows(CONFIG.SHEETS.EVENT_PARTICIPANTS) || [];
-    
-    // Filter by Deletion Flag if it exists
-    if (CONFIG.COLUMNS.DELETION_FLAG) {
-      participants = participants.filter(p => p[CONFIG.COLUMNS.DELETION_FLAG] !== true && p[CONFIG.COLUMNS.DELETION_FLAG] !== 'true');
-    }
-    
-    // Filter out rows where Registration Status is Cancelled
-    participants = participants.filter(p => p['Registration Status'] !== 'Cancelled');
-    
-    // If coordinator, filter participants to only events they manage
-    if (trueUser[CONFIG.COLUMNS.ROLE || 'Role'] === CONFIG.ROLES.COORDINATOR) {
+      // 2. Query structural lists
+      Logger.log('[START] Participant Lookup');
+      let participants = DatabaseService.readAllRows(CONFIG.SHEETS.EVENT_PARTICIPANTS) || [];
+      
+      if (CONFIG.COLUMNS.DELETION_FLAG) {
+        participants = participants.filter(p => p[CONFIG.COLUMNS.DELETION_FLAG] !== true && p[CONFIG.COLUMNS.DELETION_FLAG] !== 'true');
+      }
+      
+      participants = participants.filter(p => p['Registration Status'] !== 'Cancelled');
+      
+      // Filter out non-assigned events for Coordinators using centralized CoordinatorService mapping
+      const role = trueUser[CONFIG.COLUMNS.ROLE || 'Role'] || trueUser.role || trueUser.Role;
+      if (role === CONFIG.ROLES.COORDINATOR) {
+        const myEventIds = CoordinatorService.getAssignedEventIds(userId) || [];
+        participants = participants.filter(p => myEventIds.includes(p['Event ID']));
+      }
+
+      const allStudents = DatabaseService.readAllRows(CONFIG.SHEETS.STUDENTS) || [];
       const allEvents = DatabaseService.readAllRows(CONFIG.SHEETS.EVENTS) || [];
-      const myEventIds = allEvents
-        .filter(e => e[CONFIG.COLUMNS.COORDINATOR_ID || 'Organizer'] === userId)
-        .map(e => e[CONFIG.COLUMNS.EVENT_ID || 'Event ID']);
-      participants = participants.filter(p => myEventIds.includes(p['Event ID']));
+
+      const enriched = participants.map(p => {
+        const student = allStudents.find(s => s['Roll Number'] === p['Roll Number']) || {};
+        const event = allEvents.find(e => e['Event ID'] === p['Event ID']) || {};
+        return {
+          ...p,
+          student_name: student['Student Name'] || 'Unknown',
+          department: student['Department ID'] || 'Unknown',
+          year: student['Year'] || 'Unknown',
+          section: student['Section'] || 'Unknown',
+          event_name: event['Event Name'] || 'Unknown',
+          event_date: event['Start Date'] || 'Unknown'
+        };
+      });
+      Logger.log('[END] Participant Lookup');
+
+      Logger.log('[END] ParticipantService.getAllEnrichedParticipants | Execution Time: ' + (Date.now() - startTime) + 'ms');
+      return Utils.buildResponse(true, 'Enriched participants data evaluated.', enriched);
+    } catch (error) {
+      Logger.log('[ERROR] ParticipantService.getAllEnrichedParticipants: ' + error.message);
+      return Utils.buildResponse(false, 'Failed to map structural participant arrays.');
     }
-
-    // 3. Read students and events for enrichment
-    const allStudents = DatabaseService.readAllRows(CONFIG.SHEETS.STUDENTS) || [];
-    const allEvents = DatabaseService.readAllRows(CONFIG.SHEETS.EVENTS) || [];
-
-    const enriched = participants.map(p => {
-      const student = allStudents.find(s => s['Roll Number'] === p['Roll Number']) || {};
-      const event = allEvents.find(e => e['Event ID'] === p['Event ID']) || {};
-      return {
-        ...p,
-        student_name: student['Student Name'] || 'Unknown',
-        department: student['Department ID'] || 'Unknown',
-        year: student['Year'] || 'Unknown',
-        section: student['Section'] || 'Unknown',
-        event_name: event['Event Name'] || 'Unknown',
-        event_date: event['Start Date'] || 'Unknown'
-      };
-    });
-
-    return { success: true, data: enriched };
   },
 
   bulkAddParticipants: function(eventId, rollNumbers, userId) {
-    const results = { success: [], errors: [] };
-    for (let i = 0; i < rollNumbers.length; i++) {
-      const roll = rollNumbers[i];
-      try {
-        const res = this.addParticipant(eventId, roll, userId);
-        if (res.success) {
-          results.success.push(roll);
-        } else {
-          results.errors.push({ roll: roll, error: res.message || 'Unknown error' });
-        }
-      } catch (err) {
-        results.errors.push({ roll: roll, error: err.message });
+    const startTime = Date.now();
+    Logger.log('[START] ParticipantService.bulkAddParticipants | Event: ' + eventId);
+
+    try {
+      // Early intercept optimization: single authorization query across batch
+      Logger.log('[START] Authorization');
+      const isAuthorized = CoordinatorService.canManageEvent(userId, eventId);
+      Logger.log('[END] Authorization | Result: ' + isAuthorized);
+
+      if (!isAuthorized) {
+        return Utils.buildResponse(false, 'Unauthorized access.');
       }
+
+      const results = { success: [], errors: [] };
+      for (let i = 0; i < rollNumbers.length; i++) {
+        const roll = rollNumbers[i];
+        try {
+          // addParticipant will reuse authorization calculations cleanly
+          const res = this.addParticipant(eventId, roll, userId);
+          if (res.success) {
+            results.success.push(roll);
+          } else {
+            results.errors.push({ roll: roll, error: res.message || 'Unknown error' });
+          }
+        } catch (err) {
+          results.errors.push({ roll: roll, error: err.message });
+        }
+      }
+
+      Logger.log('[END] ParticipantService.bulkAddParticipants | Execution Time: ' + (Date.now() - startTime) + 'ms');
+      return Utils.buildResponse(true, 'Bulk execution operation processed.', results);
+    } catch (error) {
+      Logger.log('[ERROR] ParticipantService.bulkAddParticipants: ' + error.message);
+      return Utils.buildResponse(false, 'Bulk operation crashed.');
     }
-    return { success: true, data: results };
   },
 
   bulkRemoveParticipants: function(eventId, rollNumbers, userId) {
-    const results = { success: [], errors: [] };
-    for (let i = 0; i < rollNumbers.length; i++) {
-      const roll = rollNumbers[i];
-      try {
-        const res = this.removeParticipant(eventId, roll, userId);
-        if (res.success) {
-          results.success.push(roll);
-        } else {
-          results.errors.push({ roll: roll, error: res.message || 'Unknown error' });
-        }
-      } catch (err) {
-        results.errors.push({ roll: roll, error: err.message });
+    const startTime = Date.now();
+    Logger.log('[START] ParticipantService.bulkRemoveParticipants | Event: ' + eventId);
+
+    try {
+      // Early intercept optimization: single authorization query across batch
+      Logger.log('[START] Authorization');
+      const isAuthorized = CoordinatorService.canManageEvent(userId, eventId);
+      Logger.log('[END] Authorization | Result: ' + isAuthorized);
+
+      if (!isAuthorized) {
+        return Utils.buildResponse(false, 'Unauthorized access.');
       }
+
+      const results = { success: [], errors: [] };
+      for (let i = 0; i < rollNumbers.length; i++) {
+        const roll = rollNumbers[i];
+        try {
+          const res = this.removeParticipant(eventId, roll, userId);
+          if (res.success) {
+            results.success.push(roll);
+          } else {
+            results.errors.push({ roll: roll, error: res.message || 'Unknown error' });
+          }
+        } catch (err) {
+          results.errors.push({ roll: roll, error: err.message });
+        }
+      }
+
+      Logger.log('[END] ParticipantService.bulkRemoveParticipants | Execution Time: ' + (Date.now() - startTime) + 'ms');
+      return Utils.buildResponse(true, 'Bulk dynamic removals operation finalized.', results);
+    } catch (error) {
+      Logger.log('[ERROR] ParticipantService.bulkRemoveParticipants: ' + error.message);
+      return Utils.buildResponse(false, 'Bulk remove process hit structural error.');
     }
-    return { success: true, data: results };
   }
 };

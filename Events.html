@@ -141,7 +141,6 @@
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body">
-          <div class="modal-body">
             <div id="eventModalError" class="alert alert-danger d-none"></div>
             <div id="eventLockedBanner" class="alert alert-warning d-none">
               <i class="bi bi-lock-fill me-2"></i> This event is locked because it has been completed/cancelled.
@@ -170,7 +169,7 @@
                 <label for="eventDescription" class="form-label">Description</label>
                 <textarea class="form-control" id="eventDescription" rows="2"></textarea>
               </div>
-
+ 
               <div class="col-md-6">
                 <label for="eventAttendanceType" class="form-label">Attendance Type <span class="text-danger">*</span></label>
                 <select class="form-select" id="eventAttendanceType" required>
@@ -178,8 +177,81 @@
                   <option value="Open">Open</option>
                 </select>
                 <div class="invalid-feedback">Attendance Type is required.</div>
+                <div class="form-text small text-muted mt-1">
+                  <strong>Fixed</strong>: Only registered/specified college groups can record attendance.<br>
+                  <strong>Open</strong>: Any active student can scan and record attendance on the spot.
+                </div>
               </div>
 
+              <!-- Conditional Fixed Attendance Options -->
+              <div class="col-md-12 d-none" id="fixed-event-options">
+                <div class="card bg-light border-0 p-3" style="border-radius: 12px;">
+                  <label class="form-label fw-bold text-primary mb-2">Fixed Attendance Constraints</label>
+                  
+                  <div class="mb-3">
+                    <label class="form-label small fw-bold text-secondary">Target Group</label>
+                    <div class="d-flex gap-4">
+                      <div class="form-check">
+                        <input class="form-check-input" type="radio" name="fixedSubgroup" id="groupAllColleges" value="ALL" checked>
+                        <label class="form-check-label small" for="groupAllColleges">All College Students</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input" type="radio" name="fixedSubgroup" id="groupBVC" value="BVC">
+                        <label class="form-check-label small" for="groupBVC">BVC Students Only</label>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="mb-0">
+                    <label class="form-label small fw-bold text-secondary mb-1">Required Information to Collect during Scan</label>
+                    
+                    <!-- Checkboxes for All Colleges -->
+                    <div id="info-fields-all-colleges" class="d-flex flex-wrap gap-3">
+                      <div class="form-check">
+                        <input class="form-check-input info-field-chk" type="checkbox" value="Name" id="chkAllName" checked disabled>
+                        <label class="form-check-label small" for="chkAllName">Name</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input info-field-chk" type="checkbox" value="Roll Number" id="chkAllRoll" checked disabled>
+                        <label class="form-check-label small" for="chkAllRoll">Roll Number</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input info-field-chk" type="checkbox" value="College Name" id="chkAllCollege" checked>
+                        <label class="form-check-label small" for="chkAllCollege">College Name</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input info-field-chk" type="checkbox" value="Branch" id="chkAllBranch" checked>
+                        <label class="form-check-label small" for="chkAllBranch">Branch</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input info-field-chk" type="checkbox" value="Year" id="chkAllYear" checked>
+                        <label class="form-check-label small" for="chkAllYear">Year</label>
+                      </div>
+                    </div>
+                    
+                    <!-- Checkboxes for BVC Students -->
+                    <div id="info-fields-bvc-only" class="d-none flex-wrap gap-3">
+                      <div class="form-check">
+                        <input class="form-check-input info-field-chk" type="checkbox" value="Name" id="chkBvcName" checked disabled>
+                        <label class="form-check-label small" for="chkBvcName">Name</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input info-field-chk" type="checkbox" value="Roll Number" id="chkBvcRoll" checked disabled>
+                        <label class="form-check-label small" for="chkBvcRoll">Roll Number</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input info-field-chk" type="checkbox" value="Branch" id="chkBvcBranch" checked>
+                        <label class="form-check-label small" for="chkBvcBranch">Branch</label>
+                      </div>
+                      <div class="form-check">
+                        <input class="form-check-input info-field-chk" type="checkbox" value="Year" id="chkBvcYear" checked>
+                        <label class="form-check-label small" for="chkBvcYear">Year</label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+ 
               <div class="col-md-6">
                 <label for="eventStartDate" class="form-label">Start Date <span class="text-danger">*</span></label>
                 <input type="date" class="form-control" id="eventStartDate" required>
@@ -190,7 +262,7 @@
                 <input type="date" class="form-control" id="eventEndDate" required>
                 <div class="invalid-feedback">End Date is required.</div>
               </div>
-
+ 
               <div class="col-md-6">
                 <label for="eventStartTime" class="form-label">Start Time <span class="text-danger">*</span></label>
                 <input type="time" class="form-control" id="eventStartTime" required>
@@ -201,7 +273,7 @@
                 <input type="time" class="form-control" id="eventEndTime" required>
                 <div class="invalid-feedback">End Time is required.</div>
               </div>
-
+ 
               <div class="col-md-6">
                 <label for="eventVenue" class="form-label">Venue <span class="text-danger">*</span></label>
                 <input type="text" class="form-control" id="eventVenue" required>
@@ -214,6 +286,35 @@
                   <!-- Populated dynamically -->
                 </select>
                 <div class="invalid-feedback">Coordinator is required.</div>
+              </div>
+
+              <!-- Dynamic inline Coordinator creation fields -->
+              <div class="col-md-12 d-none" id="new-coordinator-fields">
+                <div class="card border-primary p-3 bg-light" style="border-radius: 12px; border-style: dashed;">
+                  <label class="form-label fw-bold text-primary mb-2">Create New Coordinator Account</label>
+                  <div class="row g-2">
+                    <div class="col-md-6">
+                      <label for="newCoordFirstName" class="form-label small text-secondary">First Name <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control form-control-sm text-uppercase" id="newCoordFirstName" placeholder="First Name">
+                    </div>
+                    <div class="col-md-6">
+                      <label for="newCoordLastName" class="form-label small text-secondary">Last Name <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control form-control-sm text-uppercase" id="newCoordLastName" placeholder="Last Name">
+                    </div>
+                    <div class="col-md-12">
+                      <label for="newCoordEmail" class="form-label small text-secondary">Email Address <span class="text-danger">*</span></label>
+                      <input type="email" class="form-control form-control-sm" id="newCoordEmail" placeholder="email@college.com">
+                    </div>
+                    <div class="col-md-6">
+                      <label for="newCoordUsername" class="form-label small text-secondary">Username <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control form-control-sm" id="newCoordUsername" placeholder="e.g. satya_c">
+                    </div>
+                    <div class="col-md-6">
+                      <label for="newCoordPassword" class="form-label small text-secondary">Password <span class="text-danger">*</span></label>
+                      <input type="password" class="form-control form-control-sm" id="newCoordPassword" placeholder="••••••••">
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div class="col-md-6">
@@ -453,3 +554,6 @@
   box-shadow: 0 0 0 1px var(--bs-primary);
 }
 </style>
+
+<?!= include('events_css'); ?>
+<?!= include('events_js'); ?>

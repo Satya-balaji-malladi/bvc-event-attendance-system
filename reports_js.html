@@ -746,4 +746,9 @@
 
   App.Modules.reports = Reports;
 })();
+
+// Auto-initialize module on direct injection trigger
+if (typeof App !== 'undefined' && App.Modules && App.Modules.reports) {
+  App.Modules.reports.init();
+}
 </script>

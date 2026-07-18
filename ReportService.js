@@ -17,12 +17,14 @@ const ReportService = {
 
     const studentMap = new Map();
     (allStudents || []).forEach(s => {
+      if (!s) return;
       const roll = s['Roll Number'] || s.roll_number || s.rollNumber;
       if (roll) studentMap.set(String(roll).trim().toUpperCase(), s);
     });
 
     const userMap = new Map();
     (allUsers || []).forEach(u => {
+      if (!u) return;
       const uId = u['User ID'] || u.user_id || u.userId;
       if (uId) userMap.set(String(uId).trim(), u);
     });

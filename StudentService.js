@@ -112,6 +112,9 @@ var StudentService = {
       obj[CONFIG.COLUMNS.STUDENT_YEAR] = normalizedData[CONFIG.COLUMNS.STUDENT_YEAR];
       obj[CONFIG.COLUMNS.STUDENT_SECTION] = normalizedData[CONFIG.COLUMNS.STUDENT_SECTION];
       obj[CONFIG.COLUMNS.STUDENT_STATUS] = normalizedData[CONFIG.COLUMNS.STUDENT_STATUS] || CONFIG.STUDENT_STATUS.ACTIVE;
+      if (normalizedData["College"] !== undefined) {
+        obj["College"] = normalizedData["College"];
+      }
       // Also satisfy 'Status' required field validation in DatabaseService
       if (CONFIG.COLUMNS.STUDENT_STATUS !== 'Status') {
         obj['Status'] = obj[CONFIG.COLUMNS.STUDENT_STATUS];

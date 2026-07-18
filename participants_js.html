@@ -206,7 +206,21 @@
 
       App.API.getAllEnrichedParticipants()
         .then(res => {
-          this.participantsData = Array.isArray(res) ? res : (res.data || []);
+          // Backend now returns a clean array, but handle all formats defensively
+          if (Array.isArray(res)) {
+            this.participantsData = res;
+          } else if (res && Array.isArray(res.data)) {
+            this.participantsData = res.data;
+          } else if (res && typeof res === 'object') {
+            // Convert numeric-keyed object {0:{}, 1:{}, success:true, ...} back to array
+            const arr = [];
+            Object.keys(res).forEach(k => {
+              if (!isNaN(parseInt(k, 10))) arr.push(res[k]);
+            });
+            this.participantsData = arr;
+          } else {
+            this.participantsData = [];
+          }
           this.selectedRolls.clear();
           this.updateBulkRemoveButton();
           const selectAll = document.getElementById('participants-select-all');

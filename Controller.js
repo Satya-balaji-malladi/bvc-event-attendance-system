@@ -949,6 +949,306 @@ const Controller = {
         return DashboardService.getRecentActivities();
       });
     }
+  },
+
+  // ==========================================
+  // CoordinatorTerminal API
+  // ==========================================
+  CoordinatorTerminal: {
+    getContext: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        const user = UserService.getUserById(userId);
+        if (!user) return Utils.buildResponse(false, 'User not found.');
+
+        const validation = CoordinatorService.validateCoordinatorSession(user);
+        if (!validation.success) return validation;
+
+        const activeAssignedIds = CoordinatorService.getAssignedEventIds(userId) || [];
+        if (activeAssignedIds.length === 0) {
+          return Utils.buildResponse(false, 'No active event assignments associated with this account credentials.');
+        }
+
+        const targetEvent = EventService.getEventById(activeAssignedIds[0]);
+        if (!targetEvent) {
+          return Utils.buildResponse(false, 'Assigned event record is missing or deleted.');
+        }
+
+        const eventId = targetEvent['Event ID'] || targetEvent.eventId;
+
+        const counts = AttendanceService.getEventAttendanceCount(eventId);
+        const stats = {
+          present: counts.present || 0,
+          remaining: counts.absent || counts.total - counts.present || 0,
+          total: counts.total || 0
+        };
+
+        const allAttendance = AttendanceService.getAttendanceByEvent(eventId) || [];
+        const recentScans = allAttendance.slice(0, 10).map(record => {
+          const student = StudentService.getStudentByRollNumber(record['Roll Number'] || record.roll_number) || {};
+          return {
+            roll: record['Roll Number'] || record.roll_number,
+            name: student['Student Name'] || 'Unknown Student',
+            time: record['Time'] || ''
+          };
+        });
+
+        return Utils.buildResponse(true, 'Terminal context loaded successfully.', {
+          user: user,
+          event: targetEvent,
+          statistics: stats,
+          recentScans: recentScans
+        });
+      });
+    },
+
+    markAttendance: function(sessionToken, rollNumber, attendanceMethod) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        const activeAssignedIds = CoordinatorService.getAssignedEventIds(userId) || [];
+        if (activeAssignedIds.length === 0) {
+          return Utils.buildResponse(false, 'No active event assignments associated with this account credentials.');
+        }
+        const eventId = activeAssignedIds[0];
+        
+        if (!rollNumber) {
+          return Utils.buildResponse(false, 'Missing required student registration identifier.');
+        }
+
+        const attendanceData = {
+          event_id: eventId,
+          roll_number: rollNumber.trim().toUpperCase(),
+          attendanceMethod: attendanceMethod || 'Barcode',
+          status: CONFIG.ATTENDANCE_STATUS.PRESENT
+        };
+
+        return AttendanceService.markAttendance(attendanceData, userId);
+      });
+    },
+
+    registerSpotStudentAndMarkAttendance: function(sessionToken, rollNumber, studentName, departmentId, year, section, collegeName) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        const activeAssignedIds = CoordinatorService.getAssignedEventIds(userId) || [];
+        if (activeAssignedIds.length === 0) {
+          return Utils.buildResponse(false, 'No active event assignments associated with this account credentials.');
+        }
+        const eventId = activeAssignedIds[0];
+        
+        if (!rollNumber) {
+          return Utils.buildResponse(false, 'Missing required student registration identifier.');
+        }
+
+        const normalizedRoll = rollNumber.trim().toUpperCase();
+
+        // 1. Check if student already exists in the sheet to prevent duplicates
+        var student = StudentService.getStudentByRollNumber(normalizedRoll);
+        if (!student) {
+          // Add student to sheet database
+          var studentPayload = {};
+          studentPayload[CONFIG.COLUMNS.STUDENT_ROLL_NUMBER] = normalizedRoll;
+          studentPayload[CONFIG.COLUMNS.STUDENT_NAME] = (studentName || 'Spot Registered Student').trim();
+          studentPayload[CONFIG.COLUMNS.STUDENT_DEPARTMENT_ID] = (departmentId || 'CSE').trim().toUpperCase();
+          studentPayload[CONFIG.COLUMNS.STUDENT_YEAR] = year || '1';
+          studentPayload[CONFIG.COLUMNS.STUDENT_SECTION] = section || 'A';
+          studentPayload[CONFIG.COLUMNS.STUDENT_STATUS] = CONFIG.STUDENT_STATUS.ACTIVE;
+          studentPayload["College"] = (collegeName || 'BVC Engineering College').trim();
+
+          var actionUser = UserService.getUserById(userId);
+          var creatorName = actionUser ? (actionUser.username || actionUser.name) : 'Coordinator';
+
+          var createResp = StudentService.createStudent(studentPayload, creatorName);
+          if (!createResp.success) {
+            return Utils.buildResponse(false, 'Failed to add student to database: ' + createResp.message);
+          }
+          student = StudentService.getStudentByRollNumber(normalizedRoll);
+        }
+
+        // 2. If the event is Fixed type, register them as a participant
+        var event = EventService.getEventById(eventId);
+        if (event) {
+          var attendanceType = event.attendance_type || event.attendanceType || 'Fixed';
+          if (attendanceType === 'Fixed') {
+            // Check if already registered as participant
+            var parts = DatabaseService.findByColumn(CONFIG.SHEETS.EVENT_PARTICIPANTS, 'Event ID', eventId) || [];
+            var isPart = parts.find(function(p) {
+              return String(p['Roll Number'] || p.roll_number || p.rollNumber).trim().toUpperCase() === normalizedRoll;
+            });
+            if (!isPart) {
+              var participantData = {};
+              participantData['Participant ID'] = 'PAR' + Date.now();
+              participantData['Event ID'] = eventId;
+              participantData['Roll Number'] = normalizedRoll;
+              participantData['Registration Status'] = 'Confirmed';
+              participantData['Status'] = 'Active';
+              participantData['Created At'] = Utils.getCurrentTimestamp();
+              DatabaseService.insertRow(CONFIG.SHEETS.EVENT_PARTICIPANTS, participantData);
+            }
+          }
+        }
+
+        // 3. Mark attendance
+        var attendanceData = {
+          event_id: eventId,
+          roll_number: normalizedRoll,
+          attendanceMethod: 'Manual',
+          status: CONFIG.ATTENDANCE_STATUS.PRESENT
+        };
+
+        return AttendanceService.markAttendance(attendanceData, userId);
+      });
+    },
+
+    getLiveStatistics: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        const activeAssignedIds = CoordinatorService.getAssignedEventIds(userId) || [];
+        if (activeAssignedIds.length === 0) {
+          return Utils.buildResponse(false, 'No active event assignments.');
+        }
+        const eventId = activeAssignedIds[0];
+        const counts = AttendanceService.getEventAttendanceCount(eventId);
+        return Utils.buildResponse(true, 'Live statistics compiled.', {
+          present: counts.present || 0,
+          remaining: counts.absent || counts.total - counts.present || 0,
+          total: counts.total || 0
+        });
+      });
+    },
+
+    getRecentScansStream: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        const activeAssignedIds = CoordinatorService.getAssignedEventIds(userId) || [];
+        if (activeAssignedIds.length === 0) {
+          return Utils.buildResponse(false, 'No active event assignments.');
+        }
+        const eventId = activeAssignedIds[0];
+        const allAttendance = AttendanceService.getAttendanceByEvent(eventId) || [];
+        const truncatedList = allAttendance.slice(0, 10).map(record => {
+          const student = StudentService.getStudentByRollNumber(record['Roll Number'] || record.roll_number) || {};
+          return {
+            roll: record['Roll Number'] || record.roll_number,
+            name: student['Student Name'] || 'Unknown Student',
+            time: record['Time'] || ''
+          };
+        });
+        return Utils.buildResponse(true, 'Recent scans stream populated.', truncatedList);
+      });
+    },
+
+    getStudentProfile: function(sessionToken, rollNumber) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        if (!rollNumber) return Utils.buildResponse(false, 'Missing roll number parameter.');
+        const normalizedRoll = rollNumber.trim().toUpperCase();
+        const student = StudentService.getStudentByRollNumber(normalizedRoll);
+        if (!student) return Utils.buildResponse(false, 'Student not found in database.');
+        return Utils.buildResponse(true, 'Student verified successfully.', {
+          name: student['Student Name'] || 'Unknown',
+          roll: normalizedRoll,
+          dept: student['Department ID'] || 'Unknown',
+          year: student['Year'] || 'Unknown'
+        });
+      });
+    },
+
+    terminateSession: function(sessionToken) {
+      return AuthService.logout(sessionToken);
+    },
+
+    validateActiveSession: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        const user = UserService.getUserById(userId);
+        if (!user) return Utils.buildResponse(false, 'User not found.');
+        return CoordinatorService.validateCoordinatorSession(user);
+      });
+    }
+  },
+
+  // ==========================================
+  // Report Controller
+  // ==========================================
+  Report: {
+    getDashboardSummary: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getDashboardSummary(userId);
+      });
+    },
+    getReportsDashboardSummary: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getReportsDashboardSummary(userId);
+      });
+    },
+    getEventReport: function(sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getEventReport(userId, filters || {});
+      });
+    },
+    getStudentReport: function(sessionToken, rollNumber) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getStudentReport(userId, rollNumber);
+      });
+    },
+    getDepartmentReport: function(sessionToken, department) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getDepartmentReport(userId, department);
+      });
+    },
+    getDepartmentComparison: function(sessionToken) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getDepartmentComparison(userId);
+      });
+    },
+    getCoordinatorReport: function(sessionToken, coordinatorId) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getCoordinatorReport(coordinatorId || userId, userId);
+      });
+    },
+    getCoordinatorPerformance: function(sessionToken, coordinatorId) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getCoordinatorReport(coordinatorId || userId, userId);
+      });
+    },
+    getDateRangeReport: function(sessionToken, fromDate, toDate) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getDateRangeReport(userId, fromDate, toDate);
+      });
+    },
+    getMonthlyReport: function(sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getMonthlyReport(userId, filters || {});
+      });
+    },
+    getEventTrendReport: function(sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getEventTrendReport(userId, filters || {});
+      });
+    },
+    getYearWiseReport: function(sessionToken, year) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getYearWiseReport(userId, year);
+      });
+    },
+    getAttendanceDefaulters: function(sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getAttendanceDefaulters(userId, filters || {});
+      });
+    },
+    getTopParticipants: function(sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getTopParticipants(userId, filters || {});
+      });
+    },
+    getAbsentStudents: function(sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getAbsentStudents(userId, filters || {});
+      });
+    },
+    getCancelledEvents: function(sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getCancelledEvents(userId, filters || {});
+      });
+    },
+    getStudentEventHistory: function(sessionToken, rollNumber) {
+      return SessionService.withSession(sessionToken, function(userId) {
+        return ReportService.getStudentEventHistory(userId, rollNumber);
+      });
+    }
   }
 
 };

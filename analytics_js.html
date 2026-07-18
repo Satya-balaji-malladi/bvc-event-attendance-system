@@ -432,4 +432,9 @@
 
     App.Modules.analytics = Analytics;
   })();
+
+  // Auto-initialize module on direct injection trigger
+  if (typeof App !== 'undefined' && App.Modules && App.Modules.analytics) {
+    App.Modules.analytics.init();
+  }
 </script>
