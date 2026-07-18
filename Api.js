@@ -333,3 +333,7 @@ function clearAttendanceLogs(sessionToken) {
 function resetSystem(sessionToken) {
   try { return JSON.parse(JSON.stringify(Controller.Settings.resetSystem(sessionToken) || {})); } catch (e) { return { success: false, message: e.message }; }
 }
+
+function getEventParticipants(sessionToken, eventId) {
+  try { return JSON.parse(JSON.stringify(Controller.Participant.getEventParticipants(sessionToken, eventId) || [])); } catch (e) { return []; }
+}
