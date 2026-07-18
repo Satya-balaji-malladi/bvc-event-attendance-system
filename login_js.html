@@ -232,18 +232,41 @@
   // Decide Target Page
   // ==========================
 
-  let targetPage = "dashboard";
+  // ==========================
+  // Navigate to Target Page
+  // ==========================
 
-  if (role === "COORDINATOR") {
-      targetPage = "coordinator";
-  }
+  if (role === 'COORDINATOR') {
+    // Coordinator needs camera access. Google Apps Script serves web apps inside
+    // a sandboxed iframe with Permissions-Policy: camera=() which blocks camera.
+    // The ONLY way to escape this is to navigate the browser to the GAS URL directly
+    // with ?page=coordinator, which triggers doGet() and serves the page top-level.
+    //
+    // We pass the session token in the URL so Coordinator.html can pick it up.
+    google.script.run
+      .withSuccessHandler(function(scriptUrl) {
+        const coordUrl = scriptUrl + '?page=coordinator&token=' + encodeURIComponent(actualToken);
+        console.log('Redirecting coordinator to standalone page:', coordUrl);
+        // Use top-level navigation to escape the GAS sandbox iframe
+        try {
+          window.top.location.href = coordUrl;
+        } catch (e) {
+          // Fallback if cross-origin top navigation blocked
+          window.location.href = coordUrl;
+        }
+      })
+      .withFailureHandler(function(err) {
+        console.error('Failed to get script URL:', err);
+        showAlert('Failed to load coordinator terminal.', 'danger');
+      })
+      .getScriptUrl();
 
-  console.log("Loading page:", targetPage);
-
-  google.script.run
+  } else {
+    // Admin / Super Admin: load the full dashboard shell via document.write
+    google.script.run
       .withSuccessHandler(function(html) {
 
-          console.log("Application shell loaded.");
+          console.log('Application shell loaded.');
 
           if (google.script.history && google.script.history.replace) {
               google.script.history.replace(
@@ -261,14 +284,14 @@
       .withFailureHandler(function(error) {
 
           console.error(error);
-
           showAlert(
-              "Failed to load application shell.",
-              "danger"
+              'Failed to load application shell.',
+              'danger'
           );
 
       })
       .getPageContent(targetPage);
+  }
 }
     function handleLoginFailure(error) {
       console.error('System level pipeline failure caught:', error);

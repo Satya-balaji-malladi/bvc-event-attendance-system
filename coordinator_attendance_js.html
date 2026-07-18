@@ -236,8 +236,23 @@ const CoordinatorUI = (() => {
   // ==========================================================================
   const extractSessionToken = () => {
     try {
+      // Primary: token passed in URL by login redirect (?page=coordinator&token=...)
       const params = new URLSearchParams(window.location.search);
-      state.sessionToken = params.get('token') || localStorage.getItem('sessionToken') || null;
+      const urlToken = params.get('token');
+      if (urlToken) {
+        // Persist it to localStorage so refreshes work
+        localStorage.setItem('sessionToken', urlToken);
+        state.sessionToken = urlToken;
+        console.log('Session token loaded from URL parameter.');
+        return;
+      }
+      // Fallback: token stored in localStorage (e.g. page refresh)
+      state.sessionToken = localStorage.getItem('sessionToken') || null;
+      if (state.sessionToken) {
+        console.log('Session token loaded from localStorage.');
+      } else {
+        console.warn('No session token found. Will attempt backend call anyway.');
+      }
     } catch (e) {
       console.error('Session token extraction error:', e);
     }
