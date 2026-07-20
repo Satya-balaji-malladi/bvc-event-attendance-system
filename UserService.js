@@ -213,8 +213,54 @@ const UserService = {
       var roleCol = this._mustRoleCol();
       var statusCol = this._mustStatusCol();
 
-      var username = userData[usernameCol] || userData.username || userData.userName || userData.usernameValue;
-      var email = userData[emailCol] || userData.email;
+      // Normalize keys to sheet headers
+      var normalized = {};
+      
+      // 1. Employee ID
+      var empIdCol = CONFIG.COLUMNS.USER_EMPLOYEE_ID || 'Employee ID';
+      normalized[empIdCol] = userData[empIdCol] || userData.employeeId || userData.employee_id || ('EMP' + Math.floor(1000 + Math.random() * 9000));
+      
+      // 2. First Name & Last Name
+      var firstNameCol = CONFIG.COLUMNS.USER_FIRST_NAME || 'First Name';
+      var lastNameCol = CONFIG.COLUMNS.USER_LAST_NAME || 'Last Name';
+      
+      var rawFirstName = userData[firstNameCol] || userData.first_name || userData.firstName;
+      var rawLastName = userData[lastNameCol] || userData.last_name || userData.lastName;
+      
+      if (!rawFirstName) {
+        var fullName = userData.full_name || userData.name || '';
+        var parts = fullName.trim().split(/\s+/);
+        rawFirstName = parts[0] || '';
+        rawLastName = rawLastName || parts.slice(1).join(' ') || '';
+      }
+      normalized[firstNameCol] = (rawFirstName || '').trim().toUpperCase();
+      normalized[lastNameCol] = (rawLastName || '').trim().toUpperCase() || 'COORDINATOR';
+
+      // 3. Username
+      normalized[usernameCol] = (userData[usernameCol] || userData.username || userData.userName || '').trim().toLowerCase();
+      if (!normalized[usernameCol] && (userData[emailCol] || userData.email)) {
+        var emailForUsername = (userData[emailCol] || userData.email || '');
+        normalized[usernameCol] = emailForUsername.split('@')[0].trim().toLowerCase();
+      }
+
+      // 4. Email Address
+      normalized[emailCol] = (userData[emailCol] || userData.email || '').trim();
+
+      // 5. Role & Status
+      normalized[roleCol] = userData[roleCol] || userData.role || 'Coordinator';
+      normalized[statusCol] = userData[statusCol] || userData.status || 'Active';
+
+      // 6. Copy over other keys
+      for (var k in userData) {
+        if (normalized[k] === undefined) {
+          normalized[k] = userData[k];
+        }
+      }
+      
+      userData = normalized;
+
+      var username = userData[usernameCol];
+      var email = userData[emailCol];
 
       if (Utils.checkEmptyValue && Utils.checkEmptyValue(username)) {
         return Utils.buildResponse(false, (CONFIG.MESSAGES && CONFIG.MESSAGES.USERNAME_REQUIRED) ? CONFIG.MESSAGES.USERNAME_REQUIRED : 'Username is required');
@@ -242,8 +288,10 @@ const UserService = {
       if (!passCols.hashCol) throw new Error('Missing CONFIG.COLUMNS.USER_PASSWORD_HASH');
 
       var rawPassword = userData.password || userData.Password || (Utils.generateRandomPassword ? Utils.generateRandomPassword() : String(new Date().getTime()));
-      var salt = passCols.saltCol && Utils.generateSalt ? Utils.generateSalt() : null;
-      var hashedPassword = salt ? Utils.hashString(String(rawPassword) + ':' + String(salt)) : Utils.hashString(String(rawPassword));
+      var salt = "";
+      // Commented out hashing as per user request to store in plain text:
+      // var hashedPassword = salt ? Utils.hashString(String(salt) + ':' + String(rawPassword).trim()) : Utils.hashString(String(rawPassword).trim());
+      var hashedPassword = String(rawPassword).trim();
 
       var now = this._currentUserNow();
 
@@ -296,6 +344,29 @@ if (CONFIG.COLUMNS.USER_LAST_NAME) {
       }
 
       var resp = Utils.buildResponse(true, (CONFIG.MESSAGES && CONFIG.MESSAGES.USER_CREATED) ? CONFIG.MESSAGES.USER_CREATED : 'User created', { user: this._sanitizeUserSafe(inserted || newUser) });
+
+      // Send Email to the newly created user/coordinator
+      try {
+        var empIdVal = userData[CONFIG.COLUMNS.USER_EMPLOYEE_ID || 'Employee ID'] || '';
+        var subject = "BVC Attendance System - Your New Account Credentials";
+        var body = "Hello " + (userData[CONFIG.COLUMNS.USER_FIRST_NAME || 'First Name'] || 'Coordinator') + ",\n\n" +
+                   "Your staff account has been created successfully in the BVC Event Attendance Management System.\n\n" +
+                   "Here are your login credentials:\n" +
+                   "• Employee ID: " + empIdVal + "\n" +
+                   "• Password: " + rawPassword + "\n\n" +
+                   "Please log in to the system and change your password upon your first login.\n\n" +
+                   "Best regards,\nBVC Engineering College Admin Team";
+        
+        if (typeof MailApp !== 'undefined') {
+          MailApp.sendEmail(email, subject, body);
+          Logger.log("Account details email sent successfully to: " + email);
+        } else if (typeof GmailApp !== 'undefined') {
+          GmailApp.sendEmail(email, subject, body);
+          Logger.log("Account details email sent successfully to: " + email);
+        }
+      } catch (emailErr) {
+        Logger.log("Error sending new user account email: " + emailErr.message);
+      }
 
       try {
         // userId is the entity id; updatedBy/createdBy is best-effort from input.
@@ -546,8 +617,10 @@ if (CONFIG.COLUMNS.USER_LAST_NAME) {
       if (!passCols.hashCol) throw new Error('Missing CONFIG.COLUMNS.USER_PASSWORD_HASH');
 
       var tempPassword = Utils.generateRandomPassword ? Utils.generateRandomPassword() : String(new Date().getTime());
-      var salt = passCols.saltCol && Utils.generateSalt ? Utils.generateSalt() : null;
-      var hashedPassword = salt ? Utils.hashString(String(tempPassword) + ':' + String(salt)) : Utils.hashString(String(tempPassword));
+      var salt = "";
+      // Commented out hashing as per user request to store in plain text:
+      // var hashedPassword = salt ? Utils.hashString(String(salt) + ':' + String(tempPassword).trim()) : Utils.hashString(String(tempPassword).trim());
+      var hashedPassword = String(tempPassword).trim();
 
       var now = Utils.getCurrentTimestamp();
       var updateData = {};
@@ -562,24 +635,48 @@ if (CONFIG.COLUMNS.USER_LAST_NAME) {
       if (CONFIG.COLUMNS && CONFIG.COLUMNS.UPDATED_BY && updatedBy !== undefined) updateData[CONFIG.COLUMNS.UPDATED_BY] = updatedBy;
       if (CONFIG.COLUMNS && CONFIG.COLUMNS.UPDATED_AT) updateData[CONFIG.COLUMNS.UPDATED_AT] = now;
 
+      var userRec = DatabaseService.findOne(usersSheet, idCol, userId);
+      var userEmail = userRec ? (userRec[CONFIG.COLUMNS.USER_EMAIL_ADDRESS] || userRec['Email Address'] || userRec['Email'] || userRec['email'] || '') : '';
+      var userName = userRec ? (userRec['First Name'] || userRec['Name'] || userRec['full_name'] || userId) : userId;
+
       var success = DatabaseService.updateRow(usersSheet, idCol, userId, updateData);
       
       if (!success) return Utils.buildResponse(false, (CONFIG.MESSAGES && CONFIG.MESSAGES.PASSWORD_RESET_FAILED) ? CONFIG.MESSAGES.PASSWORD_RESET_FAILED : 'Password reset failed');
+      
+      if (userEmail) {
+        try {
+          var subject = "BVC Event Attendance System - Password Reset";
+          var body = "Hello " + userName + ",\n\n" +
+                     "Your password for the BVC Event Attendance System has been reset by the Admin.\n\n" +
+                     "Here are your new login credentials:\n" +
+                     "User ID / Employee ID: " + userId + "\n" +
+                     "Temporary Password: " + tempPassword + "\n\n" +
+                     "Please log in and change your password immediately.\n\n" +
+                     "Regards,\n" +
+                     "System Administrator";
+          
+          MailApp.sendEmail(userEmail, subject, body);
+          Logger.log('Password reset email sent successfully to: ' + userEmail);
+        } catch (mailErr) {
+          Logger.log('Failed to send password reset email: ' + mailErr.message);
+        }
+      }
+
       try {
-  AuditService.logAction(
-    userId,
-    "UserService",
-    "RESET_PASSWORD",
-    userId,
-    "User",
-    "Password reset",
-    "",
-    "SUCCESS",
-    updatedBy || ""
-  );
-} catch (error) {
-  Logger.log(error);
-}
+        AuditService.logAction(
+          userId,
+          "UserService",
+          "RESET_PASSWORD",
+          userId,
+          "User",
+          "Password reset",
+          "",
+          "SUCCESS",
+          updatedBy || ""
+        );
+      } catch (error) {
+        Logger.log(error);
+      }
 
       // Important: return only the temporary password, no hashes/salts.
       return Utils.buildResponse(true, (CONFIG.MESSAGES && CONFIG.MESSAGES.PASSWORD_RESET_SUCCESS) ? CONFIG.MESSAGES.PASSWORD_RESET_SUCCESS : 'Password reset success', { temporaryPassword: tempPassword });
@@ -612,7 +709,9 @@ if (CONFIG.COLUMNS.USER_LAST_NAME) {
       if (!record) throw new Error('User record not found');
 
       var salt = passCols.saltCol ? record[passCols.saltCol] : null;
-      var hashed = salt ? Utils.hashString(String(salt) + ':' + String(newPassword).trim()) : Utils.hashString(String(newPassword).trim());
+      // Commented out hashing as per user request to store in plain text:
+      // var hashed = salt ? Utils.hashString(String(salt) + ':' + String(newPassword).trim()) : Utils.hashString(String(newPassword).trim());
+      var hashed = String(newPassword).trim();
 
       var updateData = {};
       updateData[passCols.hashCol] = hashed;

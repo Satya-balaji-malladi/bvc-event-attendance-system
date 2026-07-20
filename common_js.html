@@ -55,8 +55,39 @@ window.App = {
       return div.innerHTML;
     },
     formatDate: function(dateStr) {
-      if (!dateStr) return 'N/A';
-      return new Date(dateStr).toLocaleDateString();
+      if (!dateStr || dateStr === 'N/A') return 'N/A';
+      if (typeof dateStr === 'string' && dateStr.includes('T')) {
+        dateStr = dateStr.split('T')[0];
+      }
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      return `${day}-${month}-${year}`;
+    },
+    formatTime: function(timeStr) {
+      if (!timeStr || timeStr === 'N/A') return 'N/A';
+      const s = String(timeStr).trim();
+      const match = s.match(/^(\d{1,2}):(\d{2})/);
+      if (match) {
+        let hrs = parseInt(match[1], 10);
+        const mins = match[2];
+        const ampm = hrs >= 12 ? 'PM' : 'AM';
+        let displayHrs = hrs % 12;
+        if (displayHrs === 0) displayHrs = 12;
+        return `${String(displayHrs).padStart(2, '0')}:${mins} ${ampm}`;
+      }
+      const d = new Date(timeStr);
+      if (!isNaN(d.getTime())) {
+        const hrs = d.getHours();
+        const mins = String(d.getMinutes()).padStart(2, '0');
+        const ampm = hrs >= 12 ? 'PM' : 'AM';
+        let displayHrs = hrs % 12;
+        if (displayHrs === 0) displayHrs = 12;
+        return `${String(displayHrs).padStart(2, '0')}:${mins} ${ampm}`;
+      }
+      return timeStr;
     }
   },
 
@@ -446,7 +477,11 @@ window.App = {
         console.log('Not on Login page. Redirecting to Login URL...');
         const scriptUrl = window.APP_SCRIPT_URL || '';
         if (scriptUrl) {
-          window.location.href = scriptUrl + "?page=login" + (sessionExpired ? "&expired=true" : "");
+          try {
+            window.top.location.href = scriptUrl + "?page=login" + (sessionExpired ? "&expired=true" : "");
+          } catch (e) {
+            window.location.href = scriptUrl + "?page=login" + (sessionExpired ? "&expired=true" : "");
+          }
         }
       }
     },
@@ -454,16 +489,9 @@ window.App = {
     logout: function(isExpired = false) {
       console.log('=== LOGOUT STARTED ===');
       
-      // Immediately clear local state and show login (no waiting for backend)
       const token = localStorage.getItem('sessionToken');
-      localStorage.removeItem('sessionToken');
-      App.State.currentUser = null;
-      App.LoadingManager.hide(true);
       
-      console.log('Local state cleared, showing login screen');
-      this.showLogin(isExpired);
-      
-      // Call backend API to destroy session (async, non-blocking)
+      // Call backend API to destroy session (async, non-blocking) before clearing local state
       if (token) {
         console.log('Calling backend logout API...');
         App.API.logout().then((res) => {
@@ -472,6 +500,14 @@ window.App = {
           console.error('Backend logout failed (non-critical):', err);
         });
       }
+      
+      // Immediately clear local state and show login
+      localStorage.removeItem('sessionToken');
+      App.State.currentUser = null;
+      App.LoadingManager.hide(true);
+      
+      console.log('Local state cleared, showing login screen');
+      this.showLogin(isExpired);
     },
 
     _clearLocalState: function(isExpired) {

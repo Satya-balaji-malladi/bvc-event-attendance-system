@@ -4,6 +4,13 @@
  */
 const CoordinatorService = {
 
+  _normId: function(id) {
+    if (!id) return '';
+    let clean = String(id).toUpperCase().replace(/[^A-Z0-9]/g, '');
+    let match = clean.match(/([A-Z]+)0*(\d+)/);
+    return match ? (match[1] + match[2]) : clean;
+  },
+
   _tryWrap: function(methodName, failureMessage, fn) {
     if (typeof failureMessage === 'function') {
       fn = failureMessage;
@@ -39,7 +46,7 @@ const CoordinatorService = {
       const all = DatabaseService.readAllRows(CONFIG.SHEETS.EVENT_COORDINATORS) || [];
       const duplicate = all.find(a => 
         String(a['Event ID']).trim() === String(eventId).trim() && 
-        String(a['User ID']).trim() === String(userId).trim() &&
+        this._normId(a['User ID']) === this._normId(userId) &&
         a['Assignment Status'] === 'Active'
       );
       if (duplicate) {
@@ -212,7 +219,9 @@ const CoordinatorService = {
 
   getCoordinatorByUserId: function(userId) {
     if (!userId) return [];
-    return DatabaseService.findByColumn(CONFIG.SHEETS.EVENT_COORDINATORS, 'User ID', userId) || [];
+    const targetNorm = this._normId(userId);
+    const allAssignments = DatabaseService.readAllRows(CONFIG.SHEETS.EVENT_COORDINATORS) || [];
+    return allAssignments.filter(row => this._normId(row['User ID']) === targetNorm);
   },
 
   getCoordinatorByEmployeeId: function(employeeId) {
@@ -280,7 +289,7 @@ const CoordinatorService = {
       Logger.log('[DATABASE RESULT] Fetched ' + allRows.length + ' rows.');
 
       const hasAccess = allRows.some(row => 
-        String(row['User ID']).trim() === String(userId).trim() &&
+        this._normId(row['User ID']) === this._normId(userId) &&
         String(row['Event ID']).trim() === String(eventId).trim() &&
         String(row['Assignment Status']).trim() === 'Active'
       );
@@ -310,7 +319,7 @@ const CoordinatorService = {
       Logger.log('[DATABASE RESULT] Fetched ' + allRows.length + ' rows.');
 
       const assignment = allRows.find(row => 
-        String(row['User ID']).trim() === String(userId).trim() &&
+        this._normId(row['User ID']) === this._normId(userId) &&
         String(row['Event ID']).trim() === String(eventId).trim() &&
         String(row['Assignment Status']).trim() === 'Active'
       ) || null;
@@ -370,12 +379,19 @@ const CoordinatorService = {
       Logger.log('[DATABASE RESULT] Fetched ' + allRows.length + ' rows.');
 
       const eventIds = allRows
-        .filter(row => String(row['User ID']).trim() === String(userId).trim() && String(row['Assignment Status']).trim() === 'Active')
+        .filter(row => this._normId(row['User ID']) === this._normId(userId) && String(row['Assignment Status']).trim() === 'Active')
         .map(row => String(row['Event ID']).trim());
 
-      Logger.log('[OUTPUT] CoordinatorService.getAssignedEventIds -> Count: ' + eventIds.length + ' | Execution Time: ' + (Date.now() - startTime) + 'ms');
+      const activeEventIds = eventIds.filter(id => {
+        const event = EventService.getEventById(id);
+        if (!event) return false;
+        const status = (event.status || event['Event Status'] || '').toUpperCase();
+        return status !== 'COMPLETED' && status !== 'CANCELLED';
+      });
+
+      Logger.log('[OUTPUT] CoordinatorService.getAssignedEventIds -> Count: ' + activeEventIds.length + ' | Execution Time: ' + (Date.now() - startTime) + 'ms');
       Logger.log('[END] CoordinatorService.getAssignedEventIds');
-      return eventIds;
+      return activeEventIds;
     } catch (error) {
       Logger.log('[ERROR] CoordinatorService.getAssignedEventIds: ' + error.message);
       return [];
@@ -428,7 +444,7 @@ const CoordinatorService = {
       Logger.log('[DATABASE RESULT] Fetched ' + allRows.length + ' rows.');
 
       const hasAssignment = allRows.some(row => 
-        String(row['User ID']).trim() === String(userId).trim() && 
+        this._normId(row['User ID']) === this._normId(userId) && 
         String(row['Assignment Status']).trim() === 'Active'
       );
 
@@ -477,7 +493,7 @@ const CoordinatorService = {
       Logger.log('[DATABASE RESULT] Assignment rows gathered.');
 
       const hasActiveAssignment = allAssignments.some(row => 
-        String(row['User ID']).trim() === String(userId).trim() &&
+        this._normId(row['User ID']) === this._normId(userId) &&
         String(row['Assignment Status']).trim() === 'Active'
       );
 

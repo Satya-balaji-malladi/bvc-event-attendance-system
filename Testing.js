@@ -376,7 +376,8 @@ function testCreateStudent() {
 function testGetStudent(rollNumber) {
   Logger.log('--- Executing testGetStudent ---');
   const student = StudentService.getStudentByRollNumber(rollNumber);
-  if (student && student.roll_number === rollNumber) {
+  const matchedRoll = student && (student.roll_number === rollNumber || student['Roll Number'] === rollNumber || student.rollNumber === rollNumber);
+  if (student && matchedRoll) {
     Logger.log('Get Student: PASS');
     return true;
   } else {
@@ -1598,5 +1599,46 @@ function runControllerIntegrationTest() {
     Logger.log('=================================');
     Logger.log('CONTROLLER INTEGRATION TEST COMPLETE');
     Logger.log('=================================');
+  }
+}
+
+/**
+ * Diagnostic test for the Event Coordinator endpoints.
+ * @param {string} sessionToken 
+ */
+function testCoordinatorTerminalEndpoints(sessionToken) {
+  Logger.log('=================================');
+  Logger.log('START: testCoordinatorTerminalEndpoints');
+  Logger.log('Session Token: ' + sessionToken);
+  Logger.log('=================================');
+  
+  try {
+    Logger.log('1. Checking getCoordinatorTerminalData...');
+    const result = getCoordinatorTerminalData(sessionToken);
+    Logger.log('Result Success: ' + result.success);
+    Logger.log('Result Message: ' + result.message);
+    if (result.success && result.data) {
+      Logger.log('Coordinator User ID: ' + (result.data.user ? result.data.user['User ID'] : 'N/A'));
+      Logger.log('Assigned Event Name: ' + (result.data.event ? result.data.event['Event Name'] : 'N/A'));
+      Logger.log('Statistics: ' + JSON.stringify(result.data.statistics));
+      Logger.log('Recent Scans count: ' + (result.data.recentScans ? result.data.recentScans.length : 0));
+    }
+    
+    Logger.log('2. Running getLiveStatistics...');
+    const liveStats = Controller.CoordinatorTerminal.getLiveStatistics(sessionToken);
+    Logger.log('Live Stats result: ' + JSON.stringify(liveStats));
+    
+    Logger.log('3. Running getRecentScansStream...');
+    const scansStream = Controller.CoordinatorTerminal.getRecentScansStream(sessionToken);
+    Logger.log('Recent Scans Stream result success: ' + scansStream.success);
+    
+    Logger.log('END: testCoordinatorTerminalEndpoints');
+    Logger.log('=================================');
+    return result;
+  } catch (e) {
+    Logger.log('Error during coordinator endpoint test: ' + e.message);
+    Logger.log(e.stack);
+    Logger.log('=================================');
+    return { success: false, message: e.message };
   }
 }

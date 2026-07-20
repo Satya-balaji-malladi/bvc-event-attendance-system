@@ -140,6 +140,7 @@ This section defines every table's purpose, keys, related tables, expected sizin
 | **Enrollment Date** | Date | Yes | Admission date format `yyyy-MM-dd`. |
 | **Last Updated At** | Timestamp | Yes | ISO 8601 string of last update. |
 | **Notes** | String | Yes | Supplementary student comments. |
+| **College** | String | Yes | Student's institution name (e.g., Bonam Venkata Chalamayya Engineering College). |
 
 ---
 
@@ -464,15 +465,31 @@ This section defines every table's purpose, keys, related tables, expected sizin
 
 ### Table: Notifications
 
-* **Status**: **Pending Implementation**.
-* **Description**: This sheet represents a placeholder for user alert push mechanisms. The physical sheet is currently empty.
-* **Expected Columns (Based on Config specifications)**:
-  * `Notification ID` (Primary Key, e.g. `NOT000001`)
-  * `User ID` (Foreign Key pointing to `Users.User ID`)
-  * `Message` (String, notification description text)
-  * `Status` (String, validated against CONFIG.NOTIFICATION_STATUS: `Read` / `Unread`)
-  * `Created At` (Timestamp)
-  * `Created By` (String)
+* **Purpose**: Stores push notifications and user alert histories.
+* **Primary Key**: `Notification ID` (Format: `NOT` + 6 digits, e.g., `NOT000001`).
+* **Expected Record Count**: 0 - 5,000 logs.
+* **Related Tables**: `Users` (Foreign Key: `User ID`).
+
+#### Schema Columns
+
+| Column Header Text | Data Type | Nullable | Description / Business Rules |
+| :--- | :--- | :--- | :--- |
+| **Notification ID** | String | No | Primary Key. System generated (e.g., `NOT000001`). |
+| **User ID** | String | No | Foreign Key pointing to `Users.User ID`. |
+| **Title** | String | No | Short title/subject of the notification. |
+| **Message** | String | No | Detailed content of the notification. |
+| **Notification Type** | String | Yes | Classification type (e.g. `Info`, `Warning`, `Alert`). |
+| **Status** | String | No | Notification read status (e.g. `Read`, `Unread`). |
+| **Created At** | Timestamp | Yes | ISO 8601 creation timestamp. |
+| **Updated At** | Timestamp | Yes | ISO 8601 update timestamp. |
+| **Deletion Flag** | Boolean | No | Soft-delete flag (`true` / `false`). |
+
+---
+
+### Table: Diagnostics
+
+* **Purpose**: Stores system operational diagnostic logs and debugging execution messages.
+* **Note**: This sheet contains diagnostic logs and system execution messages rather than a standard structured tabular row format. It holds arbitrary system error traces, memory diagnostics, performance metrics, and connectivity health statuses.
 
 ---
 

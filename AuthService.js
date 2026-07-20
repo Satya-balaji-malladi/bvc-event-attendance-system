@@ -32,7 +32,7 @@ const AuthService = {
     return Utils && Utils.sanitizeUser ? Utils.sanitizeUser(user) : user;
   },
 
- _verifyPassword: function(user, password) {
+  _verifyPassword: function(user, password) {
   try {
 
     if (!user || !CONFIG.COLUMNS) {
@@ -53,6 +53,12 @@ const AuthService = {
       storedSalt = String(user[saltCol]).trim();
     }
 
+    // 1. Plain text comparison (User request)
+    if (storedHash === String(password).trim()) {
+      return true;
+    }
+
+    // 2. Hash comparison (fallback)
     var calculatedHash = this._hashPassword(password, storedSalt);
 
     Logger.log("===== VERIFY PASSWORD DEBUG =====");
@@ -62,7 +68,21 @@ const AuthService = {
     Logger.log("Calculated Hash  : " + calculatedHash);
     Logger.log("Hash Match       : " + (storedHash === calculatedHash));
 
-    return storedHash === calculatedHash;
+    if (storedHash === calculatedHash) {
+      return true;
+    }
+
+    // Fallback migration check: support the legacy password + ":" + salt format
+    if (storedSalt && storedSalt !== "" && storedSalt.toUpperCase() !== "N/A") {
+      var legacyHash = Utils.hashString(String(password).trim() + ":" + storedSalt);
+      Logger.log("Legacy Calculated Hash: " + legacyHash);
+      Logger.log("Legacy Hash Match     : " + (storedHash === legacyHash));
+      if (storedHash === legacyHash) {
+        return true;
+      }
+    }
+
+    return false;
 
   } catch (e) {
     Logger.log("AuthService._verifyPassword error: " + e);
@@ -219,10 +239,14 @@ Logger.log(this._verifyPassword(user, password));
     this._resetFailedAttempts(userId);
 
     // Optional: first login detection
+    // Commented out blocking block since frontend has no pre-login change password UI.
+    // Users can change their password on the Profile page after login.
+    /*
     var firstLoginCol = CONFIG.COLUMNS.USER_FIRST_LOGIN;
     if (firstLoginCol && user[firstLoginCol] === true) {
       return Utils.buildResponse(true, CONFIG.MESSAGES.FIRST_LOGIN, { requiresPasswordChange: true });
     }
+    */
 
       // Session creation via SessionService only
       if (!CONFIG.SECURITY.ALLOW_MULTIPLE_SESSIONS && SessionService.isUserLoggedIn && SessionService.isUserLoggedIn(userId)) {

@@ -298,13 +298,6 @@ const AttendanceService = {
             }
             return Utils.buildResponse(false, 'Student is not an active participant for this Fixed event.');
           }
-        } else {
-          if (typeof ParticipantService !== 'undefined' && ParticipantService && typeof ParticipantService.checkEligibility === 'function') {
-            const eligibility = ParticipantService.checkEligibility(eventId, rollNumber, userId);
-            if (!eligibility.eligible && eligibility.reason && eligibility.reason.indexOf('Already Added') === -1) {
-              return Utils.buildResponse(false, eligibility.reason);
-            }
-          }
         }
         Logger.log('[END] Attendance Validation');
 
@@ -325,11 +318,9 @@ const AttendanceService = {
 
         // 4. Attendance Save
         Logger.log('[START] Attendance Save');
-        const attendanceId = IdService.generateAttendanceId();
         const now = new Date();
 
         const newAttendance = {
-          [this._getAttendanceColumn('ATTENDANCE_ID', 'Attendance ID')]: attendanceId,
           [this._getAttendanceColumn('EVENT_ID', 'Event ID')]: eventId,
           [this._getAttendanceColumn('ROLL_NUMBER', 'Roll Number')]: rollNumber,
           [this._getAttendanceColumn('USER_ID', 'User ID')]: userId,

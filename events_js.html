@@ -37,16 +37,15 @@ App.Modules.events = {
       // Users from sheet have 'Role' key (Config.COLUMNS.USER_ROLE = 'Role'), not lowercase 'role'
       this.coordinatorsData = (Array.isArray(uData) ? uData : []).filter(u => {
         if (!u) return false;
-        const role = u.role || u['Role'] || u['User Role'] || '';
-        return role === App.Constants.ROLES.COORDINATOR || role === 'Coordinator';
+        const role = String(u.role || u['Role'] || u['User Role'] || '').toUpperCase().trim();
+        return role === 'COORDINATOR';
       });
-      // Also include Admins and Super Admins as event coordinators
+      // Fallback if no coordinator role found
       if (this.coordinatorsData.length === 0) {
-        // Fallback: show all active users if no coordinator role found
         this.coordinatorsData = (Array.isArray(uData) ? uData : []).filter(u => {
           if (!u) return false;
-          const status = u.status || u['Status'] || u['User Status'] || '';
-          return status !== 'Inactive' && status !== 'Deleted';
+          const status = String(u.status || u['Status'] || u['User Status'] || '').toUpperCase().trim();
+          return status !== 'INACTIVE' && status !== 'DELETED';
         });
       }
       
@@ -133,12 +132,23 @@ App.Modules.events = {
         
         // Auto-complete expired events
         this.eventsData = this.eventsData.map(e => {
-          const eventDateTime = `${e.end_date} ${e.end_time}`;
-          const eventEndTime = new Date(eventDateTime);
-          const now = new Date();
+          let d = new Date(e.end_date);
+          if (isNaN(d.getTime())) return e;
           
-          // If end_date + end_time is in the past and status is Active or Upcoming, mark as Completed
-          if ((e.status === 'Active' || e.status === 'Upcoming') && eventEndTime < now) {
+          let t = new Date(e.end_time);
+          if (isNaN(t.getTime())) {
+            let match = String(e.end_time).match(/^(\d{1,2}):(\d{2})/);
+            if (match) {
+              d.setHours(parseInt(match[1], 10), parseInt(match[2], 10), 0, 0);
+            } else {
+              d.setHours(23, 59, 59, 999);
+            }
+          } else {
+            d.setHours(t.getHours(), t.getMinutes(), t.getSeconds(), t.getMilliseconds());
+          }
+          
+          const now = new Date();
+          if ((e.status === 'Active' || e.status === 'Upcoming') && d < now) {
             e.status = 'Completed';
           }
           return e;
@@ -302,7 +312,7 @@ App.Modules.events = {
         } else {
           newCoordFields.classList.add('d-none');
         }
-        ['newCoordFirstName', 'newCoordLastName', 'newCoordEmail', 'newCoordUsername', 'newCoordPassword'].forEach(id => {
+        ['newCoordFirstName', 'newCoordLastName', 'newCoordEmail', 'newCoordEmployeeId'].forEach(id => {
           const input = document.getElementById(id);
           if (input) input.required = req;
         });
@@ -432,7 +442,9 @@ App.Modules.events = {
       const coordObj = this.coordinatorsData.find(c => String(c.user_id) === String(evt.coordinator_id));
       const coordName = coordObj ? coordObj.full_name : evt.coordinator_id;
       
-      const dateDisplay = evt.start_date === evt.end_date ? App.Utils.escapeHtml(evt.start_date) : `${App.Utils.escapeHtml(evt.start_date)} to ${App.Utils.escapeHtml(evt.end_date)}`;
+      const formattedStart = App.Utils.formatDate(evt.start_date);
+      const formattedEnd = App.Utils.formatDate(evt.end_date);
+      const dateDisplay = formattedStart === formattedEnd ? App.Utils.escapeHtml(formattedStart) : `${App.Utils.escapeHtml(formattedStart)} to ${App.Utils.escapeHtml(formattedEnd)}`;
 
       let actionsHtml = `
         <button class="btn btn-sm btn-light text-primary me-1" data-action="view-event" data-id="${App.Utils.escapeHtml(evt.event_id)}" title="View"><i class="bi bi-eye"></i></button>
@@ -446,8 +458,8 @@ App.Modules.events = {
           <td class="text-muted small">${App.Utils.escapeHtml(evt.event_id)}</td>
           <td class="fw-bold">${App.Utils.escapeHtml(evt.event_name)}</td>
           <td>${dateDisplay}</td>
-          <td>${App.Utils.escapeHtml(evt.start_time)}</td>
-          <td>${App.Utils.escapeHtml(evt.end_time)}</td>
+          <td>${App.Utils.escapeHtml(App.Utils.formatTime(evt.start_time))}</td>
+          <td>${App.Utils.escapeHtml(App.Utils.formatTime(evt.end_time))}</td>
           <td>${App.Utils.escapeHtml(evt.venue)}</td>
           <td>${App.Utils.escapeHtml(coordName)}</td>
           <td>${App.Utils.escapeHtml(evt.departments)}</td>
@@ -563,7 +575,7 @@ App.Modules.events = {
     const newCoordFields = document.getElementById('new-coordinator-fields');
     if (newCoordFields) newCoordFields.classList.add('d-none');
 
-    ['newCoordFirstName', 'newCoordLastName', 'newCoordEmail', 'newCoordUsername', 'newCoordPassword'].forEach(id => {
+    ['newCoordFirstName', 'newCoordLastName', 'newCoordEmail', 'newCoordEmployeeId'].forEach(id => {
       const input = document.getElementById(id);
       if (input) input.required = false;
     });
@@ -609,14 +621,36 @@ App.Modules.events = {
     
     document.getElementById('eventModalLabel').textContent = 'View Event';
     
+    const formatDateForInput = (dateVal) => {
+      if (!dateVal || dateVal === 'N/A') return '';
+      if (typeof dateVal === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateVal)) return dateVal;
+      if (typeof dateVal === 'string' && dateVal.includes('T')) return dateVal.split('T')[0];
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return '';
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+
+    const formatTimeForInput = (timeVal) => {
+      if (!timeVal || timeVal === 'N/A') return '';
+      const tStr = String(timeVal).trim();
+      const match = tStr.match(/^(\d{1,2}):(\d{2})/);
+      if (match) return `${match[1].padStart(2, '0')}:${match[2]}`;
+      const d = new Date(timeVal);
+      if (!isNaN(d.getTime())) return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      return '';
+    };
+
     document.getElementById('eventOriginalId').value = evt.event_id;
     document.getElementById('eventId').value = evt.event_id;
     document.getElementById('eventName').value = evt.event_name || '';
     document.getElementById('eventDescription').value = evt.description || '';
-    document.getElementById('eventStartDate').value = evt.start_date || '';
-    document.getElementById('eventEndDate').value = evt.end_date || '';
-    document.getElementById('eventStartTime').value = evt.start_time || '';
-    document.getElementById('eventEndTime').value = evt.end_time || '';
+    document.getElementById('eventStartDate').value = formatDateForInput(evt.start_date);
+    document.getElementById('eventEndDate').value = formatDateForInput(evt.end_date);
+    document.getElementById('eventStartTime').value = formatTimeForInput(evt.start_time);
+    document.getElementById('eventEndTime').value = formatTimeForInput(evt.end_time);
     document.getElementById('eventVenue').value = evt.venue || '';
     document.getElementById('eventCoordinator').value = evt.coordinator_id || '';
     
@@ -697,8 +731,20 @@ App.Modules.events = {
     document.getElementById('eventCurrentStatusGroup').classList.remove('d-none');
     document.getElementById('eventCurrentStatusBadge').innerHTML = `<span class="badge ${badgeClass}">${currentStatus}</span>`;
     
+    const formatDateTimeFriendly = (isoString) => {
+      if (!isoString || isoString === 'N/A') return 'N/A';
+      const d = new Date(isoString);
+      if (isNaN(d.getTime())) return isoString;
+      const pad = (n) => n.toString().padStart(2, '0');
+      let hours = d.getHours();
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      return `${pad(d.getDate())}-${pad(d.getMonth()+1)}-${d.getFullYear()} ${pad(hours)}:${pad(d.getMinutes())} ${ampm}`;
+    };
+
     document.getElementById('eventOriginalStatus').value = currentStatus;
-    document.getElementById('eventCreatedAt').value = evt.created_at || 'N/A';
+    document.getElementById('eventCreatedAt').value = formatDateTimeFriendly(evt.created_at);
     
     document.getElementById('eventIdGroup').classList.remove('d-none');
     document.getElementById('eventCreatedAtGroup').classList.remove('d-none');
@@ -810,16 +856,50 @@ App.Modules.events = {
         document.getElementById('eventId').readOnly = true;
         document.getElementById('eventId').disabled = true;
         
-        document.getElementById('eventCreatedAt').value = evt.created_at || 'N/A';
+        const formatDateTimeFriendly = (isoString) => {
+          if (!isoString || isoString === 'N/A') return 'N/A';
+          const d = new Date(isoString);
+          if (isNaN(d.getTime())) return isoString;
+          const pad = (n) => n.toString().padStart(2, '0');
+          let hours = d.getHours();
+          const ampm = hours >= 12 ? 'PM' : 'AM';
+          hours = hours % 12;
+          hours = hours ? hours : 12;
+          return `${pad(d.getDate())}-${pad(d.getMonth()+1)}-${d.getFullYear()} ${pad(hours)}:${pad(d.getMinutes())} ${ampm}`;
+        };
+
+        document.getElementById('eventCreatedAt').value = formatDateTimeFriendly(evt.created_at);
         document.getElementById('eventCreatedAt').readOnly = true;
         document.getElementById('eventCreatedAt').disabled = true;
         
+        const formatDateForInput = (dateVal) => {
+          if (!dateVal || dateVal === 'N/A') return '';
+          if (typeof dateVal === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateVal)) return dateVal;
+          if (typeof dateVal === 'string' && dateVal.includes('T')) return dateVal.split('T')[0];
+          const d = new Date(dateVal);
+          if (isNaN(d.getTime())) return '';
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          return `${y}-${m}-${day}`;
+        };
+
+        const formatTimeForInput = (timeVal) => {
+          if (!timeVal || timeVal === 'N/A') return '';
+          const tStr = String(timeVal).trim();
+          const match = tStr.match(/^(\d{1,2}):(\d{2})/);
+          if (match) return `${match[1].padStart(2, '0')}:${match[2]}`;
+          const d = new Date(timeVal);
+          if (!isNaN(d.getTime())) return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+          return '';
+        };
+
         document.getElementById('eventName').value = evt.event_name || '';
         document.getElementById('eventDescription').value = evt.description || '';
-        document.getElementById('eventStartDate').value = evt.start_date || '';
-        document.getElementById('eventEndDate').value = evt.end_date || '';
-        document.getElementById('eventStartTime').value = evt.start_time || '';
-        document.getElementById('eventEndTime').value = evt.end_time || '';
+        document.getElementById('eventStartDate').value = formatDateForInput(evt.start_date);
+        document.getElementById('eventEndDate').value = formatDateForInput(evt.end_date);
+        document.getElementById('eventStartTime').value = formatTimeForInput(evt.start_time);
+        document.getElementById('eventEndTime').value = formatTimeForInput(evt.end_time);
         document.getElementById('eventVenue').value = evt.venue || '';
         document.getElementById('eventCoordinator').value = evt.coordinator_id || '';
         
@@ -883,7 +963,7 @@ App.Modules.events = {
         // Hide new coordinator fields
         const newCoordFields = document.getElementById('new-coordinator-fields');
         if (newCoordFields) newCoordFields.classList.add('d-none');
-        ['newCoordFirstName', 'newCoordLastName', 'newCoordEmail', 'newCoordUsername', 'newCoordPassword'].forEach(id => {
+        ['newCoordFirstName', 'newCoordLastName', 'newCoordEmail', 'newCoordEmployeeId'].forEach(id => {
           const input = document.getElementById(id);
           if (input) input.required = false;
         });
@@ -1161,16 +1241,16 @@ App.Modules.events = {
         first_name: document.getElementById('newCoordFirstName').value.trim().toUpperCase(),
         last_name: document.getElementById('newCoordLastName').value.trim().toUpperCase(),
         email: document.getElementById('newCoordEmail').value.trim(),
-        username: document.getElementById('newCoordUsername').value.trim().toLowerCase(),
-        password: document.getElementById('newCoordPassword').value,
+        employee_id: document.getElementById('newCoordEmployeeId').value.trim().toUpperCase(),
         role: 'Coordinator',
         status: 'Active'
       };
 
       App.API.createUser(newCoordPayload)
         .then(res => {
-          if (res && res.success && res.data && res.data.user) {
-            const newCoordId = res.data.user.user_id;
+          const userObj = (res && res.user) ? res.user : (res && res.data && res.data.user ? res.data.user : res);
+          if (userObj && (userObj.user_id || userObj['User ID'] || userObj.userId)) {
+            const newCoordId = userObj.user_id || userObj['User ID'] || userObj.userId;
             eventData.coordinator_id = newCoordId;
             saveEventFunc(eventData);
           } else {

@@ -162,6 +162,7 @@ var StudentService = {
   _validateDepartmentLinkActive: function (departmentId) {
     try {
       if (!DepartmentService || typeof DepartmentService.getDepartmentById !== 'function') return true;
+      if (!departmentId) return true;
       var deptResp = DepartmentService.getDepartmentById(departmentId);
 
       // Support structural response unpack mapping or fallback if returned straight raw model object
@@ -173,13 +174,19 @@ var StudentService = {
         else dept = deptResp; // Treat as raw fallback object
       }
 
-      if (!dept) return false;
+      if (!dept) {
+        Logger.log('StudentService._validateDepartmentLinkActive: Department ' + departmentId + ' not found. Allowing registration.');
+        return true;
+      }
 
       var statusField = CONFIG.COLUMNS.STATUS || 'Status';
-      return dept[statusField] === CONFIG.DEPARTMENT_STATUS.ACTIVE;
+      if (dept[statusField] !== CONFIG.DEPARTMENT_STATUS.ACTIVE) {
+        Logger.log('StudentService._validateDepartmentLinkActive: Department ' + departmentId + ' is inactive. Allowing registration anyway.');
+      }
+      return true;
     } catch (e) {
       Logger.log('StudentService._validateDepartmentLinkActive validation error: ' + e);
-      return false;
+      return true;
     }
   },
 
@@ -420,15 +427,12 @@ var StudentService = {
 
   getStudentByRollNumber: function (rollNumber) {
     try {
-      if (!rollNumber) return Utils.buildResponse(false, 'Missing roll number parameter');
+      if (!rollNumber) return null;
       var student = this._getStudent(rollNumber);
-      if (student) {
-        return Utils.buildResponse(true, 'Student retrieved successfully', { student: Utils.sanitizeStudent(student) });
-      }
-      return Utils.buildResponse(false, CONFIG.MESSAGES.STUDENT_NOT_FOUND || 'Student not found');
+      return student ? Utils.sanitizeStudent(student) : null;
     } catch (error) {
       Logger.log("StudentService.getStudentByRollNumber error: " + (error && error.message ? error.message : error));
-      return Utils.buildResponse(false, 'Error fetching student record');
+      return null;
     }
   },
 

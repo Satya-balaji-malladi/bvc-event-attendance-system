@@ -75,6 +75,21 @@ function verifyOTP(employeeId, otp) {
   }
 }
 
+function recoverPassword(employeeId, otp, newPassword) {
+  try {
+    var cleanEmpId = String(employeeId || "").trim();
+    var user = DatabaseService.findOne(CONFIG.SHEETS.USERS, CONFIG.COLUMNS.USER_EMPLOYEE_ID, cleanEmpId);
+    if (!user) {
+      return { success: false, message: "User not found." };
+    }
+
+    var userId = String(user[CONFIG.COLUMNS.USER_ID]).trim();
+    return JSON.parse(JSON.stringify(AuthService.resetPassword(userId, otp, newPassword) || {}));
+  } catch (e) {
+    return { success: false, message: e.message };
+  }
+}
+
 // ==========================================
 // User API
 // ==========================================
@@ -134,21 +149,76 @@ function getAllEnrichedParticipants(sessionToken) {
 // COORDINATOR TERMINAL API ENDPOINTS
 // ==========================================
 
+function _deepInspectAndLogResponse(methodName, response) {
+  Logger.log("=== [INSPECT] " + methodName + " ===");
+  Logger.log("Is Null/Undefined: " + (response === null || response === undefined));
+  Logger.log("Type of response: " + typeof response);
+  if (response) {
+    Logger.log("Keys of response: " + JSON.stringify(Object.keys(response)));
+    Logger.log("response.success: " + response.success);
+    
+    var foundUnserializable = [];
+    var seen = [];
+    
+    function check(val, path) {
+      if (val === null || val === undefined) return;
+      if (typeof val === 'object') {
+        if (seen.indexOf(val) !== -1) {
+          foundUnserializable.push(path + " (Circular Reference)");
+          return;
+        }
+        seen.push(val);
+        
+        if (val instanceof Date) {
+          foundUnserializable.push(path + " (Date Object: " + val.toString() + ")");
+        } else if (typeof val.getRange === 'function' || typeof val.getLastRow === 'function') {
+          foundUnserializable.push(path + " (Spreadsheet/Sheet/Range Object)");
+        } else if (typeof val.toString === 'function' && val.toString().indexOf('Blob') !== -1) {
+          foundUnserializable.push(path + " (Blob Object)");
+        } else {
+          for (var k in val) {
+            if (Object.prototype.hasOwnProperty.call(val, k)) {
+              check(val[k], path + "." + k);
+            }
+          }
+        }
+      }
+    }
+    
+    check(response, "response");
+    if (foundUnserializable.length > 0) {
+      Logger.log("❌ Found non-serializable objects: " + JSON.stringify(foundUnserializable));
+    } else {
+      Logger.log("✅ No non-serializable objects found.");
+    }
+  }
+  Logger.log("=================================");
+}
+
 function getCoordinatorTerminalData(sessionToken) {
   var startTime = Date.now();
-  Logger.log("[START] Api.getCoordinatorTerminalData");
-  Logger.log("[INPUT] Session Token: " + (sessionToken ? "Provided" : "Null"));
+  Logger.log("=== ENTER getCoordinatorTerminalData() ===");
+  Logger.log("Received token: " + sessionToken);
 
   try {
     Logger.log("[CONTROLLER CALL] Invoking Controller.CoordinatorTerminal.getContext");
     var response = Controller.CoordinatorTerminal.getContext(sessionToken);
     
-    Logger.log("[OUTPUT] Context Retrieval Completed. Success Status: " + response.success);
-    Logger.log("[END] Api.getCoordinatorTerminalData | Execution Time: " + (Date.now() - startTime) + "ms");
-    return response;
+    var executionTime = Date.now() - startTime;
+    Logger.log("Controller response: " + (response ? JSON.stringify(response) : "null/undefined"));
+    Logger.log("Execution time: " + executionTime + "ms");
+    Logger.log("Complete response object: " + (response ? JSON.stringify(response) : "null/undefined"));
+    Logger.log("=== EXIT getCoordinatorTerminalData() (SUCCESS) ===");
+    return JSON.parse(JSON.stringify(response || {}));
   } catch (error) {
     Logger.log("[ERROR] Api.getCoordinatorTerminalData: " + error.message);
-    return Utils.buildResponse(false, "Failed to load coordinator terminal context data: " + error.message);
+    var errResp = Utils.buildResponse(false, "Failed to load coordinator terminal context data: " + error.message);
+    var executionTimeErr = Date.now() - startTime;
+    Logger.log("Controller response (Error case): " + JSON.stringify(errResp));
+    Logger.log("Execution time: " + executionTimeErr + "ms");
+    Logger.log("Complete response object (Error case): " + JSON.stringify(errResp));
+    Logger.log("=== EXIT getCoordinatorTerminalData() (ERROR) ===");
+    return errResp;
   }
 }
 
@@ -163,10 +233,13 @@ function markCoordinatorAttendance(sessionToken, rollNumber, attendanceMethod) {
     
     Logger.log("[OUTPUT] Attendance Marked. Success Status: " + response.success);
     Logger.log("[END] Api.markCoordinatorAttendance | Execution Time: " + (Date.now() - startTime) + "ms");
+    _deepInspectAndLogResponse("markCoordinatorAttendance", response);
     return response;
   } catch (error) {
     Logger.log("[ERROR] Api.markCoordinatorAttendance: " + error.message);
-    return Utils.buildResponse(false, "Failed to process terminal attendance entry: " + error.message);
+    var errResp = Utils.buildResponse(false, "Failed to process terminal attendance entry: " + error.message);
+    _deepInspectAndLogResponse("markCoordinatorAttendance (Error)", errResp);
+    return errResp;
   }
 }
 
@@ -181,10 +254,13 @@ function getCoordinatorStatistics(sessionToken) {
     
     Logger.log("[OUTPUT] Live Statistics Gathered. Success Status: " + response.success);
     Logger.log("[END] Api.getCoordinatorStatistics | Execution Time: " + (Date.now() - startTime) + "ms");
+    _deepInspectAndLogResponse("getCoordinatorStatistics", response);
     return response;
   } catch (error) {
     Logger.log("[ERROR] Api.getCoordinatorStatistics: " + error.message);
-    return Utils.buildResponse(false, "Failed to compile live terminal statistics: " + error.message);
+    var errResp = Utils.buildResponse(false, "Failed to compile live terminal statistics: " + error.message);
+    _deepInspectAndLogResponse("getCoordinatorStatistics (Error)", errResp);
+    return errResp;
   }
 }
 
@@ -199,10 +275,13 @@ function getCoordinatorRecentScans(sessionToken) {
     
     Logger.log("[OUTPUT] Recent Scans Fetched. Success Status: " + response.success);
     Logger.log("[END] Api.getCoordinatorRecentScans | Execution Time: " + (Date.now() - startTime) + "ms");
+    _deepInspectAndLogResponse("getCoordinatorRecentScans", response);
     return response;
   } catch (error) {
     Logger.log("[ERROR] Api.getCoordinatorRecentScans: " + error.message);
-    return Utils.buildResponse(false, "Failed to retrieve recent terminal operations stream: " + error.message);
+    var errResp = Utils.buildResponse(false, "Failed to retrieve recent terminal operations stream: " + error.message);
+    _deepInspectAndLogResponse("getCoordinatorRecentScans (Error)", errResp);
+    return errResp;
   }
 }
 
@@ -217,10 +296,13 @@ function getCoordinatorStudent(sessionToken, rollNumber) {
     
     Logger.log("[OUTPUT] Student Query Handled. Success Status: " + response.success);
     Logger.log("[END] Api.getCoordinatorStudent | Execution Time: " + (Date.now() - startTime) + "ms");
+    _deepInspectAndLogResponse("getCoordinatorStudent", response);
     return response;
   } catch (error) {
     Logger.log("[ERROR] Api.getCoordinatorStudent: " + error.message);
-    return Utils.buildResponse(false, "Failed to query structural student identity bounds: " + error.message);
+    var errResp = Utils.buildResponse(false, "Failed to query structural student identity bounds: " + error.message);
+    _deepInspectAndLogResponse("getCoordinatorStudent (Error)", errResp);
+    return errResp;
   }
 }
 
@@ -235,10 +317,13 @@ function logoutCoordinator(sessionToken) {
     
     Logger.log("[OUTPUT] Session Termination Finalized. Success Status: " + response.success);
     Logger.log("[END] Api.logoutCoordinator | Execution Time: " + (Date.now() - startTime) + "ms");
+    _deepInspectAndLogResponse("logoutCoordinator", response);
     return response;
   } catch (error) {
     Logger.log("[ERROR] Api.logoutCoordinator: " + error.message);
-    return Utils.buildResponse(false, "Failed to gracefully clear active terminal session: " + error.message);
+    var errResp = Utils.buildResponse(false, "Failed to gracefully clear active terminal session: " + error.message);
+    _deepInspectAndLogResponse("logoutCoordinator (Error)", errResp);
+    return errResp;
   }
 }
 
@@ -253,10 +338,13 @@ function validateCoordinatorSession(sessionToken) {
     
     Logger.log("[OUTPUT] Security State Evaluated. Success Status: " + response.success);
     Logger.log("[END] Api.validateCoordinatorSession | Execution Time: " + (Date.now() - startTime) + "ms");
+    _deepInspectAndLogResponse("validateCoordinatorSession", response);
     return response;
   } catch (error) {
     Logger.log("[ERROR] Api.validateCoordinatorSession: " + error.message);
-    return Utils.buildResponse(false, "Session validation sequence encountered errors: " + error.message);
+    var errResp = Utils.buildResponse(false, "Session validation sequence encountered errors: " + error.message);
+    _deepInspectAndLogResponse("validateCoordinatorSession (Error)", errResp);
+    return errResp;
   }
 }
 
@@ -271,10 +359,13 @@ function registerSpotStudentAndMark(sessionToken, rollNumber, name, department, 
     
     Logger.log("[OUTPUT] Spot student registered & marked. Success Status: " + response.success);
     Logger.log("[END] Api.registerSpotStudentAndMark | Execution Time: " + (Date.now() - startTime) + "ms");
+    _deepInspectAndLogResponse("registerSpotStudentAndMark", response);
     return response;
   } catch (error) {
     Logger.log("[ERROR] Api.registerSpotStudentAndMark: " + error.message);
-    return Utils.buildResponse(false, "Failed to register spot student and mark attendance: " + error.message);
+    var errResp = Utils.buildResponse(false, "Failed to register spot student and mark attendance: " + error.message);
+    _deepInspectAndLogResponse("registerSpotStudentAndMark (Error)", errResp);
+    return errResp;
   }
 }
 
@@ -345,4 +436,64 @@ function getEventParticipants(sessionToken, eventId) {
     Logger.log("Error in global getEventParticipants: " + e.message);
     return [];
   }
+}
+
+function runCoordinatorTerminalDiagnostic() {
+  Logger.log("=== RUNNING COORDINATOR TERMINAL DIAGNOSTIC ===");
+  try {
+    var sessions = DatabaseService.readAllRows("SESSIONS") || [];
+    var activeSession = sessions.find(function(s) { 
+      var statusCol = CONFIG.COLUMNS.SESSION_STATUS || 'Session Status';
+      return String(s[statusCol]) === 'Active'; 
+    });
+    
+    var token = "";
+    if (activeSession) {
+      var tokenCol = CONFIG.COLUMNS.SESSION_TOKEN || 'Session Token';
+      token = activeSession[tokenCol];
+      Logger.log("Found active session token: " + token);
+    } else {
+      var users = DatabaseService.readAllRows("USERS") || [];
+      var coordUser = users.find(function(u) { 
+        var role = u['Role'] || u.role || '';
+        return String(role).toUpperCase() === 'COORDINATOR';
+      });
+      if (!coordUser) {
+        Logger.log("❌ No Coordinator user found in USERS sheet.");
+        return;
+      }
+      Logger.log("Found coordinator user: " + coordUser['User ID'] + " (" + coordUser['Username'] + ")");
+      
+      var assignments = DatabaseService.readAllRows("EVENT_COORDINATORS") || [];
+      var hasAssign = assignments.some(function(a) {
+        return String(a['User ID']).toUpperCase() === String(coordUser['User ID']).toUpperCase() && String(a['Assignment Status']) === 'Active';
+      });
+      if (!hasAssign) {
+        Logger.log("Seeding active event assignment for test...");
+        var events = DatabaseService.readAllRows("EVENTS") || [];
+        if (events.length === 0) {
+          Logger.log("❌ No events found to assign.");
+          return;
+        }
+        var eventId = events[0]['Event ID'];
+        CoordinatorService.assignCoordinator(eventId, coordUser['User ID'], 'Coordinator', 'System', 'Diagnostic Seed');
+      }
+      
+      Logger.log("Creating active session for diagnostic...");
+      var sessionData = AuthService._createSession(coordUser);
+      var tokenCol = CONFIG.COLUMNS.SESSION_TOKEN || 'Session Token';
+      token = sessionData.token[tokenCol];
+      Logger.log("Created test session token: " + token);
+    }
+    
+    Logger.log("Executing getCoordinatorTerminalData(token)...");
+    var res = getCoordinatorTerminalData(token);
+    Logger.log("Execution finished successfully!");
+    Logger.log("Returned response keys: " + JSON.stringify(Object.keys(res)));
+    Logger.log("Returned response success: " + res.success);
+  } catch (e) {
+    Logger.log("❌ CRITICAL ERROR DURING DIAGNOSTIC: " + e.message);
+    if (e.stack) Logger.log(e.stack);
+  }
+  Logger.log("=== DIAGNOSTIC COMPLETE ===");
 }

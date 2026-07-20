@@ -175,6 +175,13 @@ App.Modules.users = {
       const confirmInput = document.getElementById('userConfirmPassword');
       if (pwdInput) pwdInput.setAttribute('required', 'true');
       if (confirmInput) confirmInput.setAttribute('required', 'true');
+
+      const empInput = document.getElementById('userEmployeeId');
+      if (empInput) {
+        empInput.value = '';
+        empInput.removeAttribute('readonly');
+        empInput.removeAttribute('disabled');
+      }
     }
     
     const errorAlert = document.getElementById('userModalError');
@@ -208,6 +215,12 @@ App.Modules.users = {
       document.getElementById('userDepartment').value = user.department || '';
       document.getElementById('userRole').value = String(user.role).toUpperCase() || 'USER';
       document.getElementById('userStatus').value = String(user.status).toUpperCase() === 'ACTIVE' ? 'Active' : 'Inactive';
+
+      const empInput = document.getElementById('userEmployeeId');
+      if (empInput) {
+        empInput.value = user.employee_id || '';
+        empInput.setAttribute('readonly', 'true');
+      }
 
       // Hide passwords on edit
       const pwdGroup = document.getElementById('passwordGroup');
@@ -260,6 +273,7 @@ App.Modules.users = {
     const userData = {
       full_name: document.getElementById('userName').value.trim(),
       email: emailVal,
+      employee_id: document.getElementById('userEmployeeId').value.trim().toUpperCase(),
       department: document.getElementById('userDepartment').value,
       role: document.getElementById('userRole').value,
       status: document.getElementById('userStatus').value

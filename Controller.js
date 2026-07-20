@@ -17,7 +17,7 @@ const Controller = {
      * @param {object} credentials - { usernameOrEmail, password }
      * @returns {object} Response object.
      */
-    login: function(credentials) {
+    login: function (credentials) {
       return AuthService.login(credentials);
     },
 
@@ -26,7 +26,7 @@ const Controller = {
      * @param {string} sessionToken 
      * @returns {object} Response object.
      */
-    logout: function(sessionToken) {
+    logout: function (sessionToken) {
       return AuthService.logout(sessionToken);
     },
 
@@ -35,7 +35,7 @@ const Controller = {
      * @param {string} sessionToken 
      * @returns {object} Response object.
      */
-    authenticate: function(sessionToken) {
+    authenticate: function (sessionToken) {
       return AuthService.authenticate(sessionToken);
     }
   },
@@ -49,7 +49,7 @@ const Controller = {
      * @param {string} sessionToken 
      * @returns {object|null} The session object if valid, else null.
      */
-    validateSession: function(sessionToken) {
+    validateSession: function (sessionToken) {
       return SessionService.validateSession(sessionToken);
     },
 
@@ -58,7 +58,7 @@ const Controller = {
      * @param {string} sessionToken 
      * @returns {object|null} The user object if session is valid.
      */
-    getCurrentUser: function(sessionToken) {
+    getCurrentUser: function (sessionToken) {
       return SessionService.getCurrentUser(sessionToken);
     },
 
@@ -68,7 +68,7 @@ const Controller = {
      * @param {string} role 
      * @returns {boolean} True if user has the specified role.
      */
-    hasRole: function(sessionToken, role) {
+    hasRole: function (sessionToken, role) {
       return SessionService.hasRole(sessionToken, role);
     }
   },
@@ -82,12 +82,12 @@ const Controller = {
      * @param {object} userData 
      * @returns {object} Response object.
      */
-    createUser: function(sessionToken, userData) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      Logger.log("BACKEND STEP 2: Controller.User.createUser started");
-      const result = UserService.createUser(userData);
-      Logger.log("BACKEND STEP 7: Controller.User.createUser finished.");
-      return result;
+    createUser: function (sessionToken, userData) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        Logger.log("BACKEND STEP 2: Controller.User.createUser started");
+        const result = UserService.createUser(userData);
+        Logger.log("BACKEND STEP 7: Controller.User.createUser finished.");
+        return result;
       });
     },
 
@@ -96,12 +96,12 @@ const Controller = {
      * @param {object[]} usersDataArray 
      * @returns {object} Response object.
      */
-    importUsers: function(sessionToken, usersDataArray) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      Logger.log("BACKEND STEP 2: Controller.User.importUsers started");
-      const result = UserService.importUsers(usersDataArray);
-      Logger.log("BACKEND STEP 7: Controller.User.importUsers finished.");
-      return result;
+    importUsers: function (sessionToken, usersDataArray) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        Logger.log("BACKEND STEP 2: Controller.User.importUsers started");
+        const result = UserService.importUsers(usersDataArray);
+        Logger.log("BACKEND STEP 7: Controller.User.importUsers finished.");
+        return result;
       });
     },
 
@@ -110,9 +110,9 @@ const Controller = {
      * @param {string} userId 
      * @returns {object|null}
      */
-    getUserById: function(sessionToken, userId) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return UserService.getUserById(userId);
+    getUserById: function (sessionToken, userId) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return UserService.getUserById(userId);
       });
     },
 
@@ -121,18 +121,18 @@ const Controller = {
      * @param {string} username 
      * @returns {object|null}
      */
-    getUserByUsername: function(sessionToken, username) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return UserService.getUserByUsername(username);
+    getUserByUsername: function (sessionToken, username) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return UserService.getUserByUsername(username);
       });
     },
 
     /**
      * @returns {object[]} Array of all users.
      */
-    getAllUsers: function(sessionToken) {
+    getAllUsers: function (sessionToken) {
       Logger.log("BACKEND STEP 5: Entering Controller.User.getAllUsers");
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
         Logger.log("BACKEND STEP 6: Session validated. sessionUserId: " + _sessionUserId);
         const users = UserService.getAllUsers();
         Logger.log("BACKEND STEP 7 - Controller.User.getAllUsers received from UserService: " + typeof users + " / Array? " + Array.isArray(users) + " / Length: " + (users ? users.length : 0));
@@ -146,9 +146,9 @@ const Controller = {
      * @param {object} userData 
      * @returns {object} Response object.
      */
-    updateUser: function(sessionToken, userId, userData) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return UserService.updateUser(userId, userData);
+    updateUser: function (sessionToken, userId, userData) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return UserService.updateUser(userId, userData);
       });
     },
 
@@ -157,9 +157,9 @@ const Controller = {
      * @param {string} userId 
      * @returns {object} Response object.
      */
-    deleteUser: function(sessionToken, userId) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return UserService.deleteUser(userId);
+    deleteUser: function (sessionToken, userId) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return UserService.deleteUser(userId);
       });
     },
 
@@ -168,9 +168,9 @@ const Controller = {
      * @param {string} userId 
      * @returns {object} Response object.
      */
-    deactivateUser: function(sessionToken, userId) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return UserService.deactivateUser(userId);
+    deactivateUser: function (sessionToken, userId) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return UserService.deactivateUser(userId);
       });
     },
 
@@ -179,9 +179,9 @@ const Controller = {
      * @param {string} userId 
      * @returns {object} Response object.
      */
-    resetPassword: function(sessionToken, userId) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return UserService.resetPassword(userId);
+    resetPassword: function (sessionToken, userId) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return UserService.resetPassword(userId);
       });
     },
 
@@ -190,9 +190,9 @@ const Controller = {
      * @param {string} userId 
      * @returns {object} Response object.
      */
-    activateUser: function(sessionToken, userId) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return UserService.activateUser(userId);
+    activateUser: function (sessionToken, userId) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return UserService.activateUser(userId);
       });
     },
 
@@ -201,9 +201,9 @@ const Controller = {
      * @param {string} keyword 
      * @returns {object[]}
      */
-    searchUsers: function(sessionToken, keyword) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return UserService.searchUsers(keyword);
+    searchUsers: function (sessionToken, keyword) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return UserService.searchUsers(keyword);
       });
     },
 
@@ -214,9 +214,9 @@ const Controller = {
      * @param {string} newPassword 
      * @returns {object} Response object.
      */
-    changePassword: function(sessionToken, userId, oldPassword, newPassword) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return UserService.changePassword(userId, oldPassword, newPassword);
+    changePassword: function (sessionToken, userId, oldPassword, newPassword) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return UserService.changePassword(userId, oldPassword, newPassword);
       });
     },
   },
@@ -230,9 +230,9 @@ const Controller = {
      * @param {object} studentData 
      * @returns {object} Response object.
      */
-    createStudent: function(sessionToken, studentData) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return StudentService.createStudent(studentData);
+    createStudent: function (sessionToken, studentData) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return StudentService.createStudent(studentData);
       });
     },
 
@@ -242,9 +242,9 @@ const Controller = {
      * @param {object} studentData 
      * @returns {object} Response object.
      */
-    updateStudent: function(sessionToken, rollNumber, studentData) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return StudentService.updateStudent(rollNumber, studentData);
+    updateStudent: function (sessionToken, rollNumber, studentData) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return StudentService.updateStudent(rollNumber, studentData);
       });
     },
 
@@ -253,9 +253,9 @@ const Controller = {
      * @param {string} rollNumber 
      * @returns {object} Response object.
      */
-    deleteStudent: function(sessionToken, rollNumber) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return StudentService.deleteStudent(rollNumber);
+    deleteStudent: function (sessionToken, rollNumber) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return StudentService.deleteStudent(rollNumber);
       });
     },
 
@@ -264,9 +264,14 @@ const Controller = {
      * @param {string} rollNumber 
      * @returns {object|null}
      */
-    getStudentByRollNumber: function(sessionToken, rollNumber) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return StudentService.getStudentByRollNumber(rollNumber);
+    getStudentByRollNumber: function (sessionToken, rollNumber) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        if (!rollNumber) return Utils.buildResponse(false, 'Missing roll number parameter.');
+        const student = StudentService.getStudentByRollNumber(rollNumber);
+        if (student) {
+          return Utils.buildResponse(true, 'Student retrieved successfully', { student: student });
+        }
+        return Utils.buildResponse(false, (CONFIG.MESSAGES && CONFIG.MESSAGES.STUDENT_NOT_FOUND) ? CONFIG.MESSAGES.STUDENT_NOT_FOUND : 'Student not found');
       });
     },
 
@@ -274,9 +279,9 @@ const Controller = {
      * Retrieves all students.
      * @returns {object[]}
      */
-    getAllStudents: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return StudentService.getAllStudents();
+    getAllStudents: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return StudentService.getAllStudents();
       });
     },
 
@@ -285,9 +290,9 @@ const Controller = {
      * @param {string} keyword 
      * @returns {object[]}
      */
-    searchStudents: function(sessionToken, keyword) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return StudentService.searchStudents(keyword);
+    searchStudents: function (sessionToken, keyword) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return StudentService.searchStudents(keyword);
       });
     },
 
@@ -296,9 +301,9 @@ const Controller = {
      * @param {string} department 
      * @returns {object[]}
      */
-    getStudentsByDepartment: function(sessionToken, department) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return StudentService.getStudentsByDepartment(department);
+    getStudentsByDepartment: function (sessionToken, department) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return StudentService.getStudentsByDepartment(department);
       });
     },
 
@@ -307,9 +312,9 @@ const Controller = {
      * @param {string|number} year 
      * @returns {object[]}
      */
-    getStudentsByYear: function(sessionToken, year) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return StudentService.getStudentsByYear(year);
+    getStudentsByYear: function (sessionToken, year) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return StudentService.getStudentsByYear(year);
       });
     },
 
@@ -318,9 +323,9 @@ const Controller = {
      * @param {string} section 
      * @returns {object[]}
      */
-    getStudentsBySection: function(sessionToken, section) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return StudentService.getStudentsBySection(section);
+    getStudentsBySection: function (sessionToken, section) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return StudentService.getStudentsBySection(section);
       });
     },
   },
@@ -334,9 +339,9 @@ const Controller = {
      * @param {object} eventData 
      * @returns {object} Response object.
      */
-    createEvent: function(sessionToken, eventData) {
-      return SessionService.withSession(sessionToken, function(userId) {
-      return EventService.createEvent(eventData);
+    createEvent: function (sessionToken, eventData) {
+      return SessionService.withSession(sessionToken, function (userId) {
+        return EventService.createEvent(eventData, userId);
       });
     },
 
@@ -346,12 +351,12 @@ const Controller = {
      * @param {object} eventData 
      * @returns {object} Response object.
      */
-    updateEvent: function(sessionToken, eventId, eventData) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      Logger.log("BACKEND: Controller.Event.updateEvent started for " + eventId);
-      const result = EventService.updateEvent(eventId, eventData);
-      Logger.log("BACKEND: Controller.Event.updateEvent finished.");
-      return result;
+    updateEvent: function (sessionToken, eventId, eventData) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        Logger.log("BACKEND: Controller.Event.updateEvent started for " + eventId);
+        const result = EventService.updateEvent(eventId, eventData, _sessionUserId);
+        Logger.log("BACKEND: Controller.Event.updateEvent finished.");
+        return result;
       });
     },
 
@@ -360,9 +365,9 @@ const Controller = {
      * @param {string} eventId 
      * @returns {object} Response object.
      */
-    deleteEvent: function(sessionToken, eventId) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return EventService.deleteEvent(eventId);
+    deleteEvent: function (sessionToken, eventId) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return EventService.deleteEvent(eventId);
       });
     },
 
@@ -371,12 +376,12 @@ const Controller = {
      * @param {string} eventId 
      * @returns {object|null}
      */
-    getEventById: function(sessionToken, eventId) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      Logger.log("BACKEND: Controller.Event.getEventById started for " + eventId);
-      const result = EventService.getEventById(eventId);
-      Logger.log("BACKEND: Controller.Event.getEventById finished.");
-      return result;
+    getEventById: function (sessionToken, eventId) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        Logger.log("BACKEND: Controller.Event.getEventById started for " + eventId);
+        const result = EventService.getEventById(eventId);
+        Logger.log("BACKEND: Controller.Event.getEventById finished.");
+        return result;
       });
     },
 
@@ -384,11 +389,11 @@ const Controller = {
      * Retrieves all events.
      * @returns {object} Response object.
      */
-    getAllEvents: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      const events = EventService.getAllEvents();
-      Logger.log("Controller.Event.getAllEvents() events length: " + (events ? events.length : "null"));
-      return events || [];
+    getAllEvents: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        const events = EventService.getAllEvents();
+        Logger.log("Controller.Event.getAllEvents() events length: " + (events ? events.length : "null"));
+        return events || [];
       });
     },
 
@@ -397,9 +402,9 @@ const Controller = {
      * @param {string} keyword 
      * @returns {object[]}
      */
-    searchEvents: function(sessionToken, keyword) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return EventService.searchEvents(keyword);
+    searchEvents: function (sessionToken, keyword) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return EventService.searchEvents(keyword);
       });
     },
 
@@ -408,9 +413,9 @@ const Controller = {
      * @param {string} coordinatorId 
      * @returns {object[]}
      */
-    getEventsByCoordinator: function(sessionToken, coordinatorId) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return EventService.getEventsByCoordinator(coordinatorId);
+    getEventsByCoordinator: function (sessionToken, coordinatorId) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return EventService.getEventsByCoordinator(coordinatorId);
       });
     },
 
@@ -419,9 +424,9 @@ const Controller = {
      * @param {string} status 
      * @returns {object[]}
      */
-    getEventsByStatus: function(sessionToken, status) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return EventService.getEventsByStatus(status);
+    getEventsByStatus: function (sessionToken, status) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return EventService.getEventsByStatus(status);
       });
     },
 
@@ -430,9 +435,9 @@ const Controller = {
      * @param {string} date 
      * @returns {object[]}
      */
-    getEventsByDate: function(sessionToken, date) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return EventService.getEventsByDate(date);
+    getEventsByDate: function (sessionToken, date) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return EventService.getEventsByDate(date);
       });
     },
 
@@ -447,8 +452,8 @@ const Controller = {
      * @param {object} attendanceData 
      * @returns {object} Response object.
      */
-    markAttendance: function(sessionToken, attendanceData) {
-      return SessionService.withSession(sessionToken, function(sessionUserId) {
+    markAttendance: function (sessionToken, attendanceData) {
+      return SessionService.withSession(sessionToken, function (sessionUserId) {
         try {
           // Validate request payload (minimal null safety)
           if (!attendanceData || typeof attendanceData !== 'object') {
@@ -469,8 +474,8 @@ const Controller = {
      * @param {string} attendanceId 
      * @returns {object} Response object.
      */
-    deleteAttendance: function(sessionToken, attendanceId) {
-      return SessionService.withSession(sessionToken, function(sessionUserId) {
+    deleteAttendance: function (sessionToken, attendanceId) {
+      return SessionService.withSession(sessionToken, function (sessionUserId) {
         try {
           if (!attendanceId) return Utils.buildResponse(false, 'Invalid attendance request');
           return AttendanceService.deleteAttendance(attendanceId, sessionUserId);
@@ -487,9 +492,9 @@ const Controller = {
      * @param {string} attendanceId 
      * @returns {object|null}
      */
-    getAttendanceById: function(sessionToken, attendanceId) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return AttendanceService.getAttendanceById(attendanceId);
+    getAttendanceById: function (sessionToken, attendanceId) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return AttendanceService.getAttendanceById(attendanceId);
       });
     },
 
@@ -498,9 +503,9 @@ const Controller = {
      * @param {string} eventId 
      * @returns {object[]}
      */
-    getAttendanceByEvent: function(sessionToken, eventId) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return AttendanceService.getAttendanceByEvent(eventId);
+    getAttendanceByEvent: function (sessionToken, eventId) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return AttendanceService.getAttendanceByEvent(eventId);
       });
     },
 
@@ -509,9 +514,9 @@ const Controller = {
      * @param {string} rollNumber 
      * @returns {object[]}
      */
-    getAttendanceByStudent: function(sessionToken, rollNumber) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return AttendanceService.getAttendanceByStudent(rollNumber);
+    getAttendanceByStudent: function (sessionToken, rollNumber) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return AttendanceService.getAttendanceByStudent(rollNumber);
       });
     },
 
@@ -520,9 +525,9 @@ const Controller = {
      * @param {string} date 
      * @returns {object[]}
      */
-    getAttendanceByDate: function(sessionToken, date) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return AttendanceService.getAttendanceByDate(date);
+    getAttendanceByDate: function (sessionToken, date) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return AttendanceService.getAttendanceByDate(date);
       });
     },
 
@@ -531,9 +536,9 @@ const Controller = {
      * @param {string} status 
      * @returns {object[]}
      */
-    getAttendanceByStatus: function(sessionToken, status) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return AttendanceService.getAttendanceByStatus(status);
+    getAttendanceByStatus: function (sessionToken, status) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return AttendanceService.getAttendanceByStatus(status);
       });
     },
 
@@ -543,9 +548,9 @@ const Controller = {
      * @param {string} rollNumber 
      * @returns {boolean}
      */
-    checkAttendanceExists: function(sessionToken, eventId, rollNumber) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return AttendanceService.checkAttendanceExists(eventId, rollNumber);
+    checkAttendanceExists: function (sessionToken, eventId, rollNumber) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return AttendanceService.checkAttendanceExists(eventId, rollNumber);
       });
     },
 
@@ -554,9 +559,9 @@ const Controller = {
      * @param {string} eventId 
      * @returns {object}
      */
-    getEventAttendanceCount: function(sessionToken, eventId) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return AttendanceService.getEventAttendanceCount(eventId);
+    getEventAttendanceCount: function (sessionToken, eventId) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return AttendanceService.getEventAttendanceCount(eventId);
       });
     },
 
@@ -565,9 +570,9 @@ const Controller = {
      * @param {string} rollNumber 
      * @returns {number}
      */
-    getStudentAttendanceCount: function(sessionToken, rollNumber) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return AttendanceService.getStudentAttendanceCount(rollNumber);
+    getStudentAttendanceCount: function (sessionToken, rollNumber) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return AttendanceService.getStudentAttendanceCount(rollNumber);
       });
     },
 
@@ -576,9 +581,9 @@ const Controller = {
      * @param {string} rollNumber 
      * @returns {object}
      */
-    getStudentAttendanceSummary: function(sessionToken, rollNumber) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return AttendanceService.getStudentAttendanceSummary(rollNumber);
+    getStudentAttendanceSummary: function (sessionToken, rollNumber) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return AttendanceService.getStudentAttendanceSummary(rollNumber);
       });
     },
 
@@ -586,9 +591,9 @@ const Controller = {
      * Retrieves overall attendance statistics across all events.
      * @returns {object}
      */
-    getOverallAttendanceStatistics: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return AttendanceService.getOverallAttendanceStatistics();
+    getOverallAttendanceStatistics: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return AttendanceService.getOverallAttendanceStatistics();
       });
     },
 
@@ -597,9 +602,9 @@ const Controller = {
      * @param {string} eventId 
      * @returns {object|null}
      */
-    getAttendanceSummaryByEvent: function(sessionToken, eventId) {
-      return SessionService.withSession(sessionToken, function(_sessionUserId) {
-      return AttendanceService.getAttendanceSummaryByEvent(eventId);
+    getAttendanceSummaryByEvent: function (sessionToken, eventId) {
+      return SessionService.withSession(sessionToken, function (_sessionUserId) {
+        return AttendanceService.getAttendanceSummaryByEvent(eventId);
       });
     },
   },
@@ -608,88 +613,88 @@ const Controller = {
   // Report Controller
   // ==========================================
   Report: {
-    getDashboardSummary: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getDashboardSummary: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getDashboardSummary(userId);
       });
     },
-    getReportsDashboardSummary: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getReportsDashboardSummary: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getReportsDashboardSummary(userId);
       });
     },
-    getEventReport: function(sessionToken, filters) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getEventReport: function (sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getEventReport(userId, filters);
       });
     },
-    getStudentReport: function(sessionToken, rollNumber) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getStudentReport: function (sessionToken, rollNumber) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getStudentReport(userId, rollNumber);
       });
     },
-    getDepartmentReport: function(sessionToken, department) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getDepartmentReport: function (sessionToken, department) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getDepartmentReport(userId, department);
       });
     },
-    getCoordinatorReport: function(sessionToken, coordinatorId) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getCoordinatorReport: function (sessionToken, coordinatorId) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getCoordinatorReport(userId, coordinatorId);
       });
     },
-    getDateRangeReport: function(sessionToken, fromDate, toDate) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getDateRangeReport: function (sessionToken, fromDate, toDate) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getDateRangeReport(userId, fromDate, toDate);
       });
     },
-    getAttendanceDefaulters: function(sessionToken, filters) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getAttendanceDefaulters: function (sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getAttendanceDefaulters(userId, filters);
       });
     },
-    getTopParticipants: function(sessionToken, filters) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getTopParticipants: function (sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getTopParticipants(userId, filters);
       });
     },
-    getAbsentStudents: function(sessionToken, filters) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getAbsentStudents: function (sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getAbsentStudents(userId, filters);
       });
     },
-    getYearWiseReport: function(sessionToken, year) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getYearWiseReport: function (sessionToken, year) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getYearWiseReport(userId, year);
       });
     },
-    getDepartmentComparison: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getDepartmentComparison: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getDepartmentComparison(userId);
       });
     },
-    getMonthlyReport: function(sessionToken, filters) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getMonthlyReport: function (sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getMonthlyReport(userId, filters);
       });
     },
-    getEventTrendReport: function(sessionToken, filters) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getEventTrendReport: function (sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getEventTrendReport(userId, filters);
       });
     },
-    getCancelledEvents: function(sessionToken, filters) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getCancelledEvents: function (sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getCancelledEvents(userId, filters);
       });
     },
-    getCoordinatorPerformance: function(sessionToken, coordinatorId) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getCoordinatorPerformance: function (sessionToken, coordinatorId) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getCoordinatorPerformance(userId, coordinatorId);
       });
     },
-    getStudentEventHistory: function(sessionToken, rollNumber) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getStudentEventHistory: function (sessionToken, rollNumber) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getStudentEventHistory(userId, rollNumber);
       });
     }
@@ -699,8 +704,8 @@ const Controller = {
   // Participant Controller
   // ==========================================
   Participant: {
-    getEventParticipants: function(sessionToken, eventId) {
-      return SessionService.withSession(sessionToken, function(sessionUserId) {
+    getEventParticipants: function (sessionToken, eventId) {
+      return SessionService.withSession(sessionToken, function (sessionUserId) {
         try {
           if (!eventId) return Utils.buildResponse(false, 'Invalid participant request');
           return ParticipantService.getEventParticipants(eventId, sessionUserId);
@@ -711,8 +716,8 @@ const Controller = {
       });
     },
 
-    addParticipant: function(sessionToken, eventId, rollNumber) {
-      return SessionService.withSession(sessionToken, function(sessionUserId) {
+    addParticipant: function (sessionToken, eventId, rollNumber) {
+      return SessionService.withSession(sessionToken, function (sessionUserId) {
         try {
           if (!eventId || !rollNumber) return Utils.buildResponse(false, 'Invalid participant request');
           return ParticipantService.addParticipant(eventId, rollNumber, sessionUserId);
@@ -723,8 +728,8 @@ const Controller = {
       });
     },
 
-    removeParticipant: function(sessionToken, eventId, rollNumber) {
-      return SessionService.withSession(sessionToken, function(sessionUserId) {
+    removeParticipant: function (sessionToken, eventId, rollNumber) {
+      return SessionService.withSession(sessionToken, function (sessionUserId) {
         try {
           if (!eventId || !rollNumber) return Utils.buildResponse(false, 'Invalid participant request');
           return ParticipantService.removeParticipant(eventId, rollNumber, sessionUserId);
@@ -735,8 +740,8 @@ const Controller = {
       });
     },
 
-    restoreParticipant: function(sessionToken, eventId, rollNumber) {
-      return SessionService.withSession(sessionToken, function(sessionUserId) {
+    restoreParticipant: function (sessionToken, eventId, rollNumber) {
+      return SessionService.withSession(sessionToken, function (sessionUserId) {
         try {
           if (!eventId || !rollNumber) return Utils.buildResponse(false, 'Invalid participant request');
           return ParticipantService.restoreParticipant(eventId, rollNumber, sessionUserId);
@@ -747,8 +752,8 @@ const Controller = {
       });
     },
 
-    checkEligibility: function(sessionToken, eventId, rollNumber) {
-      return SessionService.withSession(sessionToken, function(sessionUserId) {
+    checkEligibility: function (sessionToken, eventId, rollNumber) {
+      return SessionService.withSession(sessionToken, function (sessionUserId) {
         try {
           if (!eventId || !rollNumber) return Utils.buildResponse(false, 'Invalid participant request');
           return ParticipantService.checkEligibility(eventId, rollNumber, sessionUserId);
@@ -759,8 +764,8 @@ const Controller = {
       });
     },
 
-    getAllEnrichedParticipants: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(sessionUserId) {
+    getAllEnrichedParticipants: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (sessionUserId) {
         try {
           return ParticipantService.getAllEnrichedParticipants(sessionUserId);
         } catch (e) {
@@ -770,8 +775,8 @@ const Controller = {
       });
     },
 
-    bulkAddParticipants: function(sessionToken, eventId, rollNumbers) {
-      return SessionService.withSession(sessionToken, function(sessionUserId) {
+    bulkAddParticipants: function (sessionToken, eventId, rollNumbers) {
+      return SessionService.withSession(sessionToken, function (sessionUserId) {
         try {
           if (!eventId || !rollNumbers || !Array.isArray(rollNumbers)) return Utils.buildResponse(false, 'Invalid bulk import request');
           return ParticipantService.bulkAddParticipants(eventId, rollNumbers, sessionUserId);
@@ -782,8 +787,8 @@ const Controller = {
       });
     },
 
-    bulkRemoveParticipants: function(sessionToken, eventId, rollNumbers) {
-      return SessionService.withSession(sessionToken, function(sessionUserId) {
+    bulkRemoveParticipants: function (sessionToken, eventId, rollNumbers) {
+      return SessionService.withSession(sessionToken, function (sessionUserId) {
         try {
           if (!eventId || !rollNumbers || !Array.isArray(rollNumbers)) return Utils.buildResponse(false, 'Invalid bulk remove request');
           return ParticipantService.bulkRemoveParticipants(eventId, rollNumbers, sessionUserId);
@@ -800,43 +805,43 @@ const Controller = {
   // Analytics API
   // ==========================================
   Analytics: {
-    getAnalyticsSummary: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getAnalyticsSummary: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return AnalyticsService.getAnalyticsSummary(userId);
       });
     },
-    getTrendData: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getTrendData: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return AnalyticsService.getTrendData(userId);
       });
     },
-    getDepartmentData: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getDepartmentData: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return AnalyticsService.getDepartmentData(userId);
       });
     },
-    getEventWiseData: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getEventWiseData: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return AnalyticsService.getEventWiseData(userId);
       });
     },
-    getCheckInPatterns: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getCheckInPatterns: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return AnalyticsService.getCheckInPatterns(userId);
       });
     },
-    getPerformanceDistribution: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getPerformanceDistribution: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return AnalyticsService.getPerformanceDistribution(userId);
       });
     },
-    getDefaulterDistribution: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getDefaulterDistribution: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return AnalyticsService.getDefaulterDistribution(userId);
       });
     },
-    getLeaderboard: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getLeaderboard: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return AnalyticsService.getLeaderboard(userId);
       });
     }
@@ -846,23 +851,23 @@ const Controller = {
   // Settings API
   // ==========================================
   Settings: {
-    getSettings: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getSettings: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return SettingsService.getSettings();
       });
     },
-    saveSettings: function(sessionToken, payload) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    saveSettings: function (sessionToken, payload) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return SettingsService.saveSettings(payload);
       });
     },
-    clearAttendanceLogs: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    clearAttendanceLogs: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return SettingsService.clearAttendanceLogs(userId);
       });
     },
-    resetSystem: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    resetSystem: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return SettingsService.resetSystem(userId);
       });
     }
@@ -872,8 +877,8 @@ const Controller = {
   // Audit API
   // ==========================================
   Audit: {
-    getAuditLogs: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getAuditLogs: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         const user = DatabaseService.findByColumn(CONFIG.SHEETS.USERS, 'User ID', userId)[0];
         const role = user ? (user['Role'] || user.role) : null;
         if (role !== CONFIG.ROLES.ADMIN) {
@@ -889,8 +894,8 @@ const Controller = {
   // Department API
   // ==========================================
   Department: {
-    getActiveDepartments: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getActiveDepartments: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return DepartmentService.getActiveDepartments();
       });
     }
@@ -900,51 +905,51 @@ const Controller = {
   // Dashboard API (Feature-Based Development)
   // ==========================================
   Dashboard: {
-    getTotalUsers: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getTotalUsers: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         Logger.log("DASHBOARD_MODULE | STEP 2 - Session validated | User ID: " + userId);
         return DashboardService.getTotalUsersCount();
       });
     },
-    getTotalStudents: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getTotalStudents: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         Logger.log("DASHBOARD_MODULE | STEP 2 - Session validated | User ID: " + userId);
         return DashboardService.getTotalStudentsCount();
       });
     },
-    getTotalEvents: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getTotalEvents: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         Logger.log("DASHBOARD_MODULE | STEP 2 - Session validated | User ID: " + userId);
         return DashboardService.getTotalEventsCount();
       });
     },
-    getActiveEvents: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getActiveEvents: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         Logger.log("DASHBOARD_MODULE | STEP 2 - Session validated | User ID: " + userId);
         return DashboardService.getActiveEventsCount();
       });
     },
-    getUpcomingEvents: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getUpcomingEvents: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         Logger.log("DASHBOARD_MODULE | STEP 2 - Session validated | User ID: " + userId);
         return DashboardService.getUpcomingEventsCount();
       });
     },
-    getTotalParticipants: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getTotalParticipants: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         Logger.log("DASHBOARD_MODULE | STEP 2 - Session validated | User ID: " + userId);
         // Fallback or placeholder for participants list check
         return DashboardService.getTotalCoordinatorsCount();
       });
     },
-    getAttendanceToday: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getAttendanceToday: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         Logger.log("DASHBOARD_MODULE | STEP 2 - Session validated | User ID: " + userId);
         return DashboardService.getAttendanceTodayCount(userId);
       });
     },
-    getRecentEvents: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getRecentEvents: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         Logger.log("DASHBOARD_MODULE | STEP 2 - Session validated | User ID: " + userId);
         return DashboardService.getRecentActivities();
       });
@@ -955,69 +960,139 @@ const Controller = {
   // CoordinatorTerminal API
   // ==========================================
   CoordinatorTerminal: {
-    getContext: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
-        const user = UserService.getUserById(userId);
-        if (!user) return Utils.buildResponse(false, 'User not found.');
+    getContext: function (sessionToken) {
+      Logger.log("================================");
+      Logger.log("ENTER Controller.getContext()");
+      Logger.log("Token: " + sessionToken);
+      Logger.log("================================");
 
-        const validation = CoordinatorService.validateCoordinatorSession(user);
-        if (!validation.success) return validation;
+      try {
+        Logger.log("STEP 1");
+        Logger.log("Validating session");
 
-        const activeAssignedIds = CoordinatorService.getAssignedEventIds(userId) || [];
-        if (activeAssignedIds.length === 0) {
-          return Utils.buildResponse(false, 'No active event assignments associated with this account credentials.');
-        }
+        var response = SessionService.withSession(sessionToken, function (userId) {
+          try {
+            Logger.log("STEP 2");
+            Logger.log("Fetching coordinator");
+            const user = UserService.getUserById(userId);
+            Logger.log("Coordinator");
+            Logger.log(JSON.stringify(user));
 
-        const targetEvent = EventService.getEventById(activeAssignedIds[0]);
-        if (!targetEvent) {
-          return Utils.buildResponse(false, 'Assigned event record is missing or deleted.');
-        }
+            Logger.log("Validating coordinator role and status");
+            const validation = CoordinatorService.validateCoordinatorSession(user);
+            Logger.log("Validation Result: " + JSON.stringify(validation));
 
-        const eventId = targetEvent['Event ID'] || targetEvent.eventId;
+            Logger.log("STEP 3");
+            Logger.log("Fetching assigned event");
+            const activeAssignedIds = CoordinatorService.getAssignedEventIds(userId) || [];
+            Logger.log("Assigned event IDs: " + JSON.stringify(activeAssignedIds));
 
-        const counts = AttendanceService.getEventAttendanceCount(eventId);
-        const stats = {
-          present: counts.present || 0,
-          remaining: counts.absent || counts.total - counts.present || 0,
-          total: counts.total || 0
-        };
+            if (!user) {
+              Logger.log("Returning Failure");
+              return Utils.buildResponse(false, 'User not found.');
+            }
 
-        const allAttendance = AttendanceService.getAttendanceByEvent(eventId) || [];
+            if (!validation.success) {
+              Logger.log("Returning Failure");
+              return validation;
+            }
 
-        // Enrich each attendance record with student details (name + department)
-        // StudentService.getStudentByRollNumber returns a response envelope {success, data: {student: {...}}}
-        const allScans = allAttendance.map(record => {
-          const roll = record['Roll Number'] || record.roll_number || '';
-          const studentRes = StudentService.getStudentByRollNumber(roll);
-          const studentData = (studentRes && studentRes.success && studentRes.data && studentRes.data.student)
-            ? studentRes.data.student
-            : {};
-          return {
-            roll: roll,
-            name: studentData['Student Name'] || studentData['Full Name'] || studentData['Name'] || 'Unknown Student',
-            dept: studentData['Department ID'] || studentData['Department'] || 'N/A',
-            time: record['Attendance Time'] || record['Time'] || record['Created At'] || '',
-            isDuplicate: false
-          };
+            if (activeAssignedIds.length === 0) {
+              Logger.log("Returning Failure");
+              return Utils.buildResponse(false, 'No active event assignments associated with this account credentials.');
+            }
+
+            const targetEvent = EventService.getEventById(activeAssignedIds[0]);
+            Logger.log("Event");
+            Logger.log(JSON.stringify(targetEvent));
+
+            if (!targetEvent) {
+              Logger.log("Returning Failure");
+              return Utils.buildResponse(false, 'Assigned event record is missing or deleted.');
+            }
+
+            const eventId = targetEvent['Event ID'] || targetEvent.eventId;
+
+            Logger.log("STEP 5");
+            Logger.log("Building statistics");
+            const counts = AttendanceService.getEventAttendanceCount(eventId);
+            const stats = {
+              present: counts.present || 0,
+              remaining: counts.absent || counts.total - counts.present || 0,
+              total: counts.total || 0
+            };
+            Logger.log("Statistics");
+            Logger.log(JSON.stringify(stats));
+
+            Logger.log("STEP 4");
+            Logger.log("Fetching attendance");
+            const allAttendance = AttendanceService.getAttendanceByEvent(eventId) || [];
+
+            Logger.log("Enriching recent scans");
+            const allScans = allAttendance.map(record => {
+              const roll = record['Roll Number'] || record.roll_number || '';
+              const studentData = StudentService.getStudentByRollNumber(roll) || {};
+              return {
+                roll: roll,
+                name: studentData['Student Name'] || studentData['Full Name'] || studentData['Name'] || 'Unknown Student',
+                dept: studentData['Department ID'] || studentData['Department'] || 'N/A',
+                time: record['Attendance Time'] || record['Time'] || record['Created At'] || '',
+                isDuplicate: false
+              };
+            });
+            Logger.log("Recent Scans");
+            Logger.log(JSON.stringify(allScans));
+
+            Logger.log("STEP 6");
+            Logger.log("Preparing response");
+            var finalResult = Utils.buildResponse(true, 'Terminal context loaded successfully.', {
+              user: user,
+              event: targetEvent,
+              statistics: stats,
+              recentScans: allScans
+            });
+
+            Logger.log("========== FINAL RESPONSE ==========");
+            Logger.log("Type : " + typeof finalResult);
+            Logger.log("Is Null : " + (finalResult == null));
+            if (finalResult == null) {
+              Logger.log("CRITICAL");
+              Logger.log("Response became NULL");
+              Logger.log("Investigating previous variable");
+            } else {
+              Logger.log("Success : " + finalResult.success);
+              Logger.log("Message : " + finalResult.message);
+              Logger.log("Keys : " + JSON.stringify(Object.keys(finalResult)));
+              Logger.log("Full Response:");
+              Logger.log(JSON.stringify(finalResult));
+            }
+            Logger.log("====================================");
+
+            Logger.log("Returning Success");
+            return finalResult;
+          } catch (innerError) {
+            Logger.log("Inner callback error: " + innerError);
+            Logger.log(innerError.stack);
+            throw innerError;
+          }
         });
 
-        return Utils.buildResponse(true, 'Terminal context loaded successfully.', {
-          user: user,
-          event: targetEvent,
-          statistics: stats,
-          recentScans: allScans
-        });
-      });
+        return response;
+      } catch (e) {
+        Logger.log("getContext outer error: " + e);
+        Logger.log(e.stack);
+        throw e;
+      }
     },
 
-    markAttendance: function(sessionToken, rollNumber, attendanceMethod) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    markAttendance: function (sessionToken, rollNumber, attendanceMethod) {
+      return SessionService.withSession(sessionToken, function (userId) {
         const activeAssignedIds = CoordinatorService.getAssignedEventIds(userId) || [];
         if (activeAssignedIds.length === 0) {
           return Utils.buildResponse(false, 'No active event assignments associated with this account credentials.');
         }
         const eventId = activeAssignedIds[0];
-        
+
         if (!rollNumber) {
           return Utils.buildResponse(false, 'Missing required student registration identifier.');
         }
@@ -1033,14 +1108,14 @@ const Controller = {
       });
     },
 
-    registerSpotStudentAndMarkAttendance: function(sessionToken, rollNumber, studentName, departmentId, year, section, collegeName) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    registerSpotStudentAndMarkAttendance: function (sessionToken, rollNumber, studentName, departmentId, year, section, collegeName) {
+      return SessionService.withSession(sessionToken, function (userId) {
         const activeAssignedIds = CoordinatorService.getAssignedEventIds(userId) || [];
         if (activeAssignedIds.length === 0) {
           return Utils.buildResponse(false, 'No active event assignments associated with this account credentials.');
         }
         const eventId = activeAssignedIds[0];
-        
+
         if (!rollNumber) {
           return Utils.buildResponse(false, 'Missing required student registration identifier.');
         }
@@ -1077,7 +1152,7 @@ const Controller = {
           if (attendanceType === 'Fixed') {
             // Check if already registered as participant
             var parts = DatabaseService.findByColumn(CONFIG.SHEETS.EVENT_PARTICIPANTS, 'Event ID', eventId) || [];
-            var isPart = parts.find(function(p) {
+            var isPart = parts.find(function (p) {
               return String(p['Roll Number'] || p.roll_number || p.rollNumber).trim().toUpperCase() === normalizedRoll;
             });
             if (!isPart) {
@@ -1105,8 +1180,8 @@ const Controller = {
       });
     },
 
-    getLiveStatistics: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getLiveStatistics: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         const activeAssignedIds = CoordinatorService.getAssignedEventIds(userId) || [];
         if (activeAssignedIds.length === 0) {
           return Utils.buildResponse(false, 'No active event assignments.');
@@ -1121,8 +1196,8 @@ const Controller = {
       });
     },
 
-    getRecentScansStream: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getRecentScansStream: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         const activeAssignedIds = CoordinatorService.getAssignedEventIds(userId) || [];
         if (activeAssignedIds.length === 0) {
           return Utils.buildResponse(false, 'No active event assignments.');
@@ -1141,8 +1216,8 @@ const Controller = {
       });
     },
 
-    getStudentProfile: function(sessionToken, rollNumber) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getStudentProfile: function (sessionToken, rollNumber) {
+      return SessionService.withSession(sessionToken, function (userId) {
         if (!rollNumber) return Utils.buildResponse(false, 'Missing roll number parameter.');
         const normalizedRoll = rollNumber.trim().toUpperCase();
         const student = StudentService.getStudentByRollNumber(normalizedRoll);
@@ -1156,12 +1231,12 @@ const Controller = {
       });
     },
 
-    terminateSession: function(sessionToken) {
+    terminateSession: function (sessionToken) {
       return AuthService.logout(sessionToken);
     },
 
-    validateActiveSession: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    validateActiveSession: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         const user = UserService.getUserById(userId);
         if (!user) return Utils.buildResponse(false, 'User not found.');
         return CoordinatorService.validateCoordinatorSession(user);
@@ -1173,88 +1248,88 @@ const Controller = {
   // Report Controller
   // ==========================================
   Report: {
-    getDashboardSummary: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getDashboardSummary: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getDashboardSummary(userId);
       });
     },
-    getReportsDashboardSummary: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getReportsDashboardSummary: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getReportsDashboardSummary(userId);
       });
     },
-    getEventReport: function(sessionToken, filters) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getEventReport: function (sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getEventReport(userId, filters || {});
       });
     },
-    getStudentReport: function(sessionToken, rollNumber) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getStudentReport: function (sessionToken, rollNumber) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getStudentReport(userId, rollNumber);
       });
     },
-    getDepartmentReport: function(sessionToken, department) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getDepartmentReport: function (sessionToken, department) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getDepartmentReport(userId, department);
       });
     },
-    getDepartmentComparison: function(sessionToken) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getDepartmentComparison: function (sessionToken) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getDepartmentComparison(userId);
       });
     },
-    getCoordinatorReport: function(sessionToken, coordinatorId) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getCoordinatorReport: function (sessionToken, coordinatorId) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getCoordinatorReport(coordinatorId || userId, userId);
       });
     },
-    getCoordinatorPerformance: function(sessionToken, coordinatorId) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getCoordinatorPerformance: function (sessionToken, coordinatorId) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getCoordinatorReport(coordinatorId || userId, userId);
       });
     },
-    getDateRangeReport: function(sessionToken, fromDate, toDate) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getDateRangeReport: function (sessionToken, fromDate, toDate) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getDateRangeReport(userId, fromDate, toDate);
       });
     },
-    getMonthlyReport: function(sessionToken, filters) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getMonthlyReport: function (sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getMonthlyReport(userId, filters || {});
       });
     },
-    getEventTrendReport: function(sessionToken, filters) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getEventTrendReport: function (sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getEventTrendReport(userId, filters || {});
       });
     },
-    getYearWiseReport: function(sessionToken, year) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getYearWiseReport: function (sessionToken, year) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getYearWiseReport(userId, year);
       });
     },
-    getAttendanceDefaulters: function(sessionToken, filters) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getAttendanceDefaulters: function (sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getAttendanceDefaulters(userId, filters || {});
       });
     },
-    getTopParticipants: function(sessionToken, filters) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getTopParticipants: function (sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getTopParticipants(userId, filters || {});
       });
     },
-    getAbsentStudents: function(sessionToken, filters) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getAbsentStudents: function (sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getAbsentStudents(userId, filters || {});
       });
     },
-    getCancelledEvents: function(sessionToken, filters) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getCancelledEvents: function (sessionToken, filters) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getCancelledEvents(userId, filters || {});
       });
     },
-    getStudentEventHistory: function(sessionToken, rollNumber) {
-      return SessionService.withSession(sessionToken, function(userId) {
+    getStudentEventHistory: function (sessionToken, rollNumber) {
+      return SessionService.withSession(sessionToken, function (userId) {
         return ReportService.getStudentEventHistory(userId, rollNumber);
       });
     }

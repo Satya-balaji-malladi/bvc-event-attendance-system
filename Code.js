@@ -54,6 +54,34 @@ function doGet(e) {
 }
 
 /**
+ * POST handler for external API requests (e.g. from Netlify)
+ */
+function doPost(e) {
+  try {
+    var postData = JSON.parse(e.postData.contents);
+    var action = postData.action;
+    var args = postData.arguments || [];
+    
+    var result;
+    if (typeof this[action] === 'function') {
+      result = this[action].apply(null, args);
+    } else if (typeof globalThis[action] === 'function') {
+      result = globalThis[action].apply(null, args);
+    } else {
+      throw new Error("Method " + action + " not found on server.");
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify(result))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    Logger.log("[ERROR] doPost: " + error.message);
+    var errResp = { success: false, message: error.message };
+    return ContentService.createTextOutput(JSON.stringify(errResp))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+/**
  * Returns the raw HTML content for Vanilla SPA navigation
  * to avoid Chrome sandbox top-navigation blocks.
  */
@@ -121,6 +149,46 @@ function getAllEvents(sessionToken) {
   } catch (e) {
     Logger.log("Error in global getAllEvents: " + e.message);
     return [];
+  }
+}
+
+function createEvent(sessionToken, eventData) {
+  try {
+    const res = Controller.Event.createEvent(sessionToken, eventData);
+    return JSON.parse(JSON.stringify(res || {}));
+  } catch (e) {
+    Logger.log("Error in global createEvent: " + e.message);
+    return { success: false, message: e.message };
+  }
+}
+
+function updateEvent(sessionToken, eventId, eventData) {
+  try {
+    const res = Controller.Event.updateEvent(sessionToken, eventId, eventData);
+    return JSON.parse(JSON.stringify(res || {}));
+  } catch (e) {
+    Logger.log("Error in global updateEvent: " + e.message);
+    return { success: false, message: e.message };
+  }
+}
+
+function deleteEvent(sessionToken, eventId) {
+  try {
+    const res = Controller.Event.deleteEvent(sessionToken, eventId);
+    return JSON.parse(JSON.stringify(res || {}));
+  } catch (e) {
+    Logger.log("Error in global deleteEvent: " + e.message);
+    return { success: false, message: e.message };
+  }
+}
+
+function getEventById(sessionToken, eventId) {
+  try {
+    const res = Controller.Event.getEventById(sessionToken, eventId);
+    return JSON.parse(JSON.stringify(res || {}));
+  } catch (e) {
+    Logger.log("Error in global getEventById: " + e.message);
+    return null;
   }
 }
 

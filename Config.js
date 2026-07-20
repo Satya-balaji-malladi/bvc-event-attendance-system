@@ -305,7 +305,7 @@ const CONFIG = {
 
 VALIDATION: {
     EMAIL: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-    ROLL_NUMBER: /^[0-9]{2}A9[15][A-Za-z][0-9A-Za-z]{4}$/,
+    ROLL_NUMBER: /^[A-Za-z0-9_\-\.\/\s]{1,30}$/,
     PHONE: /^[0-9]{10}$/,
     YEAR: /^[1-4]$/,
     SECTION: /^[A-C]$/

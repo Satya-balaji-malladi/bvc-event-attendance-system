@@ -32,20 +32,52 @@ const ParticipantService = {
       }
       Logger.log('[END] Authorization');
 
-      // 2. Fetch participants
+      // 2. Fetch participants from registrations
       Logger.log('[START] Participant Lookup');
       const participants = DatabaseService.findByColumn(CONFIG.SHEETS.EVENT_PARTICIPANTS, 'Event ID', eventId) || [];
       
-      // 3. Join with Students data
+      // Fetch actual attendees from Attendance sheet
+      const attendance = DatabaseService.findByColumn(CONFIG.SHEETS.ATTENDANCE, 'Event ID', eventId) || [];
+      
+      // Merge attendees into participants list if they are not already there
+      const participantRolls = new Set(participants.map(p => String(p['Roll Number'] || p.roll_number || p.rollNumber).trim().toUpperCase()));
+      
+      attendance.forEach(att => {
+        const roll = String(att['Roll Number'] || att.roll_number).trim().toUpperCase();
+        if (roll && !participantRolls.has(roll)) {
+          participants.push({
+            'Event ID': eventId,
+            'Roll Number': roll,
+            'Registration Status': 'Confirmed',
+            'status': 'Active',
+            'Joined At': att.Timestamp || att.Date || ''
+          });
+          participantRolls.add(roll);
+        }
+      });
+      
+      // 3. Join with Students and Attendance data
       const allStudents = DatabaseService.readAllRows(CONFIG.SHEETS.STUDENTS) || [];
+      
+      const attendedRolls = new Set(
+        attendance
+          .filter(a => !a['Deletion Flag'])
+          .map(a => String(a['Roll Number'] || a.roll_number || a.rollNumber).trim().toUpperCase())
+      );
+
       const enriched = participants.map(p => {
-        const student = allStudents.find(s => s['Roll Number'] === p['Roll Number']) || {};
+        const roll = String(p['Roll Number'] || p.roll_number || p.rollNumber).trim().toUpperCase();
+        const student = allStudents.find(s => String(s['Roll Number']).trim().toUpperCase() === roll) || {};
+        const attendanceStatus = attendedRolls.has(roll) ? 'Present' : (p['Attendance Status'] || p.attendance_status || 'Absent');
+        
         return {
           ...p,
           student_name: student['Student Name'] || 'Unknown',
           department: student['Department ID'] || 'Unknown',
           year: student['Year'] || 'Unknown',
-          section: student['Section'] || 'Unknown'
+          section: student['Section'] || 'Unknown',
+          'Attendance Status': attendanceStatus,
+          attendance_status: attendanceStatus
         };
       });
       Logger.log('[END] Participant Lookup');

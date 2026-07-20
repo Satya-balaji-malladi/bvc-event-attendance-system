@@ -186,16 +186,19 @@
       
       if (!bsConfirmModal) return;
       
-      // Flush previous event capture patterns by clone substitution assignment
-      const newSubmitBtn = confirmModalSubmitBtn.cloneNode(true);
-      confirmModalSubmitBtn.parentNode.replaceChild(newSubmitBtn, confirmModalSubmitBtn);
-      
-      newSubmitBtn.addEventListener('click', () => {
-        bsConfirmModal.hide();
-        if (typeof onConfirmCallback === 'function') {
-          onConfirmCallback();
-        }
-      });
+      const currentSubmitBtn = document.getElementById('confirmModalSubmitBtn');
+      if (currentSubmitBtn) {
+        // Flush previous event capture patterns by clone substitution assignment
+        const newSubmitBtn = currentSubmitBtn.cloneNode(true);
+        currentSubmitBtn.parentNode.replaceChild(newSubmitBtn, currentSubmitBtn);
+        
+        newSubmitBtn.addEventListener('click', () => {
+          bsConfirmModal.hide();
+          if (typeof onConfirmCallback === 'function') {
+            onConfirmCallback();
+          }
+        });
+      }
       
       bsConfirmModal.show();
     }
@@ -207,15 +210,14 @@
       console.log('Logout protocol initiated. Dispatched clearing execution handles...');
       showLoader();
       
-      // =======================================================================
-      // TODO: Implement backend exit termination callbacks here later if required
-      // google.script.run.withSuccessHandler(...).logout();
-      // =======================================================================
-      
-      setTimeout(() => {
-        hideLoader();
-        alert('Logout routing signal delivered successfully. Session ended.');
-      }, 1000);
+      if (window.App && window.App.Auth && typeof window.App.Auth.logout === 'function') {
+        window.App.Auth.logout();
+      } else {
+        setTimeout(() => {
+          hideLoader();
+          alert('Logout routing signal delivered successfully. Session ended.');
+        }, 1000);
+      }
     }
 
     // Redundant navigation event listeners removed because common_js.html handles global navigation delegation

@@ -413,9 +413,9 @@ const NotificationService = {
     let eventName = 'Event';
     try {
       const student = StudentService.getStudentByRollNumber(rollNumber);
-      if (student && student.success && student.student) {
-        email = student.student['Email'] || student.student.email || email;
-        studentName = student.student['Student Name'] || student.student.student_name || studentName;
+      if (student) {
+        email = student['Email'] || student.email || student['Email Address'] || email;
+        studentName = student['Student Name'] || student.student_name || studentName;
       }
       const event = EventService.getEventById(eventId);
       if (event) {
@@ -446,9 +446,9 @@ const NotificationService = {
     let eventName = 'Event';
     try {
       const student = StudentService.getStudentByRollNumber(rollNumber);
-      if (student && student.success && student.student) {
-        email = student.student['Email'] || student.student.email || email;
-        studentName = student.student['Student Name'] || student.student.student_name || studentName;
+      if (student) {
+        email = student['Email'] || student.email || student['Email Address'] || email;
+        studentName = student['Student Name'] || student.student_name || studentName;
       }
       const event = EventService.getEventById(eventId);
       if (event) {

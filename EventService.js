@@ -76,10 +76,6 @@ const EventService = {
   },
 
   _evaluateEventStatus_: function(eventRecord) {
-    // Ensure null safety.
-    // Best-effort lifecycle/status evaluation without mutating the sheet.
-    // NOTE: Some sheets may already store Status. If present we keep it.
-    // If missing, we attempt to derive status from dates and configured EVENT_STATUS.
     try {
       if (!eventRecord) return eventRecord;
 
@@ -87,68 +83,105 @@ const EventService = {
       var cols = c.COLUMNS || {};
       var statusKey = eventRecord['Event Status'] !== undefined ? 'Event Status' : (cols.STATUS || null);
 
-      // If sheet already has status, keep it.
-      if (statusKey && eventRecord[statusKey]) {
-        return eventRecord;
-      }
-
-      // Default to Draft if we cannot compute.
       var draft = (c.EVENT_STATUS && c.EVENT_STATUS.DRAFT) ? c.EVENT_STATUS.DRAFT : 'Draft';
       var active = (c.EVENT_STATUS && c.EVENT_STATUS.ACTIVE) ? c.EVENT_STATUS.ACTIVE : 'Active';
       var completed = (c.EVENT_STATUS && c.EVENT_STATUS.COMPLETED) ? c.EVENT_STATUS.COMPLETED : 'Completed';
       var cancelled = (c.EVENT_STATUS && c.EVENT_STATUS.CANCELLED) ? c.EVENT_STATUS.CANCELLED : 'Cancelled';
       var stopped = (c.EVENT_STATUS && c.EVENT_STATUS.STOPPED) ? c.EVENT_STATUS.STOPPED : 'Stopped';
+      var upcoming = (c.EVENT_STATUS && c.EVENT_STATUS.UPCOMING) ? c.EVENT_STATUS.UPCOMING : 'Upcoming';
 
-      // If sheet stores a cancellation/deletion-like flag but status is missing.
-      if (this._safeDeletionFlag_(eventRecord)) {
+      // 1. If deleted/cancelled
+      if (this._safeDeletionFlag_(eventRecord) || (statusKey && (eventRecord[statusKey] === cancelled || eventRecord[statusKey] === 'Cancelled'))) {
         if (statusKey) eventRecord[statusKey] = cancelled;
         return eventRecord;
       }
 
-      // Date-based evaluation uses START_DATE/END_DATE if present.
-      var startKey = cols.START_DATE || null;
-      var endKey = cols.END_DATE || null;
-
-      var now = Utils.getCurrentDate ? Utils.getCurrentDate() : new Date();
-      var nowMs = (now && now.getTime) ? now.getTime() : new Date().getTime();
-
-      var startMs = null;
-      var endMs = null;
-      try {
-        if (startKey && eventRecord[startKey]) startMs = new Date(eventRecord[startKey]).getTime();
-      } catch (e1) {}
-      try {
-        if (endKey && eventRecord[endKey]) endMs = new Date(eventRecord[endKey]).getTime();
-      } catch (e2) {}
-
-      // If we have endMs and it's in the past => Completed.
-      if (endMs !== null && !isNaN(endMs)) {
-        if (nowMs > endMs) {
-          if (statusKey) eventRecord[statusKey] = completed;
-          return eventRecord;
-        }
+      // 2. If explicitly stopped by admin, respect that
+      if (statusKey && (eventRecord[statusKey] === stopped || eventRecord[statusKey] === 'Stopped')) {
+        return eventRecord;
       }
 
-      // If we have startMs and it's in the future => Draft/Upcoming.
-      // This system blueprint uses UPCOMING; keep it if configured.
-      var upcoming = (c.EVENT_STATUS && c.EVENT_STATUS.UPCOMING) ? c.EVENT_STATUS.UPCOMING : null;
-      if (startMs !== null && !isNaN(startMs)) {
-        if (nowMs < startMs) {
-          if (statusKey) eventRecord[statusKey] = upcoming || draft;
-          return eventRecord;
+      // 3. Dynamic evaluation based on time
+      const startVal = eventRecord['Start Date'] || eventRecord['start_date'] || eventRecord['startDate'] || null;
+      const startTimeVal = eventRecord['Start Time'] || eventRecord['start_time'] || eventRecord['startTime'] || '00:00:00';
+      const endVal = eventRecord['End Date'] || eventRecord['end_date'] || eventRecord['endDate'] || null;
+      const endTimeVal = eventRecord['End Time'] || eventRecord['end_time'] || eventRecord['endTime'] || '23:59:59';
+
+      const timezone = CONFIG.DATE_TIME.TIMEZONE || 'Asia/Kolkata';
+
+      function getFormattedDateTime(dateVal, timeVal, defaultTime) {
+        if (!dateVal) return null;
+        let d = (dateVal instanceof Date) ? new Date(dateVal.getTime()) : new Date(dateVal);
+        if (isNaN(d.getTime())) return null;
+        
+        let dateStr = Utilities.formatDate(d, timezone, 'yyyy-MM-dd');
+        
+        let timeStr = defaultTime || '00:00';
+        if (timeVal) {
+          if (timeVal instanceof Date) {
+            timeStr = Utilities.formatDate(timeVal, timezone, 'HH:mm');
+          } else {
+            let tStr = String(timeVal).trim();
+            if (tStr.includes('T') || tStr.includes('GMT') || tStr.includes('1899') || (tStr.length > 8 && !isNaN(Date.parse(tStr)))) {
+              let parsedTime = new Date(tStr);
+              if (!isNaN(parsedTime.getTime())) {
+                timeStr = Utilities.formatDate(parsedTime, timezone, 'HH:mm');
+              }
+            } else {
+              const match = tStr.toUpperCase().match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?/);
+              if (match) {
+                let hours = parseInt(match[1], 10);
+                const minutes = match[2];
+                const ampm = match[3];
+                if (ampm === 'PM' && hours < 12) {
+                  hours += 12;
+                } else if (ampm === 'AM' && hours === 12) {
+                  hours = 0;
+                }
+                timeStr = `${String(hours).padStart(2, '0')}:${minutes}`;
+              }
+            }
+          }
         }
+        return `${dateStr} ${timeStr}`;
       }
 
-      // Otherwise, treat as active.
-      if (statusKey) {
-        // If there is also a stopped field in the record, prefer it.
-        // (Backward compatible: only if sheet already has it.)
-        if (eventRecord[statusKey] === stopped) {
-          eventRecord[statusKey] = stopped;
+      const startDateTimeStr = getFormattedDateTime(startVal, startTimeVal, '00:00');
+      const endDateTimeStr = getFormattedDateTime(endVal, endTimeVal, '23:59');
+      const nowStr = Utilities.formatDate(new Date(), timezone, 'yyyy-MM-dd HH:mm');
+
+      var currentStatus = statusKey ? eventRecord[statusKey] : 'Active';
+      var newStatus = currentStatus;
+
+      if (startDateTimeStr && endDateTimeStr) {
+        if (nowStr < startDateTimeStr) {
+          newStatus = upcoming;
+        } else if (nowStr >= startDateTimeStr && nowStr <= endDateTimeStr) {
+          newStatus = active;
         } else {
-          eventRecord[statusKey] = active;
+          newStatus = completed;
+        }
+      } else if (startDateTimeStr) {
+        if (nowStr < startDateTimeStr) {
+          newStatus = upcoming;
+        } else {
+          newStatus = active;
+        }
+      } else {
+        newStatus = active;
+      }
+
+      if (statusKey && newStatus !== currentStatus) {
+        eventRecord[statusKey] = newStatus;
+        try {
+          DatabaseService.updateRow(CONFIG.SHEETS.EVENTS, CONFIG.ID_COLUMNS.EVENTS, eventRecord[CONFIG.COLUMNS.EVENT_ID], {
+            [statusKey]: newStatus
+          });
+        } catch (dbErr) {
+          Logger.log('Error auto-updating event status in sheet: ' + dbErr);
         }
       }
+
       return eventRecord;
     } catch (e) {
       Logger.log('EventService._evaluateEventStatus_ error: ' + (e && e.message ? e.message : e));
@@ -286,7 +319,7 @@ const EventService = {
     return out;
   },
 
-  createEvent: function(eventData) {
+  createEvent: function(eventData, creatorId) {
     try {
       eventData = this._normalizeEventPayload(eventData);
 
@@ -356,6 +389,23 @@ const EventService = {
       if (success) {
         this._invalidateCaches_();
         const resp = Utils.buildResponse(true, CONFIG.MESSAGES.EVENT_CREATED, { event: Utils.sanitizeEvent(newEvent) });
+
+        // Auto-assign coordinator to the event
+        if (coordinatorId) {
+          try {
+            Logger.log("Auto-assigning coordinator " + coordinatorId + " to event " + eventId);
+            CoordinatorService.assignCoordinator(
+              eventId, 
+              coordinatorId, 
+              'Primary Coordinator', 
+              creatorId || eventData[CONFIG.COLUMNS.CREATED_BY] || 'System', 
+              'Auto-assigned upon event creation'
+            );
+          } catch (assignError) {
+            Logger.log("Error in auto-assigning coordinator: " + assignError.message);
+          }
+        }
+
         try {
           AuditService.logAction(
             eventData[CONFIG.COLUMNS.CREATED_BY] || eventData[CONFIG.COLUMNS.COORDINATOR_ID],
@@ -390,7 +440,7 @@ const EventService = {
     }
   },
 
-  updateEvent: function(eventId, eventData) {
+  updateEvent: function(eventId, eventData, updaterId) {
     try {
       const eventsSheet = CONFIG.SHEETS.EVENTS;
 
@@ -457,6 +507,41 @@ const EventService = {
       if (success) {
         this._invalidateCaches_();
         const resp = Utils.buildResponse(true, CONFIG.MESSAGES.EVENT_UPDATED, { event: Utils.sanitizeEvent(updatedEvent) });
+
+        // Handle coordinator change in assignments sheet
+        var oldCoordinatorId = existingEvent[CONFIG.COLUMNS.COORDINATOR_ID];
+        var newCoordinatorId = updatedEvent[CONFIG.COLUMNS.COORDINATOR_ID];
+        if (newCoordinatorId !== oldCoordinatorId) {
+          try {
+            Logger.log("Coordinator changed from " + oldCoordinatorId + " to " + newCoordinatorId + " for event " + eventId);
+            // 1. Deactivate old coordinator assignment if exists
+            if (oldCoordinatorId) {
+              var allCoords = DatabaseService.readAllRows(CONFIG.SHEETS.EVENT_COORDINATORS) || [];
+              var oldAssignment = allCoords.find(function(a) {
+                return String(a['Event ID']).trim() === String(eventId).trim() &&
+                       String(a['User ID']).trim() === String(oldCoordinatorId).trim() &&
+                       a['Assignment Status'] === 'Active';
+              });
+              if (oldAssignment) {
+                var updates = { 'Assignment Status': 'Removed', 'Remarks': 'Reassigned on event update' };
+                DatabaseService.updateRow(CONFIG.SHEETS.EVENT_COORDINATORS, 'Assignment ID', oldAssignment['Assignment ID'], updates);
+              }
+            }
+            // 2. Assign new coordinator
+            if (newCoordinatorId) {
+              CoordinatorService.assignCoordinator(
+                eventId,
+                newCoordinatorId,
+                'Primary Coordinator',
+                updaterId || eventData[CONFIG.COLUMNS.UPDATED_BY] || 'System',
+                'Assigned on event update'
+              );
+            }
+          } catch (assignError) {
+            Logger.log("Error updating coordinator assignment on event update: " + assignError.message);
+          }
+        }
+
         try {
           AuditService.logAction(
             updatedEvent[CONFIG.COLUMNS.UPDATED_BY] || 'Unknown',

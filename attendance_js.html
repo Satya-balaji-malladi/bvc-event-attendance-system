@@ -54,9 +54,14 @@ App.Modules.attendance = {
 
   loadStudentsData: function() {
     App.API._call('getAllStudents').then(res => {
-      this.studentsData = Array.isArray(res)
+      const rawStudents = Array.isArray(res)
         ? res
         : (res.students || res.data || []);
+      this.studentsData = rawStudents.map(s => ({
+        roll_number: s.roll_number || s['Roll Number'] || '',
+        student_name: s.student_name || s['Student Name'] || '',
+        department: s.department || s['Department ID'] || ''
+      }));
     }).catch(console.error);
   },
 
@@ -96,7 +101,14 @@ App.Modules.attendance = {
       App.API._call('getEventById', this.currentEventId),
       App.API._call('getEventParticipants', this.currentEventId)
     ]).then(([attRes, eventRes, partsRes]) => {
-      this.attendanceData = attRes || [];
+      const rawAtt = attRes || [];
+      this.attendanceData = rawAtt.map(a => ({
+        attendance_id: a.attendance_id || a['Attendance ID'] || '',
+        event_id: a.event_id || a['Event ID'] || '',
+        roll_number: a.roll_number || a['Roll Number'] || '',
+        status: a.status || a['Attendance Status'] || '',
+        attendance_time: a.attendance_time || a['Attendance Time'] || ''
+      }));
       const eventObj = eventRes || {};
       const parts = partsRes || [];
       

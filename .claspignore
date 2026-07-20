@@ -1,28 +1,11 @@
-# Node.js / local-only files - DO NOT push to Google Apps Script
-# debug.js is now a safe GAS placeholder - it IS pushed
-debug_rendered.html
+# Ignore node build scripts
+compile_index.js
+index.html
+
+# Ignore node_modules
 node_modules/**
-package.json
-package-lock.json
-index.css
-TestFeatures.gs
 
-
-# Backup files
-*.bak
-*.bak.html
-Code.js.bak
-Controller.js.bak
-common_js.html.bak
-events_js.bak.html
-students_js.bak.html
-users_js.html.bak
-UserService.js.bak
-
-# Documentation
-*.md
-Architecture.md
-
-# Git
-.gitignore
+# Ignore git
 .git/**
+.gitignore
+README.md

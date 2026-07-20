@@ -107,6 +107,7 @@ const SessionService = {
   },
 
   getSession: function(sessionToken) {
+    Logger.log("ENTER: SessionService.getSession");
     try {
       Logger.log("========== GET SESSION START ==========");
       Logger.log("Incoming Token: " + sessionToken);
@@ -120,6 +121,9 @@ const SessionService = {
 
       if (isEmptyToken) {
         Logger.log("Session token is empty.");
+        Logger.log("RETURNING FROM: SessionService.getSession");
+        Logger.log("Returned value: null (Token empty fallback)");
+        Logger.log("CRITICAL: Returning NULL");
         return null;
       }
 
@@ -155,6 +159,8 @@ const SessionService = {
             Logger.log("Matched Session:");
             Logger.log(JSON.stringify(records[0]));
             Logger.log("========== GET SESSION SUCCESS ==========");
+            Logger.log("RETURNING FROM: SessionService.getSession");
+            Logger.log("Returned value: " + JSON.stringify(records[0]));
             return records[0];
           }
         }
@@ -162,17 +168,29 @@ const SessionService = {
 
       Logger.log("No matching session found.");
       Logger.log("========== GET SESSION END ==========");
+      Logger.log("RETURNING FROM: SessionService.getSession");
+      Logger.log("Returned value: null (No records matched)");
+      Logger.log("CRITICAL: Returning NULL");
       return null;
     } catch (error) {
       Logger.log("SessionService.getSession ERROR: " + (error && error.message ? error.message : error));
       if (error && error.stack) Logger.log(error.stack);
+      Logger.log("RETURNING FROM: SessionService.getSession (Catch Error)");
+      Logger.log("Returned value: null (Exception occurred)");
+      Logger.log("CRITICAL: Returning NULL");
       return null;
     }
   },
 
   _validateSessionRecord: function(session, sessionToken) {
     try {
-      if (!session) return false;
+      Logger.log("=== ENTER _validateSessionRecord() ===");
+      Logger.log("Session Token: " + sessionToken);
+      if (!session) {
+        Logger.log("Validation FAILED because: Missing session");
+        Logger.log("=== EXIT _validateSessionRecord() ===");
+        return false;
+      }
 
       var statusCol = this._col('SESSION_STATUS', 'Session Status', 'SESSION_STATUS');
       var expiryCol = this._col('EXPIRY_TIME', 'Expiry Time', 'EXPIRY_TIME');
@@ -180,21 +198,45 @@ const SessionService = {
       var tokenCol = this._col('SESSION_TOKEN', 'Session Token', 'SESSION_TOKEN');
 
       var activeStatus = (CONFIG && CONFIG.SESSION_STATUS && CONFIG.SESSION_STATUS.ACTIVE) ? CONFIG.SESSION_STATUS.ACTIVE : 'Active';
-      if (String(session[statusCol]) !== String(activeStatus)) return false;
+      
+      Logger.log("Validation Step 1");
+      Logger.log("Status Column Name: " + statusCol);
+      Logger.log("Status Value: " + session[statusCol]);
+      Logger.log("Expected Active Status: " + activeStatus);
+      
+      if (String(session[statusCol]) !== String(activeStatus)) {
+        Logger.log("Validation FAILED because: Status mismatch (Expected Active, got: " + session[statusCol] + ")");
+        Logger.log("=== EXIT _validateSessionRecord() ===");
+        return false;
+      }
 
       var currentTime = new Date().getTime();
-      var expiryTime = this._getTimestamp(session[expiryCol]);
+      var rawExpiry = session[expiryCol];
+      var expiryTime = this._getTimestamp(rawExpiry);
+
+      Logger.log("Validation Step 2");
+      Logger.log("Expiry Column Name: " + expiryCol);
+      Logger.log("Expiry Raw Value: " + rawExpiry);
+      Logger.log("Parsed Expiry Value: " + expiryTime);
+      Logger.log("Current Time: " + currentTime + " (" + new Date(currentTime).toString() + ")");
 
       // Safe fallback: if expiryTime is NaN or 0, set default timeout to prevent session failure
       if (expiryTime === 0) {
+        Logger.log("Warning: Expiry Time is 0 or invalid date. Using safe fallback timeout.");
         var timeoutMinutes = (CONFIG && CONFIG.SECURITY && CONFIG.SECURITY.SESSION_TIMEOUT_MINUTES) ? CONFIG.SECURITY.SESSION_TIMEOUT_MINUTES : 480;
         expiryTime = currentTime + (timeoutMinutes * 60000);
       }
 
       if (currentTime > expiryTime) {
+        Logger.log("Validation FAILED because: Session expired (Current Time: " + currentTime + " > Expiry Time: " + expiryTime + ")");
         this.expireSession(sessionToken);
+        Logger.log("=== EXIT _validateSessionRecord() ===");
         return false;
       }
+
+      Logger.log("Validation Step 3");
+      Logger.log("Last Activity Column Name: " + lastActivityCol);
+      Logger.log("Last Activity Timestamp: " + session[lastActivityCol]);
 
       if (lastActivityCol && session[lastActivityCol] !== undefined) {
         var updates = {};
@@ -208,14 +250,18 @@ const SessionService = {
         }
       }
 
+      Logger.log("Validation PASSED");
+      Logger.log("=== EXIT _validateSessionRecord() ===");
       return true;
     } catch (error) {
-      Logger.log('SessionService._validateSessionRecord error: ' + (error && error.message ? error.message : error));
+      Logger.log('Validation FAILED because of exception: ' + (error && error.message ? error.message : error));
+      Logger.log("=== EXIT _validateSessionRecord() ===");
       return false;
     }
   },
 
   validateSession: function(sessionToken) {
+    Logger.log("ENTER: SessionService.validateSession");
     try {
       Logger.log("========== VALIDATE SESSION ==========");
       Logger.log("Incoming Token: " + sessionToken);
@@ -229,12 +275,16 @@ const SessionService = {
 
       if (isEmptyToken) {
         Logger.log("Token is empty.");
+        Logger.log("RETURNING FROM: SessionService.validateSession");
+        Logger.log("Returned value: false (Empty token fallback)");
         return false;
       }
 
       var session = this.getSession(sessionToken);
       if (!session) {
         Logger.log("Session NOT FOUND in Sessions sheet.");
+        Logger.log("RETURNING FROM: SessionService.validateSession");
+        Logger.log("Returned value: false (Session not found)");
         return false;
       }
 
@@ -244,10 +294,14 @@ const SessionService = {
       var isValid = this._validateSessionRecord(session, sessionToken);
       Logger.log("SESSION VALID: " + isValid);
       Logger.log("======================================");
+      Logger.log("RETURNING FROM: SessionService.validateSession");
+      Logger.log("Returned value: " + isValid);
       return isValid;
     } catch (error) {
       Logger.log("SessionService.validateSession error: " + (error && error.message ? error.message : error));
       if (error && error.stack) Logger.log(error.stack);
+      Logger.log("RETURNING FROM: SessionService.validateSession (Catch Error)");
+      Logger.log("Returned value: false (Exception caught)");
       return false;
     }
   },
@@ -309,16 +363,50 @@ const SessionService = {
 
   getCurrentUser: function(sessionToken) {
     try {
+      Logger.log("---------------------");
+      Logger.log("ENTER getCurrentUser()");
+      Logger.log("Session Token: " + sessionToken);
+      
       var session = this.getSession(sessionToken);
-      if (!session) return null;
+      Logger.log("Session Object: " + (session ? JSON.stringify(session) : "null/undefined"));
+      
+      if (!session) {
+        Logger.log("getCurrentUser FAILED: Session object not found");
+        Logger.log("EXIT getCurrentUser()");
+        Logger.log("---------------------");
+        return null;
+      }
+
+      Logger.log("Session Keys: " + JSON.stringify(Object.keys(session)));
+      
+      var configUserIdCol = (CONFIG && CONFIG.COLUMNS && CONFIG.COLUMNS.USER_ID) ? CONFIG.COLUMNS.USER_ID : 'User ID';
+      Logger.log("CONFIG USER_ID Column: " + configUserIdCol);
+      
+      var sessionUserIdColVal = session["User ID"];
+      Logger.log("session[\"User ID\"]: " + sessionUserIdColVal);
+      
+      var sessionConfigColVal = session[configUserIdCol];
+      Logger.log("session[CONFIG.COLUMNS.USER_ID]: " + sessionConfigColVal);
 
       var ok = this._validateSessionRecord(session, sessionToken);
-      if (!ok) return null;
+      Logger.log("Session Validation Passed: " + ok);
+      if (!ok) {
+        Logger.log("getCurrentUser FAILED: Session validation failed");
+        Logger.log("EXIT getCurrentUser()");
+        Logger.log("---------------------");
+        return null;
+      }
 
       var userIdCol = this._col('USER_ID', 'User ID', 'USER_ID');
-      return session[userIdCol];
+      var finalUserId = session[userIdCol];
+      Logger.log("Returned User ID: " + finalUserId);
+      Logger.log("EXIT getCurrentUser()");
+      Logger.log("---------------------");
+      return finalUserId;
     } catch (error) {
       Logger.log('SessionService.getCurrentUser error: ' + (error && error.message ? error.message : error));
+      Logger.log("EXIT getCurrentUser() with error");
+      Logger.log("---------------------");
       return null;
     }
   },
@@ -488,17 +576,24 @@ const SessionService = {
 
   withSession: function(sessionToken, callback) {
     try {
+      Logger.log("=== ENTER withSession() ===");
+      Logger.log("Incoming Token: " + sessionToken);
       if (!sessionToken || (typeof sessionToken === 'string' && sessionToken.trim() === '')) {
         var msg = (CONFIG && CONFIG.MESSAGES && CONFIG.MESSAGES.SESSION_REQUIRED) ? CONFIG.MESSAGES.SESSION_REQUIRED : 'Session token required';
         throw new Error(msg);
       }
 
       var userId = this.getCurrentUser(sessionToken);
+      Logger.log("Result from getCurrentUser(): " + userId);
       if (!userId) {
+        Logger.log("Session rejected because getCurrentUser() returned null.");
         var msg2 = (CONFIG && CONFIG.MESSAGES && CONFIG.MESSAGES.SESSION_INVALID) ? CONFIG.MESSAGES.SESSION_INVALID : 'Invalid session';
+        Logger.log("=== EXIT withSession() (REJECTED) ===");
         throw new Error(msg2);
       }
 
+      Logger.log("Session accepted.");
+      Logger.log("=== EXIT withSession() (ACCEPTED) ===");
       return callback(userId);
     } catch (error) {
       Logger.log('SessionService.withSession error: ' + (error && error.message ? error.message : error));

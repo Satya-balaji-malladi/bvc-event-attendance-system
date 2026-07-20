@@ -114,13 +114,10 @@ const DatabaseService = {
       const logicalKey = this._getLogicalSheetKey(sheetName);
       Logger.log("DB STEP 2: Resolved logicalKey: " + logicalKey);
       
-      // Bypass cache for 'Users' sheet to ensure real-time accuracy for auth and profile updates
-      if (logicalKey !== "Users") {
-        const cached = this._cache[logicalKey];
-        if (cached && cached.records) {
-          Logger.log("DB STEP 3: Returning cached records: " + cached.records.length);
-          return cached.records;
-        }
+      const cached = this._cache[logicalKey];
+      if (cached && cached.records) {
+        Logger.log("DB STEP 3: Returning cached records: " + cached.records.length);
+        return cached.records;
       }
 
       const sheet = this.getSheet(logicalKey);

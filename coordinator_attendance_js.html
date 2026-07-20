@@ -10,6 +10,58 @@
 
 const CoordinatorUI = (() => {
 
+  // Override google.script.run for external hosting capability
+  if (typeof google === 'undefined' || !google.script || !google.script.run) {
+    const createRunner = (successCb, failureCb) => {
+      return new Proxy({}, {
+        get: (target, prop) => {
+          return (...args) => {
+            const apiUrl = window.BACKEND_API_URL || localStorage.getItem('BACKEND_API_URL') || '';
+            if (!apiUrl) {
+              const err = new Error("BACKEND_API_URL is not set. Please configure window.BACKEND_API_URL or localStorage.");
+              console.error(err);
+              if (failureCb) failureCb(err);
+              return;
+            }
+
+            fetch(apiUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify({ action: prop, arguments: args })
+            })
+            .then(res => res.json())
+            .then(data => {
+              if (successCb) successCb(data);
+            })
+            .catch(err => {
+              console.error(`API Call failed: ${prop}`, err);
+              if (failureCb) failureCb(err);
+            });
+          };
+        }
+      });
+    };
+
+    window.google = {
+      script: {
+        run: {
+          withSuccessHandler: (successCb) => {
+            return {
+              withFailureHandler: (failureCb) => createRunner(successCb, failureCb),
+              ...createRunner(successCb, null)
+            };
+          },
+          withFailureHandler: (failureCb) => {
+            return {
+              withSuccessHandler: (successCb) => createRunner(successCb, failureCb),
+              ...createRunner(null, failureCb)
+            };
+          }
+        }
+      }
+    };
+  }
+
   // ==========================================================================
   //  PRIVATE STATE
   // ==========================================================================
@@ -46,7 +98,9 @@ const CoordinatorUI = (() => {
     bindEvents();
     extractSessionToken();
     monitorConnection();
+    initCamera();
     loadBackendTerminalData();
+    CameraDebugger.init();
   };
 
   const cacheDOM = () => {
@@ -235,23 +289,43 @@ const CoordinatorUI = (() => {
   // ==========================================================================
   const extractSessionToken = () => {
     try {
-      // Primary: token passed in URL by login redirect (?page=coordinator&token=...)
-      const params = new URLSearchParams(window.location.search);
-      const urlToken = params.get('token');
-      if (urlToken) {
-        // Persist it to localStorage so refreshes work
-        localStorage.setItem('sessionToken', urlToken);
-        state.sessionToken = urlToken;
-        console.log('Session token loaded from URL parameter.');
-        return;
-      }
-      // Fallback: token stored in localStorage (e.g. page refresh)
-      state.sessionToken = localStorage.getItem('sessionToken') || null;
-      if (state.sessionToken) {
-        console.log('Session token loaded from localStorage.');
+      console.log('=== FRONTEND SESSION INVESTIGATION ===');
+      
+      const templateToken = (typeof window.SESSION_TOKEN_FROM_BACKEND !== 'undefined') ? window.SESSION_TOKEN_FROM_BACKEND : null;
+      console.log('Token received after login (from server template parameter):', templateToken);
+      
+      // 1. Primary: token injected by backend template context
+      if (templateToken) {
+        localStorage.setItem('sessionToken', templateToken);
+        state.sessionToken = templateToken;
+        console.log('Session token loaded from server-injected template parameter:', templateToken);
       } else {
-        console.warn('No session token found. Will attempt backend call anyway.');
+        // 2. Secondary: token passed in URL by login redirect (?page=coordinator&token=...)
+        const params = new URLSearchParams(window.location.search);
+        const urlToken = params.get('token');
+        console.log('Token retrieved from URL parameter:', urlToken);
+        if (urlToken) {
+          localStorage.setItem('sessionToken', urlToken);
+          state.sessionToken = urlToken;
+          console.log('Session token loaded from URL parameter and stored in localStorage:', urlToken);
+        } else {
+          // 3. Fallback: token stored in localStorage (e.g. page refresh)
+          state.sessionToken = localStorage.getItem('sessionToken') || null;
+          console.log('Session token loaded from fallback localStorage:', state.sessionToken);
+        }
       }
+
+      const storedToken = localStorage.getItem('sessionToken');
+      console.log('Token stored in localStorage:', storedToken);
+
+      if (templateToken && storedToken && templateToken !== storedToken) {
+        console.warn('⚠️ WARNING: Stored token in localStorage differs from the login response template token!');
+        console.warn('Template Token:', templateToken);
+        console.warn('Stored Token:', storedToken);
+      }
+      
+      console.log('Final resolved token to be used:', state.sessionToken);
+      console.log('=======================================');
     } catch (e) {
       console.error('Session token extraction error:', e);
     }
@@ -274,38 +348,76 @@ const CoordinatorUI = (() => {
   // ==========================================================================
   //  CAMERA MANAGEMENT
   // ==========================================================================
-  const initCamera = () => {
+  let preflightDeviceId = null;
+
+  const initCamera = async () => {
+    console.log("=== CAMERA INIT START ===");
     if (typeof Html5Qrcode === 'undefined') {
       setCameraStatus('Unavailable');
       return;
     }
 
-    // Enumerate cameras – populate selector, but do NOT auto-start.
-    // Auto-starting without a user gesture is blocked by most browsers.
-    Html5Qrcode.getCameras().then(cameras => {
-      if (!cameras || cameras.length === 0) {
-        setCameraStatus('No camera found');
-        return;
-      }
-      state.availableCameras = cameras;
-      setCameraStatus('Ready – tap to start');
+    try {
+      console.log("Requesting camera permission preflight...");
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "environment"
+        }
+      });
+      
+      console.log("Preflight stream obtained successfully.");
+      const tracks = stream.getVideoTracks();
+      tracks.forEach((track, idx) => {
+        console.log(`Track ${idx}:`, track.label, "ReadyState:", track.readyState);
+      });
 
-      // Show device selector when multiple cameras exist (desktop/tablet)
-      if (cameras.length > 1 && dom.cameraDeviceSelect) {
-        dom.cameraDeviceSelect.innerHTML = cameras.map((c, i) =>
-          `<option value="${i}">${c.label || `Camera ${i + 1}`}</option>`
-        ).join('');
-        dom.cameraDeviceSelect.classList.remove('d-none');
-        // Default to rear/environment camera
-        const envIdx = cameras.findIndex(c => /back|rear|environment/i.test(c.label));
-        state.activeCameraIndex = envIdx >= 0 ? envIdx : 0;
-        dom.cameraDeviceSelect.selectedIndex = state.activeCameraIndex;
+      if (tracks.length > 0) {
+        const settings = tracks[0].getSettings();
+        preflightDeviceId = settings.deviceId;
+        console.log("Saved preflight deviceId:", preflightDeviceId);
       }
-      // Do NOT auto-start here – wait for explicit user click on toggle button
-    }).catch(err => {
-      console.warn('Camera enumeration failed:', err);
+
+      // Stop temporary tracks immediately
+      tracks.forEach(track => {
+        track.stop();
+        console.log("Stopped preflight track:", track.label);
+      });
+
+      // Query available cameras
+      try {
+        console.log("Querying getCameras() after permission grant...");
+        const cameras = await Html5Qrcode.getCameras();
+        console.log("getCameras() returned:", cameras);
+        
+        if (cameras && cameras.length > 0) {
+          state.availableCameras = cameras;
+          setCameraStatus('Ready – tap to start');
+
+          // Show device selector when multiple cameras exist
+          if (cameras.length > 1 && dom.cameraDeviceSelect) {
+            dom.cameraDeviceSelect.innerHTML = cameras.map((c, i) =>
+              `<option value="${i}">${c.label || `Camera ${i + 1}`}</option>`
+            ).join('');
+            dom.cameraDeviceSelect.classList.remove('d-none');
+            // Default to rear/environment camera
+            const envIdx = cameras.findIndex(c => /back|rear|environment/i.test(c.label));
+            state.activeCameraIndex = envIdx >= 0 ? envIdx : 0;
+            dom.cameraDeviceSelect.selectedIndex = state.activeCameraIndex;
+          }
+        } else {
+          console.warn("getCameras() returned empty array. Will use preflightDeviceId.");
+          setCameraStatus('Ready – tap to start');
+        }
+      } catch (err) {
+        console.warn("getCameras() failed, falling back to preflightDeviceId. Error:", err);
+        setCameraStatus('Ready – tap to start');
+      }
+    } catch (err) {
+      console.error("Camera permission preflight FAILED:", err);
       setCameraStatus('Permission denied');
-    });
+      showToast('error', 'Camera permission denied: ' + err.message);
+    }
+    console.log("=== CAMERA INIT END ===");
   };
 
   const startCameraWithCurrentDevice = () => {
@@ -315,15 +427,13 @@ const CoordinatorUI = (() => {
     }
     if (state.cameraRunning) return; // Already running
 
-    // IMPORTANT: Always destroy old instance and clear the container DOM before
-    // creating a new one. Reusing a stopped Html5Qrcode instance causes blank video.
     const container = document.getElementById('interactive-camera-scanner');
     if (container) container.innerHTML = '';
     html5QrCode = null;
 
     try {
       html5QrCode = new Html5Qrcode('interactive-camera-scanner', {
-        verbose: false // suppress debug logs
+        verbose: false
       });
     } catch (e) {
       console.error('Html5Qrcode instantiation failed:', e);
@@ -334,12 +444,24 @@ const CoordinatorUI = (() => {
 
     // Build camera constraint
     let cameraConstraint;
+    let selectedCamera = null;
     if (state.availableCameras.length > 0 && state.availableCameras[state.activeCameraIndex]) {
-      cameraConstraint = state.availableCameras[state.activeCameraIndex].id;
+      selectedCamera = state.availableCameras[state.activeCameraIndex];
+      cameraConstraint = selectedCamera.id;
+    } else if (preflightDeviceId) {
+      console.log("Using preflightDeviceId directly for constraint:", preflightDeviceId);
+      cameraConstraint = preflightDeviceId;
     } else {
-      // Fallback: facingMode only (works on mobile when no enumeration done)
+      // Fallback: facingMode only
       cameraConstraint = { facingMode: state.facingMode };
     }
+
+    console.log('=== START CAMERA CONTROLS ===');
+    console.log('cameraConstraint:', cameraConstraint);
+    console.log('activeCameraIndex:', state.activeCameraIndex);
+    console.log('selected camera label:', selectedCamera ? selectedCamera.label : 'N/A');
+    console.log('selected camera id:', selectedCamera ? selectedCamera.id : 'N/A');
+    console.log('=============================');
 
     const config = {
       fps: 10,
@@ -357,7 +479,6 @@ const CoordinatorUI = (() => {
       cameraConstraint,
       config,
       (decodedText) => {
-        // Duplicate cooldown: ignore same roll within 5 seconds
         const now = Date.now();
         const lastScan = state.recentRolls[decodedText] || 0;
         if (now - lastScan < state.DUPLICATE_COOLDOWN_MS) return;
@@ -372,12 +493,13 @@ const CoordinatorUI = (() => {
           submitAttendance();
         }
       },
-      () => { /* QR frame error – ignore, fires every undetected frame */ }
+      () => { /* QR frame error – ignore */ }
     ).then(() => {
       state.cameraRunning = true;
       setCameraStatus('Active');
       if (dom.viewportPlaceholder) dom.viewportPlaceholder.classList.add('hidden');
       if (dom.cameraToggleIcon)   dom.cameraToggleIcon.className = 'bi bi-camera-video-fill';
+      console.log('Camera started successfully.');
     }).catch(err => {
       state.cameraRunning = false;
       html5QrCode = null;
@@ -385,13 +507,13 @@ const CoordinatorUI = (() => {
       const msg = err && err.message ? err.message : String(err);
       if (/permission|denied|NotAllowed/i.test(msg)) {
         setCameraStatus('Permission denied');
-        showToast('error', 'Camera permission denied. Allow camera access in your browser settings.');
+        showToast('error', 'Camera permission denied or permissions policy violation.');
       } else if (/NotFound|no camera/i.test(msg)) {
         setCameraStatus('No camera found');
         showToast('warning', 'No camera detected on this device.');
       } else {
         setCameraStatus('Failed – use manual input');
-        showToast('error', 'Camera could not start. Use the text input to enter roll numbers.');
+        showToast('error', 'Camera failed to start: ' + msg);
       }
     });
   };
@@ -421,6 +543,9 @@ const CoordinatorUI = (() => {
   };
 
   const toggleCamera = () => {
+    console.log("ACTIVE CAMERA BUILD v2 - " + new Date().toISOString());
+    console.log("preflightDeviceId =", preflightDeviceId);
+    console.log("available cameras =", state.availableCameras.length);
     if (state.cameraRunning) {
       stopCamera();
     } else {
@@ -434,6 +559,8 @@ const CoordinatorUI = (() => {
                 `<option value="${i}">${c.label || `Camera ${i + 1}`}</option>`
               ).join('');
               dom.cameraDeviceSelect.classList.remove('d-none');
+              
+              // Smart camera default choice: prefer rear environment camera if it exists, otherwise use first camera
               const envIdx = cameras.findIndex(c => /back|rear|environment/i.test(c.label));
               state.activeCameraIndex = envIdx >= 0 ? envIdx : 0;
               dom.cameraDeviceSelect.selectedIndex = state.activeCameraIndex;
@@ -473,15 +600,51 @@ const CoordinatorUI = (() => {
     setScannerStatus('Syncing...', 'status-info');
     if (dom.input) dom.input.disabled = true;
 
+    console.log('=== FRONTEND API CALL INVESTIGATION ===');
+    console.log('state.sessionToken:', state.sessionToken);
+    console.log('localStorage sessionToken:', localStorage.getItem('sessionToken'));
+    console.log('Is state.sessionToken valid?:', !!state.sessionToken);
+    console.log('=======================================');
+
     google.script.run
       .withSuccessHandler((res) => {
+        console.log("========== SUCCESS CALLBACK ==========");
+        console.log("Complete Response:", res);
+        console.log("Success:", res?.success);
+        console.log("Message:", res?.message);
+
+        if (res) {
+            console.log("User:", res.user);
+            console.log("Event:", res.event);
+            console.log("Statistics:", res.statistics);
+            console.log("Recent Scans:", res.recentScans);
+        }
+        console.log("======================================");
+
         if (dom.input) dom.input.disabled = false;
         if (res && res.success) {
-          hydrateUI(res.data);
+          try {
+              console.log("Calling hydrateUI()");
+              hydrateUI(res);
+              console.log("hydrateUI() completed successfully");
+          } catch (e) {
+              console.error("HYDRATE UI FAILED");
+              console.error(e);
+              console.error(e.stack);
+          }
           setScannerStatus('Ready', '');
           focusInput();
           if (showSyncToast) showToast('success', 'Synced with server successfully.');
         } else {
+          if (res && res.message && (res.message.indexOf('No active event assignments') !== -1 || res.message.indexOf('No active event') !== -1)) {
+            setScannerStatus('No Event Assigned', 'status-warn');
+            showToast('warning', 'No event assigned. Please contact the administrator.');
+            if (dom.eventTitleDisplay) dom.eventTitleDisplay.textContent = 'No Event Assigned';
+            if (dom.terminalEventName) dom.terminalEventName.textContent = 'No Event Assigned';
+            if (dom.eventDate) dom.eventDate.innerHTML = `<i class="bi bi-calendar3"></i> N/A`;
+            hideSkeleton();
+            return;
+          }
           setScannerStatus('Auth error', 'status-error');
           showToast('error', res && res.message ? res.message : 'Session verification failed.');
           handleRedirect();
@@ -498,7 +661,27 @@ const CoordinatorUI = (() => {
   };
 
   const hydrateUI = (data) => {
-    if (!data) return;
+    console.log("========== HYDRATE UI ==========");
+    console.log(data);
+    if (!data) {
+        console.error("hydrateUI received NULL data");
+        return;
+    }
+    console.log("Event:", data.event);
+    console.log("User:", data.user);
+    console.log("Statistics:", data.statistics);
+    console.log("Recent Scans:", data.recentScans);
+    console.log("================================");
+
+    // Dom element validation checks (Step 6)
+    if (!dom.eventTitleDisplay) console.error("eventTitleDisplay not found");
+    if (!dom.terminalEventName) console.error("terminalEventName not found");
+    if (!dom.eventDate) console.error("eventDate not found");
+    if (!dom.coordName) console.error("coordName not found");
+    if (!dom.statsPresent) console.error("statsPresent not found");
+    if (!dom.statsRemaining) console.error("statsRemaining not found");
+    if (!dom.statsTotal) console.error("statsTotal not found");
+    if (!dom.historyFeed) console.error("historyFeed not found");
 
     // Event details
     const ev = data.event || {};
@@ -506,11 +689,13 @@ const CoordinatorUI = (() => {
     if (dom.eventTitleDisplay)  dom.eventTitleDisplay.textContent = eventName;
     if (dom.terminalEventName)  dom.terminalEventName.textContent = eventName;
     if (dom.eventDate)          dom.eventDate.innerHTML = `<i class="bi bi-calendar3"></i> ${ev['Start Date'] || ev.startDate || 'Live'}`;
+    console.log("Updated event title");
 
     // Coordinator name
     const u = data.user || {};
     const coordName = u['First Name'] || u['Student Name'] || u['Name'] || u.name || 'Coordinator';
     if (dom.coordName) dom.coordName.innerHTML = `<i class="bi bi-person-badge"></i> ${coordName}`;
+    console.log("Updated coordinator name");
 
     // Attendance type
     state.activeEventAttendanceType = ev['Attendance Type'] || ev.attendanceType || 'Fixed';
@@ -523,6 +708,7 @@ const CoordinatorUI = (() => {
         total:     data.statistics.total     || 0,
       };
       renderStats();
+      console.log("Updated statistics");
     }
 
     // Full scan history
@@ -531,9 +717,11 @@ const CoordinatorUI = (() => {
       populateDeptFilter();
       hideSkeleton();
       renderHistory();
+      console.log("Rendered history");
     } else {
       hideSkeleton();
     }
+    console.log("Hydration completed");
   };
 
   // ==========================================================================
@@ -1017,6 +1205,385 @@ const CoordinatorUI = (() => {
     // Try parsing as ISO or spreadsheet date
     try { const d = new Date(rawTime); if (!isNaN(d)) return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }); } catch (_) {}
     return String(rawTime).substring(0, 8);
+  };
+
+  // ==========================================================================
+  //  CAMERA TEST & DIAGNOSTICS SUITE (DEBUG PANEL)
+  // ==========================================================================
+  const CameraDebugger = (() => {
+    const logs = [];
+
+    const addLog = (type, functionName, message, duration = 0, error = null) => {
+      const logEntry = {
+        timestamp: new Date().toLocaleTimeString(),
+        type: type.toUpperCase(),
+        functionName: functionName,
+        message: message,
+        duration: duration,
+        error: error ? { name: error.name, message: error.message, stack: error.stack } : null
+      };
+      logs.push(logEntry);
+      
+      // Update Live UI Timeline
+      const timeline = document.getElementById('dbg-timeline');
+      if (timeline) {
+        const color = type === 'error' ? 'text-danger' : (type === 'success' ? 'text-success' : (type === 'warn' ? 'text-warning' : 'text-dark'));
+        const entryHtml = `<div class="mb-1 border-bottom pb-1" style="font-size: 0.65rem;">
+          <span class="text-secondary">[${logEntry.timestamp}]</span> 
+          <span class="fw-bold ${color}">${logEntry.type}</span> 
+          <span class="text-secondary">${logEntry.functionName}():</span> ${logEntry.message}
+          ${duration ? `<span class="badge bg-light text-dark">${duration}ms</span>` : ''}
+        </div>`;
+        timeline.innerHTML = entryHtml + timeline.innerHTML;
+      }
+    };
+
+    const updateMetrics = async () => {
+      const getVal = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+      getVal('dbg-browser', navigator.userAgent.split(' ')[0] || 'Unknown');
+      getVal('dbg-platform', navigator.platform || 'Unknown');
+      getVal('dbg-secure', window.isSecureContext ? 'Secure' : 'Unsecure');
+      getVal('dbg-lib', typeof Html5Qrcode !== 'undefined' ? 'v2.3.8 (unpkg)' : 'Not Loaded');
+      getVal('dbg-cam-count', state.availableCameras.length);
+      getVal('dbg-active-idx', state.activeCameraIndex);
+      getVal('dbg-device-id', preflightDeviceId || 'None');
+      getVal('dbg-status', state.cameraRunning ? 'Running' : 'Stopped');
+
+      // Update Camera Permission state
+      if (navigator.permissions && typeof navigator.permissions.query === 'function') {
+        try {
+          const res = await navigator.permissions.query({ name: 'camera' });
+          getVal('dbg-permission', res.state);
+        } catch (_) {
+          getVal('dbg-permission', 'Preflight Required');
+        }
+      } else {
+        getVal('dbg-permission', 'Unsupported');
+      }
+    };
+
+    const recordError = (funcName, error) => {
+      addLog('error', funcName, error.message, 0, error);
+      const display = document.getElementById('dbg-error-display');
+      if (display) {
+        display.innerHTML = `<div class="text-danger fw-bold">[${funcName}] ${error.name}</div>
+        <div style="font-size:0.6rem;">${error.message}</div>
+        <pre class="m-0 p-1 bg-dark text-white rounded mt-1" style="font-size:0.55rem; max-height: 50px;">${error.stack || 'No trace'}</pre>`;
+      }
+    };
+
+    // Diagnostic Tests
+    const testBrowserCompatibility = () => {
+      const startTime = Date.now();
+      try {
+        const support = {
+          mediaDevices: !!navigator.mediaDevices,
+          getUserMedia: navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function',
+          permissionsAPI: !!navigator.permissions,
+          secureContext: !!window.isSecureContext,
+          barcodeDetector: 'BarcodeDetector' in window,
+          html5Qrcode: typeof Html5Qrcode !== 'undefined'
+        };
+        const pass = support.mediaDevices && support.getUserMedia && support.secureContext && support.html5Qrcode;
+        addLog('success', 'testBrowserCompatibility', `Passed: ${pass} | Metrics: ${JSON.stringify(support)}`, Date.now() - startTime);
+        return pass;
+      } catch (err) {
+        recordError('testBrowserCompatibility', err);
+        return false;
+      }
+    };
+
+    const testCameraPermission = async () => {
+      const startTime = Date.now();
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        addLog('success', 'testCameraPermission', 'Preflight track permission GRANTED.', Date.now() - startTime);
+        stream.getTracks().forEach(track => {
+          track.stop();
+          addLog('info', 'testCameraPermission', `Stopped track: ${track.label}`);
+        });
+        await updateMetrics();
+        return true;
+      } catch (err) {
+        recordError('testCameraPermission', err);
+        return false;
+      }
+    };
+
+    const testCameraEnumeration = async () => {
+      const startTime = Date.now();
+      try {
+        const cameras = await Html5Qrcode.getCameras();
+        addLog('success', 'testCameraEnumeration', `Enumerated ${cameras.length} camera(s) successfully.`, Date.now() - startTime);
+        await updateMetrics();
+        return true;
+      } catch (err) {
+        recordError('testCameraEnumeration', err);
+        return false;
+      }
+    };
+
+    const testPreflightDevice = () => {
+      const startTime = Date.now();
+      try {
+        if (!preflightDeviceId) {
+          throw new Error("No preflightDeviceId has been captured yet. Perform permission test first.");
+        }
+        addLog('success', 'testPreflightDevice', `Preflight Device ID: ${preflightDeviceId}`, Date.now() - startTime);
+        return true;
+      } catch (err) {
+        recordError('testPreflightDevice', err);
+        return false;
+      }
+    };
+
+    const testStartCamera = async () => {
+      const startTime = Date.now();
+      try {
+        if (state.cameraRunning) {
+          throw new Error("Camera is already active. Stop camera first.");
+        }
+        
+        const container = document.getElementById('interactive-camera-scanner');
+        if (container) container.innerHTML = '';
+        const tempScanner = new Html5Qrcode('interactive-camera-scanner');
+        
+        let constraint = preflightDeviceId || { facingMode: 'environment' };
+        if (state.availableCameras.length > 0 && state.availableCameras[state.activeCameraIndex]) {
+          constraint = state.availableCameras[state.activeCameraIndex].id;
+        }
+
+        await tempScanner.start(
+          constraint,
+          { fps: 10, qrbox: 250 },
+          () => {}, // Silence scan callback for test
+          () => {}
+        );
+
+        addLog('success', 'testStartCamera', 'Camera preview loaded successfully.', Date.now() - startTime);
+        
+        // Save back reference for stop test
+        html5QrCode = tempScanner;
+        state.cameraRunning = true;
+        await updateMetrics();
+        return true;
+      } catch (err) {
+        recordError('testStartCamera', err);
+        return false;
+      }
+    };
+
+    const testStopCamera = async () => {
+      const startTime = Date.now();
+      try {
+        if (!html5QrCode || !state.cameraRunning) {
+          throw new Error("No active scanner instance found to stop.");
+        }
+        await html5QrCode.stop();
+        state.cameraRunning = false;
+        html5QrCode = null;
+        
+        const container = document.getElementById('interactive-camera-scanner');
+        if (container) container.innerHTML = '';
+
+        addLog('success', 'testStopCamera', 'Scanner stopped and resource cleaned.', Date.now() - startTime);
+        await updateMetrics();
+        return true;
+      } catch (err) {
+        recordError('testStopCamera', err);
+        return false;
+      }
+    };
+
+    const stressTestCamera = async () => {
+      addLog('info', 'stressTestCamera', 'Initiating camera stress test (5 iterations)...');
+      let passes = 0;
+      let totalTime = 0;
+      
+      for (let i = 1; i <= 5; i++) {
+        addLog('info', 'stressTestCamera', `Iteration ${i}/5 starting...`);
+        const startResult = await testStartCamera();
+        if (startResult) {
+          passes++;
+          await new Promise(r => setTimeout(r, 500)); // Let preview render
+          await testStopCamera();
+        } else {
+          addLog('error', 'stressTestCamera', `Iteration ${i}/5 failed at start.`);
+        }
+      }
+      
+      addLog('success', 'stressTestCamera', `Stress test completed. Passes: ${passes}/5.`, totalTime);
+    };
+
+    const testScanner = async () => {
+      const startTime = Date.now();
+      try {
+        if (state.cameraRunning) await testStopCamera();
+        
+        const container = document.getElementById('interactive-camera-scanner');
+        if (container) container.innerHTML = '';
+        const diagScanner = new Html5Qrcode('interactive-camera-scanner');
+
+        let frameCount = 0;
+        let decodes = 0;
+        
+        let constraint = preflightDeviceId || { facingMode: 'environment' };
+        if (state.availableCameras.length > 0 && state.availableCameras[state.activeCameraIndex]) {
+          constraint = state.availableCameras[state.activeCameraIndex].id;
+        }
+
+        await diagScanner.start(
+          constraint,
+          { fps: 10, qrbox: 250 },
+          (text) => {
+            decodes++;
+            addLog('success', 'testScanner', `QR Decoded: ${text} (Total decodes this session: ${decodes})`);
+            showToast('info', `Scan Decoded: ${text}`);
+          },
+          () => {
+            frameCount++;
+          }
+        );
+
+        addLog('success', 'testScanner', 'Scanner diagnostic feed active.', Date.now() - startTime);
+        html5QrCode = diagScanner;
+        state.cameraRunning = true;
+        await updateMetrics();
+        return true;
+      } catch (err) {
+        recordError('testScanner', err);
+        return false;
+      }
+    };
+
+    const testScannerContainer = () => {
+      const startTime = Date.now();
+      try {
+        const container = document.getElementById('interactive-camera-scanner');
+        if (!container) throw new Error("DOM container #interactive-camera-scanner not found.");
+        const bounds = container.getBoundingClientRect();
+        addLog('success', 'testScannerContainer', `Container ok. Size: ${bounds.width}px x ${bounds.height}px`, Date.now() - startTime);
+        return true;
+      } catch (err) {
+        recordError('testScannerContainer', err);
+        return false;
+      }
+    };
+
+    const performanceTest = async () => {
+      const startTime = Date.now();
+      addLog('info', 'performanceTest', 'Measuring camera hardware initialize latency...');
+      const success = await testCameraPermission();
+      if (success) {
+        addLog('success', 'performanceTest', 'Performance measurement complete.', Date.now() - startTime);
+      } else {
+        addLog('error', 'performanceTest', 'Performance measurement failed due to permission reject.');
+      }
+    };
+
+    const exportLogs = () => {
+      try {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(logs, null, 2));
+        const dlAnchorElem = document.createElement('a');
+        dlAnchorElem.setAttribute("href",     dataStr);
+        dlAnchorElem.setAttribute("download", `bvc_camera_diagnostic_${Date.now()}.json`);
+        dlAnchorElem.click();
+        addLog('success', 'exportLogs', 'Logs exported successfully.');
+      } catch (err) {
+        recordError('exportLogs', err);
+      }
+    };
+
+    const resetTest = async () => {
+      try {
+        if (state.cameraRunning) {
+          await testStopCamera();
+        }
+        logs.length = 0;
+        const timeline = document.getElementById('dbg-timeline');
+        if (timeline) timeline.innerHTML = '';
+        const display = document.getElementById('dbg-error-display');
+        if (display) display.textContent = 'None recorded.';
+        addLog('info', 'resetTest', 'Diagnostic panel state has been fully reset.');
+        await updateMetrics();
+      } catch (err) {
+        recordError('resetTest', err);
+      }
+    };
+
+    // Bind Developer UI Events
+    const initBindings = () => {
+      if (!window.DEBUG_MODE) {
+        const trig = document.getElementById('camera-debug-trigger-container');
+        if (trig) trig.style.display = 'none';
+        return;
+      }
+
+      const getEl = id => document.getElementById(id);
+      const onClick = (id, fn) => { const el = getEl(id); if (el) el.addEventListener('click', fn); };
+
+      onClick('btn-open-camera-debug', () => { getEl('camera-debug-panel').style.display = 'flex'; updateMetrics(); });
+      onClick('btn-close-camera-debug', () => { getEl('camera-debug-panel').style.display = 'none'; });
+      
+      onClick('dbg-btn-test-1', testBrowserCompatibility);
+      onClick('dbg-btn-test-2', testCameraPermission);
+      onClick('dbg-btn-test-3', testCameraEnumeration);
+      onClick('dbg-btn-test-4', testPreflightDevice);
+      onClick('dbg-btn-test-5', testStartCamera);
+      onClick('dbg-btn-test-6', testStopCamera);
+      onClick('dbg-btn-test-7', stressTestCamera);
+      onClick('dbg-btn-test-8', testScanner);
+      onClick('dbg-btn-test-9', testScannerContainer);
+      onClick('dbg-btn-test-10', performanceTest);
+
+      onClick('dbg-btn-clear-error', () => { getEl('dbg-error-display').textContent = 'None recorded.'; });
+      onClick('dbg-btn-clear-timeline', () => { getEl('dbg-timeline').innerHTML = ''; });
+      onClick('dbg-btn-export-logs', exportLogs);
+      onClick('dbg-btn-reset-test', resetTest);
+      
+      addLog('info', 'initBindings', 'Diagnostic Suite fully loaded. Ready for test iterations.');
+      updateMetrics();
+    };
+
+    return {
+      init: initBindings,
+      addLog,
+      updateMetrics
+    };
+  })();
+
+  // ==========================================================================
+  //  LIBRARY VERSION RUNTIME VALIDATION (Task 6 & 8)
+  // ==========================================================================
+  window.testLibraryVersion = () => {
+    console.log("=== testLibraryVersion() ===");
+    console.log("Library Version Selected:", window.QR_SCANNER_VERSION);
+    console.log("Html5Qrcode Exists:", typeof Html5Qrcode !== 'undefined');
+    if (typeof Html5Qrcode !== 'undefined') {
+      console.log("Available APIs:", Object.keys(Html5Qrcode));
+    }
+    console.log("Constructor Exists:", typeof Html5Qrcode === 'function');
+    console.log("Scanner Exists:", typeof Html5QrcodeScanner !== 'undefined');
+    console.log("Ready State: OK");
+    console.log("============================");
+
+    // Task 8: Automatic Compatibility Report
+    console.log("=== COMPATIBILITY REPORT ===");
+    console.log("Browser:", navigator.userAgent.split(' ')[0]);
+    console.log("OS/Platform:", navigator.platform);
+    console.log("Library Version:", window.QR_SCANNER_VERSION);
+    console.log("CDN Provider:", window.CDN_PROVIDER);
+    console.log("Camera API Supported:", !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia));
+    console.log("Permission API Supported:", !!navigator.permissions);
+    
+    const score = [
+      typeof Html5Qrcode !== 'undefined',
+      !!navigator.mediaDevices,
+      window.isSecureContext
+    ].filter(Boolean).length / 3 * 100;
+    console.log(`Compatibility Score: ${Math.round(score)}%`);
+    console.log("Recommended Version: 2.3.7 (Stable)");
+    console.log("============================");
   };
 
   // ==========================================================================

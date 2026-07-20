@@ -137,6 +137,13 @@ const Utils = {
     }
   },
 
+  checkEmptyValue: function(value) {
+    if (value === null || value === undefined) return true;
+    if (typeof value === 'string' && value.trim() === '') return true;
+    if (Array.isArray(value) && value.length === 0) return true;
+    return false;
+  },
+
   sleep: function(milliseconds) {
     try {
       Utilities.sleep(milliseconds);
@@ -366,12 +373,24 @@ const Utils = {
   // ==========================================
 
   buildResponse: function(success, message, data) {
+    Logger.log("ENTER: Utils.buildResponse");
     try {
       const d = data || {};
-      return { success: Boolean(success), message: message, ...d };
+      var response = { success: Boolean(success), message: message, ...d };
+      Logger.log("RETURNING FROM: Utils.buildResponse");
+      Logger.log("Returned value:");
+      Logger.log(JSON.stringify(response));
+      if (response == null) {
+        Logger.log("CRITICAL: Returning NULL");
+      }
+      return response;
     } catch (e) {
       Logger.log('Utils.buildResponse error: ' + (e && e.message ? e.message : e));
-      return { success: false, message: CONFIG && CONFIG.MESSAGES ? CONFIG.MESSAGES.ERROR_DEFAULT : 'Error' };
+      var errorResponse = { success: false, message: CONFIG && CONFIG.MESSAGES ? CONFIG.MESSAGES.ERROR_DEFAULT : 'Error' };
+      Logger.log("RETURNING FROM: Utils.buildResponse (Error Catch)");
+      Logger.log("Returned value:");
+      Logger.log(JSON.stringify(errorResponse));
+      return errorResponse;
     }
   },
 
